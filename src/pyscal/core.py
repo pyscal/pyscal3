@@ -279,7 +279,10 @@ class System:
         -----
         Periodic boundary conditions are assumed by default.
         """
-        
+        diff = pc.get_distance_vector(pos1, pos2, self.triclinic,
+            self.rot, self.rotinv, self.boxdims)
+        dist = np.linalg.norm(diff)
+                
         if vector:
             return dist, diff
         else:
