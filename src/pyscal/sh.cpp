@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
-#include "modsystem.h"
+#include "system.h"
 
 void calculate_factors(const int lm, 
 	vector<vector<double>>& alm,

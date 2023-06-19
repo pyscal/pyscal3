@@ -4,7 +4,7 @@
 #include <pybind11/stl_bind.h>
 #include <vector>
 #include <string>
-#include "modsystem.h"
+#include "system.h"
 #include <map>
 #include <string>
 #include <any>
