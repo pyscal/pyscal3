@@ -35,7 +35,7 @@ setup(
     zip_safe=False,
     download_url = 'https://anaconda.org/conda-forge/pyscal',
     url = 'https://pyscal.org',
-    install_requires=['pybind11', 'numpy', 'ase'],
+    install_requires=['pybind11', 'numpy', 'ase', 'pyyaml'],
     classifiers=[
         'Programming Language :: Python :: 3'
     ],

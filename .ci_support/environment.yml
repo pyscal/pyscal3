@@ -12,3 +12,4 @@ dependencies:
   - pybind11
   - scipy
   - spglib
+  - pyyaml
