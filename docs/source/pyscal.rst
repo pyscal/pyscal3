@@ -12,7 +12,7 @@ module. The original pybind11 definitions of Atom and System can be found in :mo
 and :mod:`~pyscal.csystem` respectively.
 
 
-.. automodule:: pyscal.core
+.. automodule:: pyscal3.core
    :members:
    :undoc-members:
    :show-inheritance:

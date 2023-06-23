@@ -12,11 +12,11 @@ import io
 import os
 import warnings
 from ase.io import write, read
-import pyscal.formats.ase as ptase
-import pyscal.formats.lammps as ptlammps
-import pyscal.formats.mdtraj as ptmdtraj
-import pyscal.formats.vasp as ptvasp
-import pyscal.atoms as patoms
+import pyscal3.formats.ase as ptase
+import pyscal3.formats.lammps as ptlammps
+import pyscal3.formats.mdtraj as ptmdtraj
+import pyscal3.formats.vasp as ptvasp
+import pyscal3.atoms as patoms
 
 def read_file(filename, format="lammps-dump",
     compressed = False, customkeys=None):

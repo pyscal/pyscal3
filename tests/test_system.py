@@ -1,9 +1,9 @@
-import pyscal.core as pc
+import pyscal3.core as pc
 import os
 import numpy as np
 from ase.build import bulk
-from pyscal.atoms import Atoms
-from pyscal.crystal_structures import Structure
+from pyscal3.atoms import Atoms
+from pyscal3.crystal_structures import Structure
 
 
 def test_system_init():

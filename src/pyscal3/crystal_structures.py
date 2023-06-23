@@ -9,9 +9,9 @@ from functools import partial
 from functools import update_wrapper
 
 
-from pyscal.attributes import read_yaml
-from pyscal.core import System
-from pyscal.structure_creator import make_crystal
+from pyscal3.attributes import read_yaml
+from pyscal3.core import System
+from pyscal3.structure_creator import make_crystal
 
 structures = read_yaml(os.path.join(os.path.dirname(__file__), "data/structure_data.yaml"))
 elements = read_yaml(os.path.join(os.path.dirname(__file__), "data/element_data.yaml"))

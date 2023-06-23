@@ -1,5 +1,5 @@
 import numpy as np
-from pyscal.attributes import DocumentedKeywords
+from pyscal3.attributes import DocumentedKeywords
 import spglib
 
 def get_symmetry(system, angle_tolerance=-1.0,

@@ -1,7 +1,7 @@
 import os
 import numpy as np
-from pyscal.formats.ase import convert_snap
-import pyscal.core as pc
+from pyscal3.formats.ase import convert_snap
+import pyscal3.core as pc
 #import h5py
 import warnings
 

@@ -1,5 +1,5 @@
 
-import pyscal.structure_creator as pcs
+import pyscal3.structure_creator as pcs
 import os
 
 def test_create_structure():

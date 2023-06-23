@@ -1,8 +1,8 @@
 import pytest
 import os
 import numpy as np
-import pyscal.core as pc
-from pyscal.crystal_structures import Structure
+import pyscal3.core as pc
+from pyscal3.crystal_structures import Structure
 
 
 def test_q_12():

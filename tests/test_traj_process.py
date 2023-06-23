@@ -1,10 +1,10 @@
 import pytest
 import os
 import numpy as np
-import pyscal.core as pc
-from pyscal.crystal_structures import Structure
-import pyscal.structure_creator as pcs
-import pyscal.traj_process as ptp
+import pyscal3.core as pc
+from pyscal3.crystal_structures import Structure
+import pyscal3.structure_creator as pcs
+import pyscal3.traj_process as ptp
 
 def test_create_multislice_dump():
     """

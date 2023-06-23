@@ -1,8 +1,8 @@
 import pytest
 import os,sys,inspect
 import numpy as np
-import pyscal.core as pc
-from pyscal.crystal_structures import Structure
+import pyscal3.core as pc
+from pyscal3.crystal_structures import Structure
 
 def test_angular():
     sys = Structure().lattice.diamond(repetitions = [4, 4, 4])

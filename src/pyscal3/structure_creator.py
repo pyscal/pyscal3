@@ -3,8 +3,8 @@ import numpy as np
 import warnings
 import os
 
-from pyscal.atoms import Atoms
-from pyscal.attributes import read_yaml
+from pyscal3.atoms import Atoms
+from pyscal3.attributes import read_yaml
 structures = read_yaml(os.path.join(os.path.dirname(__file__), "data/structure_data.yaml"))
 
 def make_crystal(structure, lattice_constant = 1.00, repetitions = None, ca_ratio = 1.633, noise = 0, element=None,
