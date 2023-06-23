@@ -1,6 +1,6 @@
-import pyscal.core as pc
+import pyscal3.core as pc
 import os
-from pyscal.crystal_structures import Structure
+from pyscal3.crystal_structures import Structure
 import numpy as np
 from ase.build import bulk
 

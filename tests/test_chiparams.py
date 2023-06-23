@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-import pyscal.core as pc
-from pyscal.crystal_structures import Structure
+import pyscal3.core as pc
+from pyscal3.crystal_structures import Structure
 
 def test_chiparamsbcc():
     sys = Structure().lattice.bcc(repetitions = [3, 3, 3], lattice_constant=4)

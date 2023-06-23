@@ -1,6 +1,6 @@
-from pyscal.crystal_structures import Structure
-from pyscal.operations.symmetry import get_symmetry
-from pyscal.core import System
+from pyscal3.crystal_structures import Structure
+from pyscal3.operations.symmetry import get_symmetry
+from pyscal3.core import System
 
 def test_bcc():
 	struct = Structure()
