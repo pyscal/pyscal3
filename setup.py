@@ -18,13 +18,13 @@ setup(
     # tell setuptools that all packages will be under the 'src' directory
     # and nowhere else
     package_dir={'':'src'},
-    headers=["src/pyscal/system.h"],
+    headers=["src/pyscal3/system.h"],
     ext_modules=[
         Pybind11Extension(
-            "pyscal.csystem",
-            ["src/pyscal/neighbor.cpp", "src/pyscal/sh.cpp", 
-            "src/pyscal/solids.cpp", "src/pyscal/voronoi.cpp", 
-            "src/pyscal/system_binding.cpp", "lib/voro++/voro++.cc"],
+            "pyscal3.csystem",
+            ["src/pyscal3/neighbor.cpp", "src/pyscal/sh.cpp", 
+            "src/pyscal3/solids.cpp", "src/pyscal/voronoi.cpp", 
+            "src/pyscal3/system_binding.cpp", "lib/voro++/voro++.cc"],
             language='c++',
             include_dirs=['lib/voro++'],
             extra_compile_args=['-O3'],

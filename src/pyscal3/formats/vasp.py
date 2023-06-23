@@ -5,7 +5,7 @@ import gzip
 import io
 import os
 from ase.io import write, read
-import pyscal.formats.ase as ptase
+import pyscal3.formats.ase as ptase
 import warnings
 
 def read_snap(infile, compressed = False):

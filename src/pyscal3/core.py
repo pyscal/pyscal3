@@ -15,12 +15,12 @@ import io
 from scipy.special import sph_harm
 import copy
 
-from pyscal.atoms import Atoms, AttrSetter
-import pyscal.csystem as pc
-import pyscal.traj_process as ptp
-from pyscal.formats.ase import convert_snap
-import pyscal.structure_creator as pcs
-import pyscal.operations.operations as po
+from pyscal3.atoms import Atoms, AttrSetter
+import pyscal3.csystem as pc
+import pyscal3.traj_process as ptp
+from pyscal3.formats.ase import convert_snap
+import pyscal3.structure_creator as pcs
+import pyscal3.operations.operations as po
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 

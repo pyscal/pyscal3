@@ -11,7 +11,7 @@ TODO
 import numpy as np
 import warnings
 import os
-from pyscal.attributes import AttrSetter, read_yaml, MyList
+from pyscal3.attributes import AttrSetter, read_yaml, MyList
 
 attr_docs = read_yaml(os.path.join(os.path.dirname(__file__), "data/annotations.yaml"))
 

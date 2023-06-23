@@ -1,4 +1,4 @@
-import pyscal.core as pc
+import pyscal3.core as pc
 import numpy as np
 import warnings
 

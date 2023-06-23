@@ -1,8 +1,8 @@
 import numpy as np
 import os
-import pyscal.csl as csl
-import pyscal.crystal_structures as pcs
-from pyscal.core import System, Atoms
+import pyscal3.csl as csl
+import pyscal3.crystal_structures as pcs
+from pyscal3.core import System, Atoms
 
 class GrainBoundary:
     def __init__(self):
