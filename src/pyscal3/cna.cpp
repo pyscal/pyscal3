@@ -240,7 +240,7 @@ void get_common_neighbors(const int& triclinic,
     
     int m, n;
     double d, diffx, diffy, diffz;
-   
+    
     cna[ti].clear();
     cna[ti].resize(neighbors[ti].size());
     common[ti].clear();
@@ -336,14 +336,19 @@ void identify_cn12(py::dict& atoms,
 
     vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
     vector<double> cutoff = atoms[py::str("cutoff")].cast<vector<double>>();
-    vector<int> structure = atoms[py::str("structure")].cast<vector<int>>();
     vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
 
     int nop = positions.size();
     vector<vector<vector<int>>> cna(nop);
     vector<vector<vector<int>>> common(nop);
     vector<vector<vector<int>>> bonds(nop);
+    vector<int> structure(nop);
 
+    //reset structure
+    for(int ti=0; ti<nop; ti++){
+        structure.emplace_back(0);
+    }
+    
     for(int ti=0; ti<nop; ti++){
         if(structure[ti] == 0){
             get_common_neighbors(triclinic, rot, rotinv, box, ti, positions,
@@ -396,16 +401,20 @@ void identify_cn14(py::dict& atoms,
 
     int c1, c2, c3, c4;
     int nbcc1, nbcc2;
-
     vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
     vector<double> cutoff = atoms[py::str("cutoff")].cast<vector<double>>();
-    vector<int> structure = atoms[py::str("structure")].cast<vector<int>>();
     vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-
+    
     int nop = positions.size();
     vector<vector<vector<int>>> cna(nop);
     vector<vector<vector<int>>> common(nop);
     vector<vector<vector<int>>> bonds(nop);
+    vector<int> structure(nop);
+
+    //reset structure
+    for(int ti=0; ti<nop; ti++){
+        structure.emplace_back(0);
+    }
 
     for(int ti=0; ti<nop; ti++){
         if(structure[ti] == 0){
@@ -413,7 +422,7 @@ void identify_cn14(py::dict& atoms,
                 cutoff, neighbors, cna, common);
             get_common_bonds(triclinic, rot, rotinv, box, ti, positions,
                 cutoff, neighbors, cna, common, bonds);
-
+            
             nbcc1 = 0;
             nbcc2 = 0;
 
@@ -432,7 +441,6 @@ void identify_cn14(py::dict& atoms,
                 }
 
             }
-            cout<<nbcc1<<" "<<nbcc2<<endl;
             if((nbcc1==6) && (nbcc2==8)){
                 structure[ti] = 3;   
             }
