@@ -15,7 +15,8 @@ def calculate_cna(system, lattice_constant=None):
 
     Returns
     -------
-    system: System object
+    resdict: dict
+        dictionary containing the calculated results
 
     Notes
     -----
@@ -47,7 +48,7 @@ def calculate_cna(system, lattice_constant=None):
 
         pc.get_acna_neighbors_cn14(system.atoms, system.triclinic, 
             system.rot, system.rotinv, system.boxdims)
-        pc.identify_cn12(system.atoms, system.triclinic, 
+        pc.identify_cn14(system.atoms, system.triclinic, 
             system.rot, system.rotinv, system.boxdims)
 
     else:
@@ -63,5 +64,13 @@ def calculate_cna(system, lattice_constant=None):
             lattice_constant, 2)
         pc.identify_cn14(system.atoms, system.triclinic, 
             system.rot, system.rotinv, system.boxdims)
-    
-    return system
+
+
+    res_dict = {
+    "others": len([x for x in system.atoms.structure if x==0]),
+    "fcc": len([x for x in system.atoms.structure if x==1]),
+    "hcp": len([x for x in system.atoms.structure if x==2]),
+    "bcc": len([x for x in system.atoms.structure if x==3]),
+    "ico": len([x for x in system.atoms.structure if x==4]),
+    }
+    return res_dict

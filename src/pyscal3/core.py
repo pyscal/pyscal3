@@ -1327,3 +1327,40 @@ class System:
             mapdict["angular_parameters"]["cosines"] = "cosines"
 
         self.atoms._add_attribute(mapdict)
+
+
+    def calculate_cna(self, lattice_constant=None):
+        """
+        Calculate the Common Neighbor Analysis indices
+
+        Parameters
+        ----------
+
+        lattice_constant : float, optional
+            lattice constant to calculate CNA. If not specified,
+            adaptive CNA will be used
+
+        Returns
+        -------
+        resdict: dict
+            dictionary of calculated structure
+
+        Notes
+        -----
+        Performs the common neighbor analysis [1][2] or the adaptive common neighbor
+        analysis [2] and assigns a structure to each atom.
+        
+        If `lattice_constant` is specified, a convential common neighbor analysis is
+        used. If `lattice_constant` is not specified, adaptive common neighbor analysis is used. 
+        The assigned structures can be accessed by :attr:`~pyscal.catom.Atom.structure`.
+        The values assigned for stucture are 0 Unknown, 1 fcc, 2 hcp, 3 bcc, 4 icosahedral.
+
+        References
+        ----------
+        .. [1] Faken, Jonsson, CMS 2, 1994
+        .. [2] Honeycutt, Andersen, JPC 91, 1987
+        .. [3] Stukowski, A, Model Simul Mater SC 20, 2012
+
+        """
+        resdict = po.cna.calculate_cna(self)
+        return resdict
