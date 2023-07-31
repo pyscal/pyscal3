@@ -1,4 +1,4 @@
-#include "modsystem.h"
+#include "system.h"
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -142,7 +142,16 @@ void get_acna_neighbors_cn12(py::dict& atoms,
             }
             cutoff[ti] = 1.207*ssum/12.00;
         }
-    }     
+    }
+
+    atoms[py::str("neighbors")] = neighbors;
+    atoms[py::str("neighbordist")] = neighbordist;
+    atoms[py::str("neighborweight")] = neighborweight;
+    atoms[py::str("diff")] = diff;
+    atoms[py::str("r")] = r;
+    atoms[py::str("theta")] = theta;
+    atoms[py::str("phi")] = phi;
+    atoms[py::str("cutoff")] = cutoff;     
 
 }
 
@@ -205,7 +214,16 @@ void get_acna_neighbors_cn14(py::dict& atoms,
             }
             cutoff[ti] = 1.207*ssum/14.00;
         }
-    }     
+    }
+
+    atoms[py::str("neighbors")] = neighbors;
+    atoms[py::str("neighbordist")] = neighbordist;
+    atoms[py::str("neighborweight")] = neighborweight;
+    atoms[py::str("diff")] = diff;
+    atoms[py::str("r")] = r;
+    atoms[py::str("theta")] = theta;
+    atoms[py::str("phi")] = phi;
+    atoms[py::str("cutoff")] = cutoff;     
 }
 
 
