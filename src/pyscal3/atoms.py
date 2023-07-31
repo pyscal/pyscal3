@@ -129,11 +129,15 @@ class Atoms(dict, AttrSetter):
     def ntotal(self):
         return self._nreal + self._nghost
 
-    def create_attribute(key, fill_with=None):
+    def create_attribute(self, key, fill_with=None, alias=None):
         """
         Create an attribute in atoms, and will with given value
         """
+        if alias is None:
+            alias = key
         self[key] = [fill_with for x in range(self.ntotal)]
+        mapdict = {alias: key}
+        self._add_attribute(mapdict)
 
     def from_dict(self, atoms):
         if not 'positions' in atoms.keys():
