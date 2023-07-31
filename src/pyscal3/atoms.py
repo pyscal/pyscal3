@@ -115,15 +115,15 @@ class Atoms(dict, AttrSetter):
       
     @property
     def natoms(self):
-        return np.sum([1 for x in self['ghost'] if x==False])
+        return len([1 for x in self['ghost'] if x==False])
 
     @property
     def nreal(self):
-        return np.sum([1 for x in self['ghost'] if x==False])
+        return len([1 for x in self['ghost'] if x==False])
     
     @property
     def nghost(self):
-        return np.sum([1 for x in self['ghost'] if x==True])
+        return len([1 for x in self['ghost'] if x==True])
     
     @property
     def ntotal(self):

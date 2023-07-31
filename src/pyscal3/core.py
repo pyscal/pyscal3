@@ -663,7 +663,7 @@ class System:
                 finished = pc.get_all_neighbors_adaptive(self.atoms, 0.0,
                     self.triclinic, self.rot, self.rotinv,
                     self.boxdims, threshold, nlimit, padding, cells)
-                if not finished:
+                if not bool(finished):
                     raise RuntimeError("Could not find adaptive cutoff")
             else:
                 if cells:
