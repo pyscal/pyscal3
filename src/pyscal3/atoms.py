@@ -115,19 +115,19 @@ class Atoms(dict, AttrSetter):
       
     @property
     def natoms(self):
-        return self._nreal
+        return np.sum([1 for x in self['ghost'] if not x])
 
     @property
     def nreal(self):
-        return self._nreal
+        return np.sum([1 for x in self['ghost'] if not x])
     
     @property
     def nghost(self):
-        return self._nghost
+        return np.sum([1 for x in self['ghost'] if x])
     
     @property
     def ntotal(self):
-        return self._nreal + self._nghost
+        return len(self['positions'])
 
     def create_attribute(self, key, fill_with=None, alias=None):
         """
