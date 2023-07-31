@@ -23,7 +23,8 @@ setup(
         Pybind11Extension(
             "pyscal3.csystem",
             ["src/pyscal3/neighbor.cpp", "src/pyscal3/sh.cpp", 
-            "src/pyscal3/solids.cpp", "src/pyscal3/voronoi.cpp", 
+            "src/pyscal3/solids.cpp", "src/pyscal3/voronoi.cpp",
+            "src/pyscal3/cna.cpp", 
             "src/pyscal3/system_binding.cpp", "lib/voro++/voro++.cc"],
             language='c++',
             include_dirs=['lib/voro++'],
