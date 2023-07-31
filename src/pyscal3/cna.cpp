@@ -405,8 +405,6 @@ void identify_cn14(py::dict& atoms,
     vector<vector<vector<int>>> common(nop);
     vector<vector<vector<int>>> bonds(nop);
 
-    cout<<nop<<" "<<structure.size()<<endl;
-
     for(int ti=0; ti<nop; ti++){
         if(structure[ti] == 0){
             get_common_neighbors(triclinic, rot, rotinv, box, ti, positions,
