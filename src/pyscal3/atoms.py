@@ -129,6 +129,12 @@ class Atoms(dict, AttrSetter):
     def ntotal(self):
         return self._nreal + self._nghost
 
+    def create_attribute(key, fill_with=None):
+        """
+        Create an attribute in atoms, and will with given value
+        """
+        self[key] = [fill_with for x in range(self.ntotal)]
+
     def from_dict(self, atoms):
         if not 'positions' in atoms.keys():
             raise ValueError('positions is a necessary key in atoms')
