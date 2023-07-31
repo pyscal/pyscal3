@@ -20,7 +20,8 @@ import pyscal3.csystem as pc
 import pyscal3.traj_process as ptp
 from pyscal3.formats.ase import convert_snap
 import pyscal3.structure_creator as pcs
-import pyscal3.operations.operations as po
+import pyscal3.operations.operations as operations
+import pyscal3.operations.cna as cna
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -179,7 +180,7 @@ class System:
     def repeat(self, repetitions, atoms=None, ghost=False, scale_box=True, assign=False, return_atoms=False):
         """
         """
-        return po.repeat(self, repetitions, 
+        return operations.repeat(self, repetitions, 
             atoms=atoms, ghost=ghost, 
             scale_box=scale_box, 
             return_atoms=return_atoms)
@@ -254,7 +255,7 @@ class System:
         """
         Embedded the triclinic box in a cubic box
         """
-        return po.embed_in_cubic_box(self, input_box=input_box,
+        return operations.embed_in_cubic_box(self, input_box=input_box,
             return_box=return_box) 
 
     def get_distance(self, pos1, pos2, vector=False):
@@ -1362,5 +1363,5 @@ class System:
         .. [3] Stukowski, A, Model Simul Mater SC 20, 2012
 
         """
-        resdict = po.cna.calculate_cna(self)
+        resdict = cna.calculate_cna(self)
         return resdict

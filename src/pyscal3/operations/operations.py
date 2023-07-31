@@ -1,5 +1,5 @@
 import numpy as np
-from pyscal3.attributes import DocumentedKeywords
+#from pyscal3.attributes import DocumentedKeywords
 
 def repeat(system, repetitions, ghost = False,
     scale_box = True, atoms = None, return_atoms = False, return_box=False):
