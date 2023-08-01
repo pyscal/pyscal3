@@ -20,7 +20,8 @@ import pyscal3.csystem as pc
 import pyscal3.traj_process as ptp
 from pyscal3.formats.ase import convert_snap
 import pyscal3.structure_creator as pcs
-import pyscal3.operations.operations as po
+import pyscal3.operations.operations as operations
+import pyscal3.operations.cna as cna
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -149,7 +150,8 @@ class System:
             #get a rough cell
             needed_cells = np.ceil(needed_atoms/len(atoms))
             nx = int(needed_cells**(1/3))
-            nx = int(np.ceil(nx/2))
+
+            #nx = int(np.ceil(nx/2))
 
             if np.sum(self.box) == 0:
                 raise ValueError("Simulation box should be initialized before atoms")
@@ -179,7 +181,7 @@ class System:
     def repeat(self, repetitions, atoms=None, ghost=False, scale_box=True, assign=False, return_atoms=False):
         """
         """
-        return po.repeat(self, repetitions, 
+        return operations.repeat(self, repetitions, 
             atoms=atoms, ghost=ghost, 
             scale_box=scale_box, 
             return_atoms=return_atoms)
@@ -254,7 +256,7 @@ class System:
         """
         Embedded the triclinic box in a cubic box
         """
-        return po.embed_in_cubic_box(self, input_box=input_box,
+        return operations.embed_in_cubic_box(self, input_box=input_box,
             return_box=return_box) 
 
     def get_distance(self, pos1, pos2, vector=False):
@@ -663,7 +665,7 @@ class System:
                 finished = pc.get_all_neighbors_adaptive(self.atoms, 0.0,
                     self.triclinic, self.rot, self.rotinv,
                     self.boxdims, threshold, nlimit, padding, cells)
-                if not finished:
+                if not bool(finished):
                     raise RuntimeError("Could not find adaptive cutoff")
             else:
                 if cells:
@@ -1327,3 +1329,40 @@ class System:
             mapdict["angular_parameters"]["cosines"] = "cosines"
 
         self.atoms._add_attribute(mapdict)
+
+
+    def calculate_cna(self, lattice_constant=None):
+        """
+        Calculate the Common Neighbor Analysis indices
+
+        Parameters
+        ----------
+
+        lattice_constant : float, optional
+            lattice constant to calculate CNA. If not specified,
+            adaptive CNA will be used
+
+        Returns
+        -------
+        resdict: dict
+            dictionary of calculated structure
+
+        Notes
+        -----
+        Performs the common neighbor analysis [1][2] or the adaptive common neighbor
+        analysis [2] and assigns a structure to each atom.
+        
+        If `lattice_constant` is specified, a convential common neighbor analysis is
+        used. If `lattice_constant` is not specified, adaptive common neighbor analysis is used. 
+        The assigned structures can be accessed by :attr:`~pyscal.catom.Atom.structure`.
+        The values assigned for stucture are 0 Unknown, 1 fcc, 2 hcp, 3 bcc, 4 icosahedral.
+
+        References
+        ----------
+        .. [1] Faken, Jonsson, CMS 2, 1994
+        .. [2] Honeycutt, Andersen, JPC 91, 1987
+        .. [3] Stukowski, A, Model Simul Mater SC 20, 2012
+
+        """
+        resdict = cna.calculate_cna(self)
+        return resdict

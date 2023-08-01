@@ -115,19 +115,29 @@ class Atoms(dict, AttrSetter):
       
     @property
     def natoms(self):
-        return self._nreal
+        return len([1 for x in self['ghost'] if x==False])
 
     @property
     def nreal(self):
-        return self._nreal
+        return len([1 for x in self['ghost'] if x==False])
     
     @property
     def nghost(self):
-        return self._nghost
+        return len([1 for x in self['ghost'] if x==True])
     
     @property
     def ntotal(self):
-        return self._nreal + self._nghost
+        return len(self['positions'])
+
+    def create_attribute(self, key, fill_with=None, alias=None):
+        """
+        Create an attribute in atoms, and will with given value
+        """
+        if alias is None:
+            alias = key
+        self[key] = [fill_with for x in range(self.ntotal)]
+        mapdict = {alias: key}
+        self._add_attribute(mapdict)
 
     def from_dict(self, atoms):
         if not 'positions' in atoms.keys():
