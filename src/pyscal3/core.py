@@ -150,7 +150,8 @@ class System:
             #get a rough cell
             needed_cells = np.ceil(needed_atoms/len(atoms))
             nx = int(needed_cells**(1/3))
-            nx = int(np.ceil(nx/2))
+
+            #nx = int(np.ceil(nx/2))
 
             if np.sum(self.box) == 0:
                 raise ValueError("Simulation box should be initialized before atoms")
