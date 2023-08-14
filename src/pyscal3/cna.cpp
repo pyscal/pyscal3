@@ -445,7 +445,7 @@ void get_diamond_neighbors(py::dict& atoms,
     const vector<vector<double>>& rot, 
     const vector<vector<double>>& rotinv,
     const vector<double>& box,
-    vector<vector<int>>& first_shell){
+    vector<vector<double>>& first_shell){
 
     double d;
     double diffx,diffy,diffz;
@@ -515,7 +515,7 @@ void identify_diamond_cna(py::dict& atoms,
     vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
 
     int nop = positions.size();
-    vector<vector<double>> cutoff(nop);
+    vector<double> cutoff(nop);
     vector<vector<double>> first_shell(nop);
 
     get_diamond_neighbors(atoms,
