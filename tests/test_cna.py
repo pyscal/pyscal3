@@ -66,3 +66,11 @@ def test_ase_bulks():
     sys.read_inputfile(ti_hcp, format="ase")
     cna = sys.calculate_cna()
     assert cna["hcp"] == 2
+
+def test_cna_diamond():
+    atoms, box = pcs.make_crystal(structure="diamond", repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
+    sys = pc.System()
+    sys.box = box
+    sys.atoms = atoms
+    sys.identify_diamond()
+    assert sys.atoms.structure[0] == 5

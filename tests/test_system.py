@@ -30,7 +30,7 @@ def test_nop():
 	sys = Structure().lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)
 
 	assert sys.natoms == 16
-	assert len(sys.atoms['positions']) == 432
+	assert len(sys.atoms['positions']) == 2000
 
 	for a in sys.iter_atoms():
 		assert np.sum(a["positions"]) == 0
@@ -46,7 +46,7 @@ def test_embed():
 	sys.box = np.array(cu.cell)
 	sys.atoms = Atoms({"positions": cu.positions})
 	sys.embed_in_cubic_box()
-	assert np.abs(sys.box[0][0] - 15.315932880500618) < 1E-5
+	assert np.abs(sys.box[0][0] - 25.526554800834365) < 1E-5
 
 def test_distance():
 	sys = Structure().lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)

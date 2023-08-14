@@ -1367,7 +1367,7 @@ class System:
         resdict = cna.calculate_cna(self)
         return resdict
 
-    def identify_cna(self):
+    def identify_diamond(self):
         """
         Identify diamond structure
 
