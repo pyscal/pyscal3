@@ -437,3 +437,161 @@ void identify_cn14(py::dict& atoms,
     }
     atoms[py::str("structure")] = structure;
 }
+
+
+//Diamond identification routines
+void get_diamond_neighbors(py::dict& atoms,
+    const int& triclinic,
+    const vector<vector<double>>& rot, 
+    const vector<vector<double>>& rotinv,
+    const vector<double>& box,
+    vector<vector<int>>& first_shell){
+
+    double d;
+    double diffx,diffy,diffz;
+    double tempr,temptheta,tempphi;
+    vector<double> diffi, diffj;
+
+    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
+    vector<vector<int>> atom_temp_neighbors = atoms[py::str("temp_neighbors")].cast<vector<vector<int>>>();;
+    vector<vector<double>> atom_temp_neighbordist = atoms[py::str("temp_neighbordist")].cast<vector<vector<double>>>();;
+
+    int nop = positions.size();
+    vector<vector<int>> neighbors(nop);
+    vector<vector<double>> neighbordist(nop);
+    vector<vector<double>> neighborweight(nop);
+    vector<vector<vector<double>>> diff(nop);
+    vector<vector<double>> r(nop);
+    vector<vector<double>> phi(nop);
+    vector<vector<double>> theta(nop);
+
+    for (int ti=0; ti<nop; ti++){
+        for(int i=0 ; i<4; i++){
+            int tj = atom_temp_neighbors[ti][i];
+            first_shell[ti].emplace_back(tj);
+
+            for(int j=0; j<4; j++){
+                int tk = atom_temp_neighbors[tj][j];
+                if (ti == tk) continue;
+                d = get_abs_distance(positions[ti], positions[tk],
+                    triclinic, rot, rotinv, box, 
+                    diffx, diffy, diffz);
+
+                neighbors[ti].emplace_back(tk);
+                neighbordist[ti].emplace_back(d);
+                neighborweight[ti].emplace_back(1.00);
+                
+                diffi.clear();
+                diffi.emplace_back(diffx);
+                diffi.emplace_back(diffy);
+                diffi.emplace_back(diffz);
+                diff[ti].emplace_back(diffi);
+                
+                convert_to_spherical_coordinates(diffx, diffy, diffz, tempr, tempphi, temptheta);
+                
+                r[ti].emplace_back(tempr);
+                phi[ti].emplace_back(tempphi);
+                theta[ti].emplace_back(temptheta);                
+            }
+        }
+    }
+    atoms[py::str("neighbors")] = neighbors;
+    atoms[py::str("neighbordist")] = neighbordist;
+    atoms[py::str("neighborweight")] = neighborweight;
+    atoms[py::str("diff")] = diff;
+    atoms[py::str("r")] = r;
+    atoms[py::str("theta")] = theta;
+    atoms[py::str("phi")] = phi;
+
+}
+
+
+void identify_diamond_cna(py::dict& atoms,
+    const int& triclinic,
+    const vector<vector<double>>& rot, 
+    const vector<vector<double>>& rotinv,
+    const vector<double>& box){
+
+    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
+
+    int nop = positions.size();
+    vector<vector<double>> cutoff(nop);
+    vector<vector<double>> first_shell(nop);
+
+    get_diamond_neighbors(atoms,
+        triclinic,
+        rot, 
+        rotinv,
+        box,
+        first_shell);
+
+    //now get the neighbors, and neighbor distance
+    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
+    vector<vector<double>> neighbordist = atoms[py::str("neighbordist")].cast<vector<vector<double>>>();
+
+    for (int ti=0; ti<nop; ti++){
+        double ssum = 0;
+        for(int i=0; i<12; i++){
+            ssum += neighbordist[ti][i];
+        }
+        cutoff[ti] = 1.207*ssum/12.00;
+    }
+
+    //assign cutoff
+    atoms[py::str("cutoff")] = cutoff;
+
+    //cutoffs have been assigned. Now run cn12 identification
+    identify_cn12(atoms,
+        triclinic,
+        rot, 
+        rotinv,
+        box);
+
+
+    vector<int> structure = atoms[py::str("structure")].cast<vector<int>>();
+    
+    for (int ti=0; ti<nop; ti++){
+        if (structure[ti] == 1){
+            structure[ti] = 5;
+        }
+        else if (structure[ti] == 2){
+            structure[ti] = 8;
+        }
+    }
+
+    //second pass
+    for (int ti=0; ti<nop; ti++){
+        if (structure[ti] < 5){
+            for(int i=0; i<4; i++){
+                if(structure[first_shell[ti][i]] == 5){
+                    structure[ti] = 6;
+                    break;
+                }
+                else if(structure[first_shell[ti][i]] == 8){
+                    structure[ti] = 9;
+                    break;
+                } 
+            }
+        }     
+    }
+
+    for (int ti=0; ti<nop; ti++){
+        if (structure[ti] < 5){
+            //still unassigned
+            for (int j=0; j<neighbors[ti].size(); j++){
+                int tj = neighbors[ti][j];
+                if (structure[tj] == 5){
+                    structure[ti] = 7;
+                    break;
+                }
+                else if (structure[tj] == 8){
+                    structure[ti] = 10;
+                    break;
+                } 
+            }
+        }
+    }
+
+    atoms[py::str("structure")] = structure;     
+
+}
