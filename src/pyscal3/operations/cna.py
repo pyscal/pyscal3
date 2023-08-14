@@ -81,8 +81,7 @@ def identify_diamond(system):
 
     Parameters
     ----------
-    find_neighbors : bool, optional
-        If True, find 4 closest neighbors
+    system: System object
 
     Returns
     -------
