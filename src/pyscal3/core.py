@@ -20,8 +20,10 @@ import pyscal3.csystem as pc
 import pyscal3.traj_process as ptp
 from pyscal3.formats.ase import convert_snap
 import pyscal3.structure_creator as pcs
+
 import pyscal3.operations.operations as operations
 import pyscal3.operations.cna as cna
+import pyscal3.operations.centrosymmetry
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -1394,4 +1396,37 @@ class System:
         .. [1] Maras et al, CPC 205, 2016
         """
         resdict = cna.identify_diamond(self)
-        return resdict        
+        return resdict 
+
+    def calculate_centrosymmetry(self, nmax=12):
+        """
+        Calculate the centrosymmetry parameter
+
+        Parameters
+        ----------        
+        nmax : int, optional
+            number of neighbors to be considered for centrosymmetry 
+            parameters. Has to be a positive, even integer. Default 12
+
+        Returns
+        -------
+        None
+        
+        Notes
+        -----
+        Calculate the centrosymmetry parameter for each atom which can be accessed by
+        :attr:`~pyscal.catom.centrosymmetry` attribute. It calculates the degree of inversion
+        symmetry of an atomic environment. Centrosymmetry recalculates the neighbor using
+        the number method as specified in :func:`¬pyscal.core.System.find_neighbors` method. This
+        is the ensure that the required number of neighbors are found for calculation of the parameter.
+
+        The Greedy Edge Selection (GES) [1] as specified in [2] in used in this method. 
+        GES algorithm is implemented in LAMMPS and Ovito. Please see [2] for
+        a detailed description of the algorithms. 
+        References
+        ----------
+        .. [1] Stukowski, A, Model Simul Mater SC 20, 2012
+        .. [2] Larsen, arXiv:2003.08879v1, 2020
+
+        """
+        return pyscal3.operations.centrosymmetry(self, nmax)       
