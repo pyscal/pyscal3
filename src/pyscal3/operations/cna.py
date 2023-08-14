@@ -74,3 +74,48 @@ def calculate_cna(system, lattice_constant=None):
     "ico": len([x for x in system.atoms.structure if x==4]),
     }
     return res_dict
+
+def identify_diamond(system):
+    """
+    Identify diamond structure
+
+    Parameters
+    ----------
+    find_neighbors : bool, optional
+        If True, find 4 closest neighbors
+
+    Returns
+    -------
+    diamondstructure : dict
+        dict of structure signature
+
+    Notes
+    -----
+    Identify diamond structure using the algorithm mentioned in [1]. It is an
+    extended CNA method. The integers 5, 6, 7, 8, 9 and 10 are assigned to the
+    structure variable of the atom. 5 stands for cubic diamond, 6 stands for first
+    nearest neighbors of cubic diamond and 7 stands for second nearest neighbors
+    of cubic diamond. 8 signifies hexagonal diamond, the first nearest neighbors
+    are marked with 9 and second nearest neighbors with 10.
+
+    References
+    ----------
+    .. [1] Maras et al, CPC 205, 2016
+    """
+    system.atoms.create_attribute('structure', fill_with = 0)
+    #run to calculate temp neighbors
+    system.find_neighbors(method='number', nmax=4, assign_neighbor=False)
+
+    pc.identify_diamond_cna(system.atoms, system.triclinic, 
+            system.rot, system.rotinv, system.boxdims)
+
+    res_dict = {
+    "others": len([x for x in system.atoms.structure if x==0]),
+    "cubic diamond": len([x for x in system.atoms.structure if x==5]),
+    "cubic diamond 1NN": len([x for x in system.atoms.structure if x==6]),
+    "cubic diamond 2NN": len([x for x in system.atoms.structure if x==7]),
+    "hex diamond": len([x for x in system.atoms.structure if x==8]),
+    "hex diamond 1NN": len([x for x in system.atoms.structure if x==9]),
+    "hex diamond 2NN": len([x for x in system.atoms.structure if x==10]),
+    }
+    return res_dict    
