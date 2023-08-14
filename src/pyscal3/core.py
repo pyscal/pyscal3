@@ -1429,4 +1429,4 @@ class System:
         .. [2] Larsen, arXiv:2003.08879v1, 2020
 
         """
-        return pyscal3.operations.centrosymmetry(self, nmax)       
+        return pyscal3.operations.centrosymmetry.calculate_centrosymmetry(self, nmax)       

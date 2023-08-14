@@ -18,14 +18,14 @@
 void calculate_centrosymmetry(py::dict& atoms,
     const int nmax){
     
-    double d, dx, dy, dz, weight;
+    double dx, dy, dz, weight;
     vector<datom> temp;
 
     vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();;
     vector<vector<vector<double>>> diff = atoms[py::str("diff")].cast<vector<vector<vector<double>>>>();;
 
     int nop = neighbors.size();
-    vector<vector<double>> centrosymmetry(nop);
+    vector<double> centrosymmetry(nop);
     
     for (int ti=0; ti<nop; ti++){
     	int count = 0;

@@ -7,7 +7,7 @@ def calculate_centrosymmetry(system, nmax=12):
     Parameters
     ----------
     system: System object
-    
+
     nmax : int, optional
         number of neighbors to be considered for centrosymmetry 
         parameters. Has to be a positive, even integer. Default 12
@@ -39,6 +39,8 @@ def calculate_centrosymmetry(system, nmax=12):
     if not nmax%2 == 0:
         raise ValueError("nmax has to even integer")
 
+    system.atoms.create_attribute('centrosymmetry', fill_with = 0)
+    system.find_neighbors(method='number', nmax=nmax, assign_neighbor=True)
     pc.calculate_centrosymmetry(system.atoms, nmax)
 
     return system.atoms.centrosymmetry
