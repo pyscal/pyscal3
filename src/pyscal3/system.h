@@ -315,3 +315,9 @@ void identify_diamond_cna(py::dict& atoms,
     const vector<vector<double>>& rot, 
     const vector<vector<double>>& rotinv,
     const vector<double>& box);
+
+/*-----------------------------------------------------
+    Other Methods
+-----------------------------------------------------*/
+void calculate_centrosymmetry(py::dict& atoms,
+    const int nmax);
