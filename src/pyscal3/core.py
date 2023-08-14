@@ -96,6 +96,19 @@ class System:
         Box setter 
         """
         #we should automatically check for triclinic cells here
+        self.internal_box = userbox
+        self.actual_box = userbox
+
+    @property
+    def internal_box(self):
+        return self.box
+
+    @internal_box.setter
+    def internal_box(self, userbox):
+        """
+        Box setter 
+        """
+        #we should automatically check for triclinic cells here
         summ = 0
         for i in range(3):
             box1 = np.array(userbox[i-1])
@@ -114,6 +127,8 @@ class System:
         self.boxdims[0] = np.sum(np.array(userbox[0])**2)**0.5
         self.boxdims[1] = np.sum(np.array(userbox[1])**2)**0.5
         self.boxdims[2] = np.sum(np.array(userbox[2])**2)**0.5
+
+        #and we reset the original memory of the box
         self._box = userbox
 
     @property
@@ -159,7 +174,7 @@ class System:
                 raise ValueError("Simulation box should be initialized before atoms")
             atoms, box = self.repeat((nx, nx, nx), atoms=atoms, ghost=True, scale_box=True, assign=False, return_atoms=True)
             self.actual_box = self.box.copy()
-            self.box = box
+            self.internal_box = box
 
         self._atoms = atoms
         
