@@ -1366,3 +1366,32 @@ class System:
         """
         resdict = cna.calculate_cna(self)
         return resdict
+
+    def identify_diamond(self):
+        """
+        Identify diamond structure
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        diamondstructure : dict
+            dict of structure signature
+
+        Notes
+        -----
+        Identify diamond structure using the algorithm mentioned in [1]. It is an
+        extended CNA method. The integers 5, 6, 7, 8, 9 and 10 are assigned to the
+        structure variable of the atom. 5 stands for cubic diamond, 6 stands for first
+        nearest neighbors of cubic diamond and 7 stands for second nearest neighbors
+        of cubic diamond. 8 signifies hexagonal diamond, the first nearest neighbors
+        are marked with 9 and second nearest neighbors with 10.
+
+        References
+        ----------
+        .. [1] Maras et al, CPC 205, 2016
+        """
+        resdict = cna.identify_diamond(self)
+        return resdict        

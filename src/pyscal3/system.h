@@ -302,3 +302,16 @@ void identify_cn14(py::dict& atoms,
     const vector<vector<double>>& rot, 
     const vector<vector<double>>& rotinv,
     const vector<double>& box);
+
+void get_diamond_neighbors(py::dict& atoms,
+    const int& triclinic,
+    const vector<vector<double>>& rot, 
+    const vector<vector<double>>& rotinv,
+    const vector<double>& box,
+    vector<vector<int>>& first_shell);
+
+void identify_diamond_cna(py::dict& atoms,
+    const int& triclinic,
+    const vector<vector<double>>& rot, 
+    const vector<vector<double>>& rotinv,
+    const vector<double>& box);
