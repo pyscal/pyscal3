@@ -183,10 +183,20 @@ class System:
     def repeat(self, repetitions, atoms=None, ghost=False, scale_box=True, assign=False, return_atoms=False):
         """
         """
-        return operations.repeat(self, repetitions, 
-            atoms=atoms, ghost=ghost, 
-            scale_box=scale_box, 
-            return_atoms=return_atoms)
+
+        if max(repetitions) < 1:
+            #call fractional
+            return operations.repeat_fractional(self, repetitions, 
+                atoms=atoms, ghost=ghost, 
+                scale_box=scale_box, 
+                return_atoms=return_atoms)
+        elif min(repetitions) >= 1:
+            return operations.repeat(self, repetitions, 
+                atoms=atoms, ghost=ghost, 
+                scale_box=scale_box, 
+                return_atoms=return_atoms)
+        else:
+            raise ValueError("Repetitions have to be of the form ((x, y, z) < 1) or ((x, y, z) >= 1)")
 
     def remap_atoms_into_box(self):
         """
