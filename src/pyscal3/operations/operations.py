@@ -149,12 +149,7 @@ def repeat_fractional(system, repetitions, ghost = False,
     newatoms = []
     idstart = len(atoms) + 1
 
-    x_lo = repetitions[0]*system.boxdims[0]
-    x_hi = (repetitions[0]+1)*system.boxdims[0]
-    y_lo = repetitions[1]*system.boxdims[1]
-    y_hi = (repetitions[1]+1)*system.boxdims[1]
-    z_lo = repetitions[2]*system.boxdims[2]
-    z_hi = (repetitions[2]+1)*system.boxdims[2]
+
     xs = 2*repetitions[0] + 1
     ys = 2*repetitions[1] + 1
     zs = 2*repetitions[2] + 1
@@ -164,42 +159,59 @@ def repeat_fractional(system, repetitions, ghost = False,
     del datadict['ids']
     del datadict['head']
     del datadict['ghost']
+    
     positions = []
     ids = []
     head = []
     ghosts = []
+    #add existing positions
+    for pos in atoms.positions:
+        positions.append(pos)
 
-    #first loop directly over atoms
-    for count, pos in enumerate(atoms['positions']):
-        if not atoms["ghost"][count]:
+    x_lo = repetitions[0]*min(np.array(positions)[:,0])
+    x_hi = (1-repetitions[0])*max(np.array(positions)[:,0])
+    y_lo = repetitions[1]*min(np.array(positions)[:,1])
+    y_hi = (1-repetitions[1])*max(np.array(positions)[:,1])
+    z_lo = repetitions[2]*min(np.array(positions)[:,2])
+    z_hi = (1-repetitions[2])*max(np.array(positions)[:,2])
+
+    limits = [[x_lo, x_hi], [y_lo, y_hi], [z_lo, z_hi]]
+
+    for dim in range(3):
+        new_positions = []
+        new_ids = []
+        new_head = []
+        new_ghosts = []
+
+        index = [0, 0, 0]
+        index[dim] = 1
+
+        #first loop directly over atoms
+        for count, pos in enumerate(positions):
             #now check coordinates one by one
             mod = False
-            if (pos[0] <= x_lo):
-                pos = pos + np.array(box[0])
+            if (pos[dim] <= limits[dim][0]):
+                pos = pos + np.array(box[dim])
                 mod = True
-            elif (pos[0] > x_hi):
-                pos = pos - np.array(box[0])
-                mod = True  
-            if (pos[1] <= y_lo):
-                pos = pos + np.array(box[1])
-                mod = True
-            elif (pos[1] > y_hi):
-                pos = pos - np.array(box[1])
-                mod = True  
-            if (pos[2] <= z_lo):
-                pos = pos + np.array(box[2])
-                mod = True
-            elif (pos[2] > z_hi):
-                pos = pos - np.array(box[2])
+            elif (pos[dim] > limits[dim][1]):
+                pos = pos - np.array(box[dim])
                 mod = True
             if mod:  
-                positions.append(list(pos))
-                ids.append(idstart)
-                head.append(count)
-                ghosts.append(ghost)
+                #print(f'mod pos: {pos}')
+                new_positions.append(list(pos))
+                new_ids.append(idstart)
+                new_head.append(count)
+                new_ghosts.append(ghost)
                 idstart += 1
                 for key in datadict.keys():
                     datadict[key].append(atoms[key][count])
+
+        #now we merge everything and be done
+        positions = [*positions, *new_positions]
+        ids = [*ids, *new_ids]
+        head = [*head, *new_head]
+        ghosts = [*ghosts, *new_ghosts]
+
 
     if scale_box:
         box[0] = xs*np.array(box[0])
@@ -207,6 +219,7 @@ def repeat_fractional(system, repetitions, ghost = False,
         box[2] = zs*np.array(box[2])
     if ghost:
         system.ghosts_created = True
+
 
     atoms['positions'].extend(positions)
     atoms['ids'].extend(ids)
@@ -216,6 +229,7 @@ def repeat_fractional(system, repetitions, ghost = False,
         atoms[key].extend(datadict[key])
 
     if return_atoms:
+        return positions
         return atoms, box
 
     else:
