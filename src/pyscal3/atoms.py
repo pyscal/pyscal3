@@ -131,7 +131,7 @@ class Atoms(dict, AttrSetter):
         """
         if alias is None:
             alias = key
-        self[key] = [fill_with for x in range(self.ntotal)]
+        self[key] = np.array([fill_with for x in range(self.ntotal)])
         mapdict = {alias: key}
         self._add_attribute(mapdict)
 
@@ -209,7 +209,10 @@ class Atoms(dict, AttrSetter):
 
     def iter_atoms(self):
         for index in range(self.nreal):
-            atom_dict = {key: [self[key][index]] for key in self.keys()}
+            atom_dict = {}
+            for key in self.keys():
+                if index < len(self[key]):
+                    atom_dict[key] = self._convert_to_list(self[key][index]) 
             yield Atoms(atom_dict)
 
     def _generate_bool_list(self, ids=None, indices=None, condition=None, selection=False):
