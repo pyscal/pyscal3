@@ -89,12 +89,14 @@ def repeat(system, repetitions, ghost = False,
     if ghost:
         system.ghosts_created = True
 
-    atoms['positions'].extend(positions)
-    atoms['ids'].extend(ids)
-    atoms['ghost'].extend(ghosts)
-    atoms['head'].extend(head)
+    
+    atoms['positions'] = np.concatenate((atoms['positions'], positions))
+    atoms['ids'] = np.concatenate((atoms['ids'], ids))
+    atoms['ghost'] = np.concatenate((atoms['ghost'], ghosts))
+    atoms['head'] = np.concatenate((atoms['head'], head))
+
     for key in datadict.keys():
-        atoms[key].extend(datadict[key])
+        atoms[key] = np.concatenate((atoms[key], datadict[key]))
 
     if return_atoms:
         return atoms, box

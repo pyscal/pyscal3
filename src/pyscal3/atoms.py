@@ -23,7 +23,6 @@ class Atoms(dict, AttrSetter):
         self._lattice_constant = None
         self._lattice = None
         AttrSetter.__init__(self)
-
         if atoms is not None:
             self.from_dict(atoms)
     
@@ -43,7 +42,7 @@ class Atoms(dict, AttrSetter):
             return val
 
     def __setitem__(self, key, val):
-        dict.__setitem__(self, key, MyList(val))
+        dict.__setitem__(self, key, np.array(val))
 
     def __repr__(self):
         dictrepr = dict.__repr__(self)
@@ -54,10 +53,6 @@ class Atoms(dict, AttrSetter):
         disp_atoms = {f"atom {x}": self._get_atoms(x) for x in range(self.natoms)}
         return disp_atoms
         
-    #def update(self, atoms):
-    #    for k, v in dict(*args, **kwargs).items():
-    #        self[k] = v
-
     def __add__(self, atoms):
         if not 'positions' in atoms.keys():
             raise ValueError('positions is a necessary key in atoms')
@@ -90,7 +85,8 @@ class Atoms(dict, AttrSetter):
             atoms['head'] = [self.natoms+x for x in range(nop)]
         
         common_keys = list(set(self.keys()).intersection(set(atoms.keys())))
-        _ = [self[key].extend(atoms[key]) for key in common_keys]
+        for key in common_keys:
+            self[key] = np.concatenate((self[key], atoms[key]))
         extra_keys_add = len(atoms.keys()) - len(common_keys)
         extra_keys_exist = len(self.keys()) - len(common_keys)
         
@@ -186,12 +182,16 @@ class Atoms(dict, AttrSetter):
         """
         Check if the given item is a list, if not convert to a single item list
         """
-        if not isinstance(data, list):
-            data = [data]
+        if np.isscalar(data):
+            data = np.array([data])
         return data
        
     def _get_atoms(self, index):
-        atom_dict = {key: self._convert_to_list(self[key][index]) for key in self.keys()}
+        atom_dict = {}
+        for key in self.keys():
+            if index < len(self[key]):
+                atom_dict[key] = self._convert_to_list(self[key][index]) 
+        #atom_dict = {key: self._convert_to_list(self[key][index]) for key in self.keys()}
         return Atoms(atom_dict)
 
     def _delete_atoms(self, indices):
@@ -223,7 +223,7 @@ class Atoms(dict, AttrSetter):
         if selection:
             indices = [x for x in range(self.nreal) if self["condition"][x]]
         elif ids is not None:
-            if not isinstance(ids, list):
+            if np.isscalar(ids):
                 ids = [ids]
             indices = [x for x in range(len(self["ids"])) if self["ids"][x] in ids]
             if len(indices) == 0:
@@ -235,7 +235,7 @@ class Atoms(dict, AttrSetter):
         elif indices is None:
             indices = [x for x in range(self.nreal)]
         
-        if not isinstance(indices, list):
+        if np.isscalar(indices):
             indices = [indices]
 
         bool_list = [ True if x in indices else False for x in range(self.nreal)]
@@ -277,14 +277,14 @@ class Atoms(dict, AttrSetter):
         return condition
 
     def apply_selection(self, ids=None, indices=None, condition=None):
-        if isinstance(condition, list):
+        if isinstance(condition, (list, np.ndarray)):
             masks = self._validate_condition(condition)
         else:
             masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition)
         self._apply_selection(masks)
     
     def remove_selection(self, ids=None, indices=None, condition=None):
-        if isinstance(condition, list):
+        if isinstance(condition, (list, np.ndarray)):
             masks = self._validate_condition(condition)
         else:
             masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition)
