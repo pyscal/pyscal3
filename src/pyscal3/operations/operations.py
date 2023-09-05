@@ -104,6 +104,79 @@ def repeat(system, repetitions, ghost = False,
         system.atoms = atoms
         return system
 
+def repeat_positive(system, repetitions, ghost = False,
+    scale_box = True, atoms = None, return_atoms = False, return_box=False):
+    """
+    Repeat the given system
+
+    """
+    box = system.box        
+    system.actual_box = box.copy()
+
+    if atoms is None:
+        atoms = system.atoms
+
+    newatoms = []
+    idstart = len(atoms) + 1
+
+    x1 = 0
+    x2 = repetitions[0]
+    y1 = 0
+    y2 = repetitions[1]
+    z1 = 0
+    z2 = repetitions[2]
+    xs = repetitions[0]
+    ys = repetitions[1]
+    zs = repetitions[2]
+    
+    datadict = {key:[] for key in atoms.keys()}
+    del datadict['positions']
+    del datadict['ids']
+    del datadict['head']
+    del datadict['ghost']
+    positions = []
+    ids = []
+    head = []
+    ghosts = []
+
+    for i in range(x1, x2):
+        for j in range(y1, y2):
+            for k in range(z1, z2):
+                if (i==j==k==0):
+                    continue
+                for count, pos in enumerate(atoms['positions']):
+                    #we should create ghost images for only real atoms
+                    if not atoms["ghost"][count]:
+                        pos = (pos + i*np.array(box[0]) + j*np.array(box[1]) + k*np.array(box[2]))
+                        positions.append(list(pos))
+                        ids.append(idstart)
+                        head.append(count)
+                        ghosts.append(ghost)
+                        idstart += 1
+                        for key in datadict.keys():
+                            datadict[key].append(atoms[key][count])
+
+    if scale_box:
+        box[0] = xs*np.array(box[0])
+        box[1] = ys*np.array(box[1])
+        box[2] = zs*np.array(box[2])
+    if ghost:
+        system.ghosts_created = True
+
+    atoms['positions'].extend(positions)
+    atoms['ids'].extend(ids)
+    atoms['ghost'].extend(ghosts)
+    atoms['head'].extend(head)
+    for key in datadict.keys():
+        atoms[key].extend(datadict[key])
+
+    if return_atoms:
+        return atoms, box
+
+    else:
+        system.box = box
+        system.atoms = atoms
+        return system
 
 def repeat_fractional(system, repetitions, ghost = False,
     scale_box = True, atoms = None, return_atoms = False, return_box=False):

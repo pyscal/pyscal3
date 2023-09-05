@@ -198,7 +198,7 @@ class System:
         ## MOVE TO ATOMS
         self._atoms.add_atoms(atoms)
 
-    def repeat(self, repetitions, atoms=None, ghost=False, scale_box=True, assign=False, return_atoms=False):
+    def repeat(self, repetitions, atoms=None, ghost=False, scale_box=True, assign=False, return_atoms=False, positive=False):
         """
         """
 
@@ -209,10 +209,16 @@ class System:
                 scale_box=scale_box, 
                 return_atoms=return_atoms)
         elif min(repetitions) >= 1:
-            return operations.repeat(self, repetitions, 
-                atoms=atoms, ghost=ghost, 
-                scale_box=scale_box, 
-                return_atoms=return_atoms)
+            if positive:
+                return operations.repeat_positive(self, repetitions, 
+                    atoms=atoms, ghost=ghost, 
+                    scale_box=scale_box, 
+                    return_atoms=return_atoms)
+            else:
+                return operations.repeat(self, repetitions, 
+                    atoms=atoms, ghost=ghost, 
+                    scale_box=scale_box, 
+                    return_atoms=return_atoms)
         else:
             raise ValueError("Repetitions have to be of the form ((x, y, z) < 1) or ((x, y, z) >= 1)")
 
