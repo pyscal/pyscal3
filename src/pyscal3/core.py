@@ -96,6 +96,19 @@ class System:
         Box setter 
         """
         #we should automatically check for triclinic cells here
+        self.internal_box = userbox
+        self.actual_box = userbox
+
+    @property
+    def internal_box(self):
+        return self._box
+
+    @internal_box.setter
+    def internal_box(self, userbox):
+        """
+        Box setter 
+        """
+        #we should automatically check for triclinic cells here
         summ = 0
         for i in range(3):
             box1 = np.array(userbox[i-1])
@@ -114,6 +127,8 @@ class System:
         self.boxdims[0] = np.sum(np.array(userbox[0])**2)**0.5
         self.boxdims[1] = np.sum(np.array(userbox[1])**2)**0.5
         self.boxdims[2] = np.sum(np.array(userbox[2])**2)**0.5
+
+        #and we reset the original memory of the box
         self._box = userbox
 
     @property
@@ -150,6 +165,7 @@ class System:
             #we need to estimate a rough idea
             needed_atoms = 200 - len(atoms)
             #get a rough cell
+            print(needed_atoms)
             needed_cells = np.ceil(needed_atoms/len(atoms))
             nx = int(needed_cells**(1/3))
 
@@ -158,8 +174,10 @@ class System:
             if np.sum(self.box) == 0:
                 raise ValueError("Simulation box should be initialized before atoms")
             atoms, box = self.repeat((nx, nx, nx), atoms=atoms, ghost=True, scale_box=True, assign=False, return_atoms=True)
+            print(nx)
+            print(box)
             self.actual_box = self.box.copy()
-            self.box = box
+            self.internal_box = box
 
         self._atoms = atoms
         
@@ -180,13 +198,30 @@ class System:
         ## MOVE TO ATOMS
         self._atoms.add_atoms(atoms)
 
-    def repeat(self, repetitions, atoms=None, ghost=False, scale_box=True, assign=False, return_atoms=False):
+    def repeat(self, repetitions, atoms=None, ghost=False, scale_box=True, assign=False, return_atoms=False, positive=False, box=None):
         """
         """
-        return operations.repeat(self, repetitions, 
-            atoms=atoms, ghost=ghost, 
-            scale_box=scale_box, 
-            return_atoms=return_atoms)
+
+        if max(repetitions) < 1:
+            #call fractional
+            return operations.repeat_fractional(self, repetitions, 
+                atoms=atoms, ghost=ghost, 
+                scale_box=scale_box, 
+                return_atoms=return_atoms)
+        elif min(repetitions) >= 1:
+            if positive:
+                return operations.repeat_positive(self, repetitions, 
+                    atoms=atoms, ghost=ghost, 
+                    scale_box=scale_box, 
+                    return_atoms=return_atoms,
+                    box=box)
+            else:
+                return operations.repeat(self, repetitions, 
+                    atoms=atoms, ghost=ghost, 
+                    scale_box=scale_box, 
+                    return_atoms=return_atoms)
+        else:
+            raise ValueError("Repetitions have to be of the form ((x, y, z) < 1) or ((x, y, z) >= 1)")
 
     def remap_atoms_into_box(self):
         """
