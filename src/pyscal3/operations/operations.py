@@ -267,7 +267,7 @@ def embed_in_cubic_box(system, input_box=None,
         only returned if `return_box` is True
     """
     if input_box is None:
-        box = system._box
+        box = system.box
         backupbox = box.copy()
     else:
         box = input_box
