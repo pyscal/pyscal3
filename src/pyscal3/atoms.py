@@ -145,24 +145,24 @@ class Atoms(dict, AttrSetter):
         nop = len(atoms["positions"])
         
         if not 'ids' in atoms.keys():
-            atoms['ids'] = [x+1 for x in range(nop)]
+            atoms['ids'] = np.array([x+1 for x in range(nop)])
         
-        atoms['ghost'] = [False for x in range(nop)]
+        atoms['ghost'] = np.array([False for x in range(nop)])
         if not 'types' in atoms.keys():
-            atoms['types'] = [1 for x in range(nop)]
+            atoms['types'] = np.array([1 for x in range(nop)])
         if not 'species' in atoms.keys():
-            atoms['species'] = [None for x in range(nop)]
+            atoms['species'] = np.array([None for x in range(nop)])
         if not 'mask_1' in atoms.keys():
-            atoms['mask_1'] = [False for x in range(nop)]
+            atoms['mask_1'] = np.array([False for x in range(nop)])
         if not 'mask_2' in atoms.keys():
-            atoms['mask_2'] = [False for x in range(nop)]
+            atoms['mask_2'] = np.array([False for x in range(nop)])
         if not 'condition' in atoms.keys():
-            atoms['condition'] = [True for x in range(nop)]
+            atoms['condition'] = np.array([True for x in range(nop)])
         if not 'head' in atoms.keys():
-            atoms['head'] = [x for x in range(nop)]
+            atoms['head'] = np.array([x for x in range(nop)])
         
         for key, val in atoms.items():
-            self[key] = MyList(val)
+            self[key] = np.array(val)
         self._nreal = len(val)
 
         #add attributes
