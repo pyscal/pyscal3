@@ -104,14 +104,15 @@ def repeat(system, repetitions, ghost = False,
         system.atoms = atoms
         return system
 
-def repeat_positive(system, repetitions, ghost = False,
+def repeat_positive(system, repetitions, box=None, ghost = False,
     scale_box = True, atoms = None, return_atoms = False, return_box=False):
     """
     Repeat the given system
 
     """
-    box = system.box        
-    system.actual_box = box.copy()
+    if box is None:
+        box = system.box        
+        system.actual_box = box.copy()
 
     if atoms is None:
         atoms = system.atoms
@@ -174,7 +175,8 @@ def repeat_positive(system, repetitions, ghost = False,
         return atoms, box
 
     else:
-        system.box = box
+        if scale_box:
+            system.box = box
         system.atoms = atoms
         return system
 
