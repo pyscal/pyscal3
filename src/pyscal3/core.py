@@ -14,6 +14,7 @@ import gzip
 import io
 from scipy.special import sph_harm
 import copy
+from functools import partial, update_wrapper
 
 from pyscal3.atoms import Atoms, AttrSetter
 import pyscal3.csystem as pc
@@ -51,7 +52,19 @@ class System:
         if filename is not None:
             self.read_inputfile(filename, format=format, 
                                             compressed = compressed, customkeys=customkeys)
-    
+
+        #customised methods for the class
+        self.modify = AttrSetter()
+        self.modify.head = operations
+        mapdict = {}
+
+        #repeat methid
+        mapdict["repeat"] = update_wrapper(partial(operations.repeat, self), operations.repeat)
+        mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
+
+        self.modify._add_attribute(mapdict)
+
+
     @classmethod
     def from_structure(cls, structure, lattice_constant = 1.00, repetitions = None, ca_ratio = 1.633, noise = 0, element=None, chemical_symbol=None):
         atoms, box, sdict = pcs.make_crystal(structure, lattice_constant=lattice_constant,
@@ -195,10 +208,6 @@ class System:
         ## MOVE TO ATOMS
         self._atoms.add_atoms(atoms)
 
-    def repeat(self, repetitions):
-        """
-        """
-        return operations.repeat(self, repetitions)
 
     def remap_atoms_into_box(self):
         """
