@@ -2,6 +2,15 @@ import numpy as np
 import copy
 #from pyscal3.attributes import DocumentedKeywords
 
+def _create_ghosts(system, repetitions):
+    """
+    This method creates a padded layer around the atoms
+    """
+    box = copy.copy(system.box)        
+    system.actual_box = box.copy()
+
+
+
 def repeat(system, repetitions, ghost = False,
     scale_box = True, atoms = None, return_atoms = False, return_box=False):
     """
@@ -65,7 +74,7 @@ def repeat(system, repetitions, ghost = False,
         new_id_list = []
         for i in range(1, repetitions[0]):
             npos = copy.copy(pos)
-            npos[:, d] = npos[:, d] + i*np.linalg.norm(box[d])
+            npos = npos + i*box[d]
             pos_list.append(npos)
             new_ids = [idstart+i for i in range(len(pos))]
             new_id_list.append(new_ids)
