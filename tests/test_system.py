@@ -30,7 +30,7 @@ def test_nop():
 	sys = Structure().lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)
 
 	assert sys.natoms == 16
-	assert len(sys.atoms['positions']) == 2000
+	assert len(sys.atoms['positions']) == 128
 
 	for a in sys.iter_atoms():
 		assert np.sum(a["positions"]) == 0

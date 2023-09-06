@@ -44,6 +44,9 @@ class Atoms(dict, AttrSetter):
     def __setitem__(self, key, val):
         dict.__setitem__(self, key, np.array(val))
 
+    def __len__(self):
+        return self.nreal
+        
     def __repr__(self):
         dictrepr = dict.__repr__(self)
         return '%s(%s)' % (type(self).__name__, dictrepr)

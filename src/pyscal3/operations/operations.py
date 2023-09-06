@@ -2,17 +2,81 @@ import numpy as np
 import copy
 #from pyscal3.attributes import DocumentedKeywords
 
-def _create_ghosts(system, repetitions):
+def _create_ghosts(atoms, box, repetitions, ghost=True):
     """
     This method creates a padded layer around the atoms
     """
-    box = copy.copy(system.box)        
-    system.actual_box = box.copy()
+    box = np.array(copy.copy(box))        
+    idstart = len(atoms) + 1
+
+    pos = atoms.positions
+    nop = len(pos)
+    ids = atoms.ids
+    head = [x for x in range(len(pos))]
+    ghosts = [False for x in range(nop)]
 
 
+    #all the other keys
+    datadict = {key: atoms[key][:atoms.nreal] for key in atoms.keys()}
+    del datadict['positions']
+    del datadict['ids']
+    del datadict['head']
+    del datadict['ghost']
 
-def repeat(system, repetitions, ghost = False,
-    scale_box = True, atoms = None, return_atoms = False, return_box=False):
+    #prepopulate
+    for d in range(3):
+        #first do to the right
+        pos_list = []
+        new_id_list = []
+        ghost_list = []
+
+        for i in range(1, repetitions[d]):
+            npos = copy.copy(pos)
+            npos = npos + i*box[d]
+            pos_list.append(npos)
+            new_ids = [idstart+i for i in range(len(pos))]
+            new_id_list.append(new_ids)
+            ghost_list.append([ghost for x in range(len(pos))])
+            idstart = idstart + len(new_ids)
+
+        for i in range(-repetitions[d]+1, 0):
+            npos = copy.copy(pos)
+            npos = npos + i*box[d]
+            pos_list.append(npos)
+            new_ids = [idstart+i for i in range(len(pos))]
+            new_id_list.append(new_ids)
+            ghost_list.append([ghost for x in range(len(pos))])
+            #change id start
+            idstart = idstart + len(new_ids)
+
+        pos = np.concatenate((pos, *pos_list))
+        ids = np.concatenate((ids, *new_id_list))
+        ghosts = np.concatenate((ghosts, *ghost_list))
+        
+        head = np.concatenate((head, np.tile(head, len(pos_list))))
+
+        for key in datadict.keys():
+            datadict[key] = np.concatenate((datadict[key], np.tile(datadict[key], len(pos_list))))
+
+    atoms["positions"] = pos
+    atoms["ids"] = ids
+    atoms["head"] = head
+    atoms["ghost"] = ghosts
+
+    for key in datadict.keys():
+        atoms[key] = datadict[key]
+
+
+    box[0] = (2*repetitions[0]-1)*np.array(box[0])
+    box[1] = (2*repetitions[1]-1)*np.array(box[1])
+    box[2] = (2*repetitions[2]-1)*np.array(box[2])
+
+    return atoms, box
+
+
+def repeat(system, repetitions, 
+    ghost = False, scale_box = True, 
+    atoms = None, return_atoms = False):
     """
     Repeat the given system
 
@@ -46,13 +110,12 @@ def repeat(system, repetitions, ghost = False,
 
 
     """
-    box = copy.copy(system.box)        
+    box = np.array(copy.copy(system.box))        
     system.actual_box = box.copy()
 
     if atoms is None:
         atoms = system.atoms
 
-    newatoms = []
     idstart = len(atoms) + 1
 
     pos = atoms.positions
@@ -72,21 +135,23 @@ def repeat(system, repetitions, ghost = False,
     for d in range(3):
         pos_list = []
         new_id_list = []
-        for i in range(1, repetitions[0]):
+        ghost_list = []
+        for i in range(1, repetitions[d]):
             npos = copy.copy(pos)
             npos = npos + i*box[d]
             pos_list.append(npos)
             new_ids = [idstart+i for i in range(len(pos))]
             new_id_list.append(new_ids)
+            ghost_list.append([ghost for x in range(len(pos))])
             #change id start
             idstart = idstart + len(new_ids)
 
         pos = np.concatenate((pos, *pos_list))
         ids = np.concatenate((ids, *new_id_list))
+        ghosts = np.concatenate((ghosts, *ghost_list))
         #generate new ids
         
         head = np.concatenate((head, np.tile(head, len(pos_list))))
-        ghosts = np.concatenate((ghosts, np.tile(ghosts, len(pos_list))))
 
         for key in datadict.keys():
             datadict[key] = np.concatenate((datadict[key], np.tile(datadict[key], len(pos_list))))
