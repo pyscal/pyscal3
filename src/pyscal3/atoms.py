@@ -46,7 +46,7 @@ class Atoms(dict, AttrSetter):
 
     def __len__(self):
         return self.nreal
-        
+
     def __repr__(self):
         dictrepr = dict.__repr__(self)
         return '%s(%s)' % (type(self).__name__, dictrepr)
@@ -201,9 +201,10 @@ class Atoms(dict, AttrSetter):
         del_real = np.sum([1 for x in indices if x < self._nreal])
         del_ghost = np.sum([1 for x in indices if x >= self._nreal])
 
+        reverse_indices = [x for x in range(len(self['positions'])) if x not in indices]
+
         for key in self.keys():
-            for index in sorted(indices, reverse=True):
-                del self[key][index]
+            self[key] = self[key][reverse_indices]
 
         td = len(indices)
         self._nreal = int(self.nreal - del_real)
