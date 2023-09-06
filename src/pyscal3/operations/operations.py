@@ -37,7 +37,7 @@ def repeat(system, repetitions, ghost = False,
 
 
     """
-    box = system.box        
+    box = copy.copy(system.box)        
     system.actual_box = box.copy()
 
     if atoms is None:
@@ -49,7 +49,7 @@ def repeat(system, repetitions, ghost = False,
     pos = atoms.positions
     nop = len(pos)
     ids = atoms.ids
-    head = atoms.head
+    head = [x for x in range(len(pos))]
     ghosts = [False for x in range(nop)]
 
     #all the other keys
@@ -60,24 +60,27 @@ def repeat(system, repetitions, ghost = False,
     del datadict['ghost']
 
     #prepopulate
-
     for d in range(3):
-        for i in range(1, repetitions[0]+1):
-            npos = copy(pos)
-            npos = npos[:, d] + i*system.boxdims[d]
+        pos_list = []
+        new_id_list = []
+        for i in range(1, repetitions[0]):
+            npos = copy.copy(pos)
+            npos[:, d] = npos[:, d] + i*np.linalg.norm(box[d])
+            pos_list.append(npos)
+            new_ids = [idstart+i for i in range(len(pos))]
+            new_id_list.append(new_ids)
+            #change id start
+            idstart = idstart + len(new_ids)
 
-        pos = np.concatenate((pos, npos))
-        
+        pos = np.concatenate((pos, *pos_list))
+        ids = np.concatenate((ids, *new_id_list))
         #generate new ids
-        new_ids = [idstart+i for i in range(len(pos))]
-        #change id start
-        idstart = idstart + len(new_ids)
-        ids = np.concatenate((ids, new_ids))
-        head = np.concatenate((head, head))
-        ghosts = np.concatenate((ghosts, [ghost for x in range(len(npos))]))
+        
+        head = np.concatenate((head, np.tile(head, len(pos_list))))
+        ghosts = np.concatenate((ghosts, np.tile(ghosts, len(pos_list))))
 
         for key in datadict.keys():
-            datadict[key] = np.concatenate((datadict[key], datadict[key]))
+            datadict[key] = np.concatenate((datadict[key], np.tile(datadict[key], len(pos_list))))
 
     atoms["positions"] = pos
     atoms["ids"] = ids

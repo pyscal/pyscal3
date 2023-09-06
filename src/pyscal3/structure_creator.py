@@ -2,6 +2,7 @@
 import numpy as np
 import warnings
 import os
+import copy
 
 from pyscal3.atoms import Atoms
 from pyscal3.attributes import read_yaml
@@ -61,12 +62,12 @@ def make_crystal(structure, lattice_constant = 1.00, repetitions = None, ca_rati
         nz = repetitions[2]
 
     if structure in structures.keys():
-        sdict = structures[structure]
+        sdict = copy.copy(structures[structure])
     else:
         raise ValueError("Unknown crystal structure")
     
     unique_types = np.unique(sdict["species"])
-    print(element)
+    #print(element)
     if element is not None:
         if isinstance(element, str):
             element = [element]
@@ -89,6 +90,7 @@ def make_crystal(structure, lattice_constant = 1.00, repetitions = None, ca_rati
     xh = nx*lattice_constant*sdict["scaling_factors"][0]
     yh = ny*lattice_constant*sdict["scaling_factors"][1]
     zh = nz*lattice_constant*sdict["scaling_factors"][2]
+    sdict["positions"] = lattice_constant*np.array(sdict["positions"])
     box = [[xh, 0, 0], [0, yh, 0], [0, 0, zh]]
 
     #create structure
@@ -97,9 +99,9 @@ def make_crystal(structure, lattice_constant = 1.00, repetitions = None, ca_rati
             for k in range(1, nz+1):
                 for l in range(1, sdict["natoms"]+1):
                     m += 1
-                    posx = ((lattice_constant*sdict["positions"][l-1][0])+(lattice_constant*sdict["scaling_factors"][0]*(float(i)-1)))
-                    posy = ((lattice_constant*sdict["positions"][l-1][1])+(lattice_constant*sdict["scaling_factors"][1]*(float(j)-1)))
-                    posz = ((lattice_constant*sdict["positions"][l-1][2])+(lattice_constant*sdict["scaling_factors"][2]*(float(k)-1)))
+                    posx = ((sdict["positions"][l-1][0])+(lattice_constant*sdict["scaling_factors"][0]*(float(i)-1)))
+                    posy = ((sdict["positions"][l-1][1])+(lattice_constant*sdict["scaling_factors"][1]*(float(j)-1)))
+                    posz = ((sdict["positions"][l-1][2])+(lattice_constant*sdict["scaling_factors"][2]*(float(k)-1)))
                     if noise > 0:
                         posx = np.random.normal(loc=posx, scale=noise)
                         posy = np.random.normal(loc=posy, scale=noise)

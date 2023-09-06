@@ -161,23 +161,23 @@ class System:
         """
         Set atoms
         """
-        if(len(atoms['positions']) < 200):
-            #we need to estimate a rough idea
-            needed_atoms = 200 - len(atoms)
-            #get a rough cell
-            print(needed_atoms)
-            needed_cells = np.ceil(needed_atoms/len(atoms))
-            nx = int(needed_cells**(1/3))
+        #if(len(atoms['positions']) < 200):
+        #    #we need to estimate a rough idea
+        #    needed_atoms = 200 - len(atoms)
+        #    #get a rough cell
+        #    print(needed_atoms)
+        #    needed_cells = np.ceil(needed_atoms/len(atoms))
+        #    nx = int(needed_cells**(1/3))
 
             #nx = int(np.ceil(nx/2))
 
-            if np.sum(self.box) == 0:
-                raise ValueError("Simulation box should be initialized before atoms")
-            atoms, box = self.repeat((nx, nx, nx), atoms=atoms, ghost=True, scale_box=True, assign=False, return_atoms=True)
-            print(nx)
-            print(box)
-            self.actual_box = self.box.copy()
-            self.internal_box = box
+        #    if np.sum(self.box) == 0:
+        #        raise ValueError("Simulation box should be initialized before atoms")
+        #    atoms, box = self.repeat((nx, nx, nx), atoms=atoms, ghost=True, scale_box=True, assign=False, return_atoms=True)
+        #    print(nx)
+        #    print(box)
+        #    self.actual_box = self.box.copy()
+        #    self.internal_box = box
 
         self._atoms = atoms
         
