@@ -170,13 +170,9 @@ class System:
             #print(needed_atoms)
             needed_cells = np.ceil(needed_atoms/len(atoms['positions']))
             nx = int(needed_cells**(1/3))
-            print(nx)
-            #nx = int(np.ceil(nx/2))
-            print(f'actual length {len(atoms["positions"])}')
             if np.sum(self.box) == 0:
                 raise ValueError("Simulation box should be initialized before atoms")
             atoms, box = operations.repeat(self, (nx, nx, nx), atoms=atoms, ghost=True, return_atoms=True)
-            print(f'changed to {len(atoms["positions"])}')
             self.actual_box = self.box.copy()
             self.internal_box = box
 
@@ -203,13 +199,6 @@ class System:
         """
         """
         return operations.repeat(self, repetitions)
-
-    def _create_ghosts(self, atoms, box, repetitions):
-        """
-        """
-        self.ghosts_created = True
-        newatoms, newbox = operations._create_ghosts(atoms, box, repetitions)
-        return newatoms, newbox
 
     def remap_atoms_into_box(self):
         """
@@ -716,10 +705,10 @@ class System:
             backupbox = self._box.copy()
             if self.triclinic:
                 if not self.ghosts_created:
-                    atoms, box = self._create_ghosts(self.atoms, self.box, (2, 2, 2))
-                    self._atoms = atoms
+                    atoms, box = operations.repeat(self, (2, 2, 2), atoms=self.atoms, ghost=True, return_atoms=True)
                     self.actual_box = self.box.copy()
                     self.internal_box = box
+                    self._atoms = atoms
                     self = self.embed_in_cubic_box()
             pc.get_all_neighbors_voronoi(self.atoms, 0.0,
                 self.triclinic, self.rot, self.rotinv,
