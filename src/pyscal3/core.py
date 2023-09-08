@@ -14,6 +14,7 @@ import gzip
 import io
 from scipy.special import sph_harm
 import copy
+from functools import partial, update_wrapper
 
 from pyscal3.atoms import Atoms, AttrSetter
 import pyscal3.csystem as pc
@@ -51,12 +52,25 @@ class System:
         if filename is not None:
             self.read_inputfile(filename, format=format, 
                                             compressed = compressed, customkeys=customkeys)
-    
+
+        #customised methods for the class
+        self.modify = AttrSetter()
+        self.modify.head = operations
+        mapdict = {}
+
+        #repeat methid
+        mapdict["repeat"] = update_wrapper(partial(operations.repeat, self), operations.repeat)
+        mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
+
+        self.modify._add_attribute(mapdict)
+
+
     @classmethod
     def from_structure(cls, structure, lattice_constant = 1.00, repetitions = None, ca_ratio = 1.633, noise = 0, element=None, chemical_symbol=None):
         atoms, box, sdict = pcs.make_crystal(structure, lattice_constant=lattice_constant,
              repetitions=repetitions, ca_ratio=ca_ratio,
              noise=noise, element=element, return_structure_dict=True)
+
         obj = cls()
         obj.box = box
         obj.atoms = atoms
@@ -161,21 +175,17 @@ class System:
         """
         Set atoms
         """
+
         if(len(atoms['positions']) < 200):
             #we need to estimate a rough idea
-            needed_atoms = 200 - len(atoms)
+            needed_atoms = 200 - len(atoms['positions'])
             #get a rough cell
-            print(needed_atoms)
-            needed_cells = np.ceil(needed_atoms/len(atoms))
+            #print(needed_atoms)
+            needed_cells = np.ceil(needed_atoms/len(atoms['positions']))
             nx = int(needed_cells**(1/3))
-
-            #nx = int(np.ceil(nx/2))
-
             if np.sum(self.box) == 0:
                 raise ValueError("Simulation box should be initialized before atoms")
-            atoms, box = self.repeat((nx, nx, nx), atoms=atoms, ghost=True, scale_box=True, assign=False, return_atoms=True)
-            print(nx)
-            print(box)
+            atoms, box = operations.repeat(self, (nx, nx, nx), atoms=atoms, ghost=True, return_atoms=True)
             self.actual_box = self.box.copy()
             self.internal_box = box
 
@@ -198,30 +208,6 @@ class System:
         ## MOVE TO ATOMS
         self._atoms.add_atoms(atoms)
 
-    def repeat(self, repetitions, atoms=None, ghost=False, scale_box=True, assign=False, return_atoms=False, positive=False, box=None):
-        """
-        """
-
-        if max(repetitions) < 1:
-            #call fractional
-            return operations.repeat_fractional(self, repetitions, 
-                atoms=atoms, ghost=ghost, 
-                scale_box=scale_box, 
-                return_atoms=return_atoms)
-        elif min(repetitions) >= 1:
-            if positive:
-                return operations.repeat_positive(self, repetitions, 
-                    atoms=atoms, ghost=ghost, 
-                    scale_box=scale_box, 
-                    return_atoms=return_atoms,
-                    box=box)
-            else:
-                return operations.repeat(self, repetitions, 
-                    atoms=atoms, ghost=ghost, 
-                    scale_box=scale_box, 
-                    return_atoms=return_atoms)
-        else:
-            raise ValueError("Repetitions have to be of the form ((x, y, z) < 1) or ((x, y, z) >= 1)")
 
     def remap_atoms_into_box(self):
         """
@@ -728,7 +714,9 @@ class System:
             backupbox = self._box.copy()
             if self.triclinic:
                 if not self.ghosts_created:
-                    atoms, box = self.repeat((1, 1, 1), ghost=True, scale_box=True, assign=False, return_atoms=True)
+                    atoms, box = operations.repeat(self, (2, 2, 2), atoms=self.atoms, ghost=True, return_atoms=True)
+                    self.actual_box = self.box.copy()
+                    self.internal_box = box
                     self._atoms = atoms
                     self = self.embed_in_cubic_box()
             pc.get_all_neighbors_voronoi(self.atoms, 0.0,

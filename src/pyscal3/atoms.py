@@ -23,7 +23,6 @@ class Atoms(dict, AttrSetter):
         self._lattice_constant = None
         self._lattice = None
         AttrSetter.__init__(self)
-
         if atoms is not None:
             self.from_dict(atoms)
     
@@ -43,7 +42,10 @@ class Atoms(dict, AttrSetter):
             return val
 
     def __setitem__(self, key, val):
-        dict.__setitem__(self, key, MyList(val))
+        dict.__setitem__(self, key, np.array(val))
+
+    def __len__(self):
+        return self.nreal
 
     def __repr__(self):
         dictrepr = dict.__repr__(self)
@@ -54,10 +56,6 @@ class Atoms(dict, AttrSetter):
         disp_atoms = {f"atom {x}": self._get_atoms(x) for x in range(self.natoms)}
         return disp_atoms
         
-    #def update(self, atoms):
-    #    for k, v in dict(*args, **kwargs).items():
-    #        self[k] = v
-
     def __add__(self, atoms):
         if not 'positions' in atoms.keys():
             raise ValueError('positions is a necessary key in atoms')
@@ -90,7 +88,8 @@ class Atoms(dict, AttrSetter):
             atoms['head'] = [self.natoms+x for x in range(nop)]
         
         common_keys = list(set(self.keys()).intersection(set(atoms.keys())))
-        _ = [self[key].extend(atoms[key]) for key in common_keys]
+        for key in common_keys:
+            self[key] = np.concatenate((self[key], atoms[key]))
         extra_keys_add = len(atoms.keys()) - len(common_keys)
         extra_keys_exist = len(self.keys()) - len(common_keys)
         
@@ -135,7 +134,7 @@ class Atoms(dict, AttrSetter):
         """
         if alias is None:
             alias = key
-        self[key] = [fill_with for x in range(self.ntotal)]
+        self[key] = np.array([fill_with for x in range(self.ntotal)])
         mapdict = {alias: key}
         self._add_attribute(mapdict)
 
@@ -145,24 +144,24 @@ class Atoms(dict, AttrSetter):
         nop = len(atoms["positions"])
         
         if not 'ids' in atoms.keys():
-            atoms['ids'] = [x+1 for x in range(nop)]
+            atoms['ids'] = np.array([x+1 for x in range(nop)])
         
-        atoms['ghost'] = [False for x in range(nop)]
+        atoms['ghost'] = np.array([False for x in range(nop)])
         if not 'types' in atoms.keys():
-            atoms['types'] = [1 for x in range(nop)]
+            atoms['types'] = np.array([1 for x in range(nop)])
         if not 'species' in atoms.keys():
-            atoms['species'] = [None for x in range(nop)]
+            atoms['species'] = np.array([None for x in range(nop)])
         if not 'mask_1' in atoms.keys():
-            atoms['mask_1'] = [False for x in range(nop)]
+            atoms['mask_1'] = np.array([False for x in range(nop)])
         if not 'mask_2' in atoms.keys():
-            atoms['mask_2'] = [False for x in range(nop)]
+            atoms['mask_2'] = np.array([False for x in range(nop)])
         if not 'condition' in atoms.keys():
-            atoms['condition'] = [True for x in range(nop)]
+            atoms['condition'] = np.array([True for x in range(nop)])
         if not 'head' in atoms.keys():
-            atoms['head'] = [x for x in range(nop)]
+            atoms['head'] = np.array([x for x in range(nop)])
         
         for key, val in atoms.items():
-            self[key] = MyList(val)
+            self[key] = np.array(val)
         self._nreal = len(val)
 
         #add attributes
@@ -186,21 +185,26 @@ class Atoms(dict, AttrSetter):
         """
         Check if the given item is a list, if not convert to a single item list
         """
-        if not isinstance(data, list):
-            data = [data]
+        if np.isscalar(data):
+            data = np.array([data])
         return data
        
     def _get_atoms(self, index):
-        atom_dict = {key: self._convert_to_list(self[key][index]) for key in self.keys()}
+        atom_dict = {}
+        for key in self.keys():
+            if index < len(self[key]):
+                atom_dict[key] = self._convert_to_list(self[key][index]) 
+        #atom_dict = {key: self._convert_to_list(self[key][index]) for key in self.keys()}
         return Atoms(atom_dict)
 
     def _delete_atoms(self, indices):
         del_real = np.sum([1 for x in indices if x < self._nreal])
         del_ghost = np.sum([1 for x in indices if x >= self._nreal])
 
+        reverse_indices = [x for x in range(len(self['positions'])) if x not in indices]
+
         for key in self.keys():
-            for index in sorted(indices, reverse=True):
-                del self[key][index]
+            self[key] = self[key][reverse_indices]
 
         td = len(indices)
         self._nreal = int(self.nreal - del_real)
@@ -209,7 +213,10 @@ class Atoms(dict, AttrSetter):
 
     def iter_atoms(self):
         for index in range(self.nreal):
-            atom_dict = {key: [self[key][index]] for key in self.keys()}
+            atom_dict = {}
+            for key in self.keys():
+                if index < len(self[key]):
+                    atom_dict[key] = self._convert_to_list(self[key][index]) 
             yield Atoms(atom_dict)
 
     def _generate_bool_list(self, ids=None, indices=None, condition=None, selection=False):
@@ -223,7 +230,7 @@ class Atoms(dict, AttrSetter):
         if selection:
             indices = [x for x in range(self.nreal) if self["condition"][x]]
         elif ids is not None:
-            if not isinstance(ids, list):
+            if np.isscalar(ids):
                 ids = [ids]
             indices = [x for x in range(len(self["ids"])) if self["ids"][x] in ids]
             if len(indices) == 0:
@@ -235,7 +242,7 @@ class Atoms(dict, AttrSetter):
         elif indices is None:
             indices = [x for x in range(self.nreal)]
         
-        if not isinstance(indices, list):
+        if np.isscalar(indices):
             indices = [indices]
 
         bool_list = [ True if x in indices else False for x in range(self.nreal)]
@@ -277,14 +284,14 @@ class Atoms(dict, AttrSetter):
         return condition
 
     def apply_selection(self, ids=None, indices=None, condition=None):
-        if isinstance(condition, list):
+        if isinstance(condition, (list, np.ndarray)):
             masks = self._validate_condition(condition)
         else:
             masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition)
         self._apply_selection(masks)
     
     def remove_selection(self, ids=None, indices=None, condition=None):
-        if isinstance(condition, list):
+        if isinstance(condition, (list, np.ndarray)):
             masks = self._validate_condition(condition)
         else:
             masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition)
@@ -324,6 +331,7 @@ class Atoms(dict, AttrSetter):
             types, typecounts = np.unique(typelist, return_counts=True)
             concdict = {str(t): typecounts[c]/np.sum(typecounts) for c, t in enumerate(types)}
         return concdict
+
 
 
 

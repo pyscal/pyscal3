@@ -75,6 +75,25 @@ def write_poscar(sys, outfile, comments="pyscal"):
     outfile : string
         name of the input file
     """
+    #get element strings
+    if 'species' not in sys.atoms.keys():
+        sys.atoms["species"] = [None for x in range(sys.atoms.ntotal)]
+
+    if sys.atoms.species[0] is None:
+        if species is None:
+            raise ValueError("Species was not known! To convert to ase, species need to be provided using the species keyword")
+        #otherwise we know the species
+        types = sys.atoms.types
+        unique_types = np.unique(types)
+        if not (len(unique_types) == len(species)):
+            raise ValueError("Length of species and number of types found in system are different. Maybe you specified \"Au\" instead of [\"Au\"]")
+        #now assign the species to custom
+        atomspecies = []        
+        for cc, typ in enumerate(types):
+            atomspecies.append(species[int(typ-1)])
+    else:
+        atomspecies = sys.atoms.species
+
 
     fout = open(outfile, 'w')
 
@@ -86,16 +105,14 @@ def write_poscar(sys, outfile, comments="pyscal"):
     fout.write("      %1.14f %1.14f %1.14f\n"%(vecs[0][0], vecs[0][1], vecs[0][2]))
     fout.write("      %1.14f %1.14f %1.14f\n"%(vecs[1][0], vecs[1][1], vecs[1][2]))
     fout.write("      %1.14f %1.14f %1.14f\n"%(vecs[2][0], vecs[2][1], vecs[2][2]))
-
-    atypes = sys.atoms.types
     
-    tt, cc  = np.unique(atypes, return_counts=True)
+    tt, cc  = np.unique(atomspecies, return_counts=True)
     
     atomgroups = [[] for x in range(len(tt))]
     
     for count, t in enumerate(tt):
-        for cc, pos in enumerate(sys.atoms.positions):
-            if int(atypes[cc]) == t:
+        for ccount, pos in enumerate(sys.atoms.positions):
+            if atomspecies[ccount] == t:
                 atomgroups[count].append(pos)
 
     fout.write("  ")
