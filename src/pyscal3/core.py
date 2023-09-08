@@ -305,21 +305,6 @@ class System:
         else:
             return dist
 
-    def get_concentration(self):
-        """
-        Return a dict containing the concentration of the system
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        condict : dict
-            dict of concentration values
-        """
-        return self.concentration
-
 
     def read_inputfile(self, filename, format="lammps-dump", 
                                             compressed = False, customkeys=None):
