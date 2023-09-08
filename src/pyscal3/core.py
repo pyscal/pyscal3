@@ -73,7 +73,7 @@ def _make_general_lattice(positions,
     s = System()
     s.box = box
     s.atoms = atoms
-    s.atoms._lattice = structure
+    s.atoms._lattice = 'custom'
     s.atoms._lattice_constant = lattice_constant
     s._structure_dict = sdict
     return s     
