@@ -1,6 +1,7 @@
 import numpy as np
 import copy
 from scipy.spatial import distance
+import pyscal3.csystem as pc
 
 #from pyscal3.attributes import DocumentedKeywords
 def pad_repeat(atoms, box, repetitions, ghost=True):
@@ -277,7 +278,12 @@ def extract_cubic_representation(system, repetitions = (3,3,3), return_atoms = F
     
     atoms: Atoms object
         only returned if `return_atoms` is True.
+    
 
+    Notes
+    -----
+    This algorithm is not guaranteed to work. Althought it can extract a cubic box,
+    there is no guarantee that the extracted box is actually a unit cell.
     """
     atoms, box = pad_repeat(system.atoms, system.box, repetitions, ghost=False)
     
@@ -329,5 +335,30 @@ def extract_cubic_representation(system, repetitions = (3,3,3), return_atoms = F
     else:
         system.box = box
         system.atoms = atoms
-        system.remap_atoms_into_box()
+        system.modify.remap_to_box()
         return system
+
+
+def remap_to_box(system):
+    """
+    Remap the atom to back inside the box.
+    
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    system
+    """
+    rot = np.array(system.box).T
+    rotinv = np.linalg.inv(rot)
+
+    for x in range(system.natoms):
+        pos = pc.remap_atom_into_box(system.atoms["positions"][x], 
+            system.triclinic,
+            rot, 
+            rotinv, 
+            system.box_dimensions)
+        system.atoms["positions"][x] = pos
+    return system       

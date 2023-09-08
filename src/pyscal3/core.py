@@ -130,6 +130,7 @@ class System:
         #repeat methid
         mapdict["repeat"] = update_wrapper(partial(operations.repeat, self), operations.repeat)
         mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
+        mapdict["remap_to_box"] = update_wrapper(partial(operations.remap_to_box, self), operations.remap_to_box)
 
         self.modify._add_attribute(mapdict)
 
@@ -261,22 +262,7 @@ class System:
         """ 
         ## MOVE TO ATOMS
         self._atoms.add_atoms(atoms)
-
-
-    def remap_atoms_into_box(self):
-        """
-        Go through atoms in the list and remap them into the bix
-        """
-        rot = np.array(self.box).T
-        rotinv = np.linalg.inv(rot)
-
-        for x in range(self.natoms):
-            pos = pc.remap_atom_into_box(self.atoms["positions"][x], 
-                self.triclinic,
-                rot, 
-                rotinv, 
-                self.box_dimensions)
-            self.atoms["positions"][x] = pos        
+     
 
     def apply_mask(self, mask_type="primary", ids=None, indices=None, condition=None, selection=False):
         """
