@@ -44,7 +44,7 @@ def test_embed():
 	sys = pc.System()
 	sys.box = np.array(cu.cell)
 	sys.atoms = Atoms({"positions": cu.positions})
-	sys.embed_in_cubic_box()
+	sys.modify.embed_in_cubic_box()
 	assert np.abs(sys.box[0][0] - 5.105310960166873) < 1E-5
 
 def test_distance():

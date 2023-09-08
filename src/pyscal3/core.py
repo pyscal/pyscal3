@@ -131,6 +131,7 @@ class System:
         mapdict["repeat"] = update_wrapper(partial(operations.repeat, self), operations.repeat)
         mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
         mapdict["remap_to_box"] = update_wrapper(partial(operations.remap_to_box, self), operations.remap_to_box)
+        mapdict["embed_in_cubic_box"] = update_wrapper(partial(operations.embed_in_cubic_box, self), operations.embed_in_cubic_box)
 
         self.modify._add_attribute(mapdict)
 
@@ -263,48 +264,6 @@ class System:
         ## MOVE TO ATOMS
         self._atoms.add_atoms(atoms)
      
-
-    def apply_mask(self, mask_type="primary", ids=None, indices=None, condition=None, selection=False):
-        """
-
-        Notes
-        -----
-        Masks can be used to exclude atoms from neighbor calculations. An atom for which
-        mask is set to True is excluded from the calculation. There are two types of masks,
-        `primary` or `secondary`. For example, neighbors are being calculated for a central
-        atom `i`. The neighbor atom is denoted as `j`. If `primary` mask of `i` is True, no neighbor
-        calculation is carried out for `i`. If it is False, `i` is considered. Now if `secondary`
-        mask of `j` is True, it will not included in the list of neighbors of `i` even if it is within
-        the cutoff distance. The `primary` mask of `j` has no effect in this situation.
-
-        An example situation can be to calculate the local concentration around Ni atoms in a NiAl
-        structure. In this case, the `primary` mask of all Al atoms can be set to True so that
-        only `Ni` atoms are considered. Now, in a second case, the task is to count the number of Al
-        atoms around each Ni atom. For this case, the `primary` mask of all Al atoms can be set to True,
-        and the `secondary` mask of all Ni atoms can be set to True.
-
-        The masks for ghost atoms are copied from the corresponding mask for real atoms.
-        """
-        #check if length of mask is equal to length of real atoms
-        self.atoms.apply_mask(mask_type=mask_type, ids=ids, 
-            indices=indices, condition=condition, selection=selection)
-
-    def remove_mask(self, mask_type="primary", ids=None, indices=None, condition=None, selection=False):
-        """
-        Remove applied masks
-
-        Parameters
-        ----------
-        mask_type: string, optional
-            type of mask to be applied, either `primary`, `secondary` or `all`
-
-        Returns
-        -------
-        None
-        """
-        self._atoms.remove_mask(mask_type=mask_type, ids=ids, 
-            indices=indices, condition=condition, selection=selection)
-
     def apply_selection(self, ids=None, indices=None, condition=None):
         self._atoms.apply_selection(ids=ids, indices=indices, condition=condition)    
     
@@ -314,13 +273,6 @@ class System:
     def delete(self, ids=None, indices=None, condition=None, selection=False):
         self._atoms.delete(ids=ids, indices=indices, condition=condition, selection=selection)
 
-
-    def embed_in_cubic_box(self, input_box=None, return_box=False):
-        """
-        Embedded the triclinic box in a cubic box
-        """
-        return operations.embed_in_cubic_box(self, input_box=input_box,
-            return_box=return_box) 
 
     def get_distance(self, pos1, pos2, vector=False):
         """
