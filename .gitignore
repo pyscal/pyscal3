@@ -11,3 +11,4 @@ docs/html/*
 docs/doctrees/*
 docs/source/examples
 .ipynb_check*
+*.dump
