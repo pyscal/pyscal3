@@ -38,11 +38,19 @@ class System:
     """ 
     #system wide things available before structure creation
     create = AttrSetter()
-    create.head = pcs
+    #create.head = pcs
     mapdict = {}
     mapdict["lattice"] = {}
     for key in structure_dict.keys():
-        mapdict["lattice"][key] = update_wrapper(partial(pcs.make_crystal, key), pcs.make_crystal)
+        mapdict["lattice"][key] = update_wrapper(partial(pcs.make_crystal, key), 
+            pcs.make_crystal)
+    
+    mapdict["element"] = {}
+    for key in element_dict.keys():
+        mapdict["element"][key] = update_wrapper(partial(pcs.make_crystal,
+            element_dict[key]['structure'],
+            lattice_constant=element_dict[key]['lattice_constant'],
+            element = key), pcs.make_crystal)
 
     create._add_attribute(mapdict)
 
