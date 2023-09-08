@@ -1,12 +1,11 @@
 import pyscal3.core as pc
 import os
-from pyscal3.crystal_structures import Structure
 import numpy as np
 from ase.build import bulk
 
 def test_voronoi_props():
     nx = 5
-    sys = Structure().lattice.bcc(repetitions = [nx, nx, nx], lattice_constant=3.127)
+    sys = pc.System.create.lattice.bcc(repetitions = [nx, nx, nx], lattice_constant=3.127)
     sys.find_neighbors(method="voronoi")
 
     assert sys.atoms.voronoi.vertex.numbers[0][0] == 6

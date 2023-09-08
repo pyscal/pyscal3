@@ -2,7 +2,6 @@ import pytest
 import os
 import numpy as np
 import pyscal3.core as pc
-from pyscal3.crystal_structures import Structure
 
 def test_complex_system():
     sys = pc.System('tests/files/cluster.dump')
@@ -25,7 +24,7 @@ def test_cluster_cutoff():
 
 def test_system_nucsize_fraction():
     #create some atoms
-    sys = Structure().lattice.bcc(repetitions = [2,2,2], lattice_constant=3.20)    
+    sys = pc.System.create.lattice.bcc(repetitions = [2,2,2], lattice_constant=3.20)    
 
     #test that atoms are set properly
     assert sys.natoms == 16

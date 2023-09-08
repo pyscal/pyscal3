@@ -90,7 +90,7 @@ class System:
     for key in structure_dict.keys():
         mapdict["lattice"][key] = update_wrapper(partial(_make_crystal, key), 
             _make_crystal)
-    mapdict["lattice"]["general"] = _make_general_lattice
+    mapdict["lattice"]["custom"] = _make_general_lattice
 
     mapdict["element"] = {}
     for key in element_dict.keys():

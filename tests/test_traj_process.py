@@ -2,7 +2,6 @@ import pytest
 import os
 import numpy as np
 import pyscal3.core as pc
-from pyscal3.crystal_structures import Structure
 import pyscal3.structure_creator as pcs
 import pyscal3.traj_process as ptp
 
@@ -10,7 +9,7 @@ def test_create_multislice_dump():
     """
     Create a multitest dump file and test it
     """
-    sys = Structure().lattice.bcc(repetitions = [6, 6, 6])
+    sys = pc.System.create.lattice.bcc(repetitions = [6, 6, 6])
     ptp.write_file(sys, "tests/bcc1.dump")
 
     atoms2, boxdims2 = pcs.make_crystal('bcc', repetitions=[6,6,6])
@@ -36,7 +35,7 @@ def test_customvals_dump():
     """
     Test writing customvals
     """
-    sys = Structure().lattice.bcc(repetitions = [1, 1, 1])
+    sys = pc.System.create.lattice.bcc(repetitions = [1, 1, 1])
 
 
     #test for multiple customvals
