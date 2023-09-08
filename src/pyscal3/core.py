@@ -32,6 +32,51 @@ import pyscal3.operations.centrosymmetry
 structure_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/structure_data.yaml"))
 element_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/element_data.yaml"))
 
+def _make_crystal(structure, 
+    lattice_constant = 1.00, 
+    repetitions = None, 
+    ca_ratio = 1.633, 
+    noise = 0, 
+    element=None):
+    
+    atoms, box, sdict = pcs.make_crystal(structure, 
+        lattice_constant=lattice_constant,
+        repetitions=repetitions, 
+        ca_ratio=ca_ratio,
+        noise=noise, 
+        element=element, 
+        return_structure_dict=True)
+    s = System()
+    s.box = box
+    s.atoms = atoms
+    s.atoms._lattice = structure
+    s.atoms._lattice_constant = lattice_constant
+    s._structure_dict = sdict
+    return s
+
+def _make_general_lattice(positions,
+    types, 
+    scaling_factors=[1.0, 1.0, 1.0],
+    lattice_constant = 1.00, 
+    repetitions = None, 
+    noise = 0,
+    element=None):
+
+    atoms, box, sdict = pcs.general_lattice(positions,
+        types,
+        scaling_factors=scaling_factors,
+        lattice_constant=lattice_constant,
+        repetitions=repetitions,
+        noise=noise,
+        element=element,
+        return_structure_dict=True)
+    s = System()
+    s.box = box
+    s.atoms = atoms
+    s.atoms._lattice = structure
+    s.atoms._lattice_constant = lattice_constant
+    s._structure_dict = sdict
+    return s     
 
 class System:
     """
@@ -1464,48 +1509,4 @@ class System:
         return pyscal3.operations.centrosymmetry.calculate_centrosymmetry(self, nmax)
 
 
-def _make_crystal(structure, 
-    lattice_constant = 1.00, 
-    repetitions = None, 
-    ca_ratio = 1.633, 
-    noise = 0, 
-    element=None):
-    
-    atoms, box, sdict = pcs.make_crystal(structure, 
-        lattice_constant=lattice_constant,
-        repetitions=repetitions, 
-        ca_ratio=ca_ratio,
-        noise=noise, 
-        element=element, 
-        return_structure_dict=True)
-    s = System()
-    s.box = box
-    s.atoms = atoms
-    s.atoms._lattice = structure
-    s.atoms._lattice_constant = lattice_constant
-    s._structure_dict = sdict
-    return s
-
-def _make_general_lattice(positions,
-    types, 
-    scaling_factors=[1.0, 1.0, 1.0],
-    lattice_constant = 1.00, 
-    repetitions = None, 
-    noise = 0,
-    element=None):
-
-    atoms, box, sdict = pcs.general_lattice(positions,
-        types,
-        scaling_factors=scaling_factors,
-        lattice_constant=lattice_constant,
-        repetitions=repetitions,
-        noise=noise,
-        element=element,
-        return_structure_dict=True)
-    s = System()
-    s.box = box
-    s.atoms = atoms
-    s.atoms._lattice = structure
-    s.atoms._lattice_constant = lattice_constant
-    s._structure_dict = sdict
-    return s               
+          
