@@ -32,6 +32,7 @@ import pyscal3.operations.centrosymmetry
 structure_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/structure_data.yaml"))
 element_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/element_data.yaml"))
 
+
 class System:
     """
     Python class for holding the properties of an atomic configuration 
@@ -42,15 +43,17 @@ class System:
     mapdict = {}
     mapdict["lattice"] = {}
     for key in structure_dict.keys():
-        mapdict["lattice"][key] = update_wrapper(partial(pcs.make_crystal, key), 
-            pcs.make_crystal)
-    
+        mapdict["lattice"][key] = update_wrapper(partial(_make_crystal, key), 
+            _make_crystal)
+    mapdict["lattice"]["general"] = _make_general_lattice
+
     mapdict["element"] = {}
     for key in element_dict.keys():
-        mapdict["element"][key] = update_wrapper(partial(pcs.make_crystal,
+        mapdict["element"][key] = update_wrapper(partial(_make_crystal,
             element_dict[key]['structure'],
             lattice_constant=element_dict[key]['lattice_constant'],
             element = key), pcs.make_crystal)
+
 
     create._add_attribute(mapdict)
 
@@ -84,21 +87,6 @@ class System:
         mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
 
         self.modify._add_attribute(mapdict)
-
-
-    @classmethod
-    def from_structure(cls, structure, lattice_constant = 1.00, repetitions = None, ca_ratio = 1.633, noise = 0, element=None, chemical_symbol=None):
-        atoms, box, sdict = pcs.make_crystal(structure, lattice_constant=lattice_constant,
-             repetitions=repetitions, ca_ratio=ca_ratio,
-             noise=noise, element=element, return_structure_dict=True)
-
-        obj = cls()
-        obj.box = box
-        obj.atoms = atoms
-        obj.atoms._lattice = structure
-        obj.atoms._lattice_constant = lattice_constant
-        obj._structure_dict = sdict
-        return obj
 
     def iter_atoms(self):
         return self.atoms.iter_atoms()
@@ -1473,4 +1461,51 @@ class System:
         .. [2] Larsen, arXiv:2003.08879v1, 2020
 
         """
-        return pyscal3.operations.centrosymmetry.calculate_centrosymmetry(self, nmax)       
+        return pyscal3.operations.centrosymmetry.calculate_centrosymmetry(self, nmax)
+
+
+def _make_crystal(structure, 
+    lattice_constant = 1.00, 
+    repetitions = None, 
+    ca_ratio = 1.633, 
+    noise = 0, 
+    element=None):
+    
+    atoms, box, sdict = pcs.make_crystal(structure, 
+        lattice_constant=lattice_constant,
+        repetitions=repetitions, 
+        ca_ratio=ca_ratio,
+        noise=noise, 
+        element=element, 
+        return_structure_dict=True)
+    s = System()
+    s.box = box
+    s.atoms = atoms
+    s.atoms._lattice = structure
+    s.atoms._lattice_constant = lattice_constant
+    s._structure_dict = sdict
+    return s
+
+def _make_general_lattice(positions,
+    types, 
+    scaling_factors=[1.0, 1.0, 1.0],
+    lattice_constant = 1.00, 
+    repetitions = None, 
+    noise = 0,
+    element=None):
+
+    atoms, box, sdict = pcs.general_lattice(positions,
+        types,
+        scaling_factors=scaling_factors,
+        lattice_constant=lattice_constant,
+        repetitions=repetitions,
+        noise=noise,
+        element=element,
+        return_structure_dict=True)
+    s = System()
+    s.box = box
+    s.atoms = atoms
+    s.atoms._lattice = structure
+    s.atoms._lattice_constant = lattice_constant
+    s._structure_dict = sdict
+    return s               
