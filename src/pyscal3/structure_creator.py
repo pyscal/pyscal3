@@ -8,8 +8,14 @@ from pyscal3.atoms import Atoms
 from pyscal3.attributes import read_yaml
 structures = read_yaml(os.path.join(os.path.dirname(__file__), "data/structure_data.yaml"))
 
-def make_crystal(structure, lattice_constant = 1.00, repetitions = None, ca_ratio = 1.633, noise = 0, element=None,
-    return_structure_dict=False, structures=structures):
+def make_crystal(structure, 
+    lattice_constant = 1.00, 
+    repetitions = None, 
+    ca_ratio = 1.633, 
+    noise = 0, 
+    element=None,
+    return_structure_dict=False, 
+    structures=structures):
     """
     Create a basic crystal structure and return it as a list of `Atom` objects
     and box dimensions.
@@ -125,6 +131,60 @@ def make_crystal(structure, lattice_constant = 1.00, repetitions = None, ca_rati
         return patoms, box, sdict
 
     return patoms, box
+
+def general_lattice(positions,
+    types, 
+    scaling_factors=[1.0, 1.0, 1.0],
+    lattice_constant = 1.00, 
+    repetitions = None, 
+    noise = 0,
+    element=None,
+    return_structure_dict=False):
+    """
+    Create a general lattice structure.
+
+    species: list
+        list of per-atom species
+
+    positions:
+        list of relative positions positions of reach atom (between 0-1)
+
+    scaling_fractors:
+        factors with which the unit cell should be scaled, for example hcp could
+        have [1,1.73, 1.63]. Default [1,1,1]
+
+    lattice_constant : float, optional
+        lattice constant of the crystal structure, default 1
+
+    repetitions : list of ints of len 3, optional
+        of type `[nx, ny, nz]`, repetions of the unit cell in x, y and z directions.
+        default `[1, 1, 1]`.
+
+    noise : float, optional
+        If provided add normally distributed noise with standard deviation `noise` to the atomic positions.
+    
+    element : string, optional
+        The chemical element
+    """
+    if not (len(types) == len(positions)):
+        raise ValueError("types and positions should have same length!")
+
+    sdict = {"custom":
+                {"natoms": len(positions),
+                 "species": types,
+                 "scaling_factors": scaling_factors,
+                 "positions": positions}
+            }
+
+    atoms, box = make_crystal("custom", lattice_constant=lattice_constant,
+        repetitions=repetitions, noise=noise, element=element,
+        structures=sdict)
+
+    if return_structure_dict:
+        return atoms, box, sdict
+
+    return atoms, box
+
 
 def _update_list_of_elements():
     """

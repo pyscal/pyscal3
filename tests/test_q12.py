@@ -2,11 +2,10 @@ import pytest
 import os
 import numpy as np
 import pyscal3.core as pc
-from pyscal3.crystal_structures import Structure
 
 
 def test_q_12():
-    sys = Structure().lattice.fcc(repetitions = [4, 4, 4])
+    sys = pc.System.create.lattice.fcc(repetitions = [4, 4, 4])
 
     #sys.get_neighbors(method = 'voronoi')
     sys.find_neighbors(method = 'cutoff', cutoff=0.9)

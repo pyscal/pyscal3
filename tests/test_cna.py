@@ -3,45 +3,29 @@ import os,sys,inspect
 import numpy as np
 import pyscal3.core as pc
 from ase.build import bulk
-import pyscal3.structure_creator as pcs
 
 #test conventional cna for fcc
 def test_cna_cutoff():
-    atoms, box = pcs.make_crystal(structure="fcc", repetitions=(7,7,7), lattice_constant=4.00, noise=0.01)
-    sys = pc.System()
-    sys.box = box
-    sys.atoms = atoms
+    sys = pc.System.create.lattice.fcc(repetitions=(7,7,7), lattice_constant=4.00, noise=0.01)
     res = sys.calculate_cna(lattice_constant=4.00)
     assert res["fcc"] == 7*7*7*4
 
 def test_cna_a1():
-    atoms, box = pcs.make_crystal(structure="fcc", repetitions=(7,7,7), lattice_constant=4.00, noise=0.01)
-    sys = pc.System()
-    sys.box = box
-    sys.atoms = atoms
+    sys = pc.System.create.lattice.fcc(repetitions=(7,7,7), lattice_constant=4.00, noise=0.01)
     res = sys.calculate_cna(lattice_constant=None)
     assert res["fcc"] == 7*7*7*4
 
 #now test adaptive
 def test_cna_adaptive():
-    atoms, box = pcs.make_crystal(structure="fcc", repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
-    sys = pc.System()
-    sys.box = box
-    sys.atoms = atoms
+    sys = pc.System.create.lattice.fcc(repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
     sys.calculate_cna(lattice_constant=None)
     assert sys.atoms.structure[0] == 1
 
-    atoms, box = pcs.make_crystal(structure="hcp", repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
-    sys = pc.System()
-    sys.box = box
-    sys.atoms = atoms
+    sys = pc.System.create.lattice.hcp(repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
     sys.calculate_cna(lattice_constant=None)
     assert sys.atoms.structure[0] == 2
 
-    atoms, box = pcs.make_crystal(structure="bcc", repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
-    sys = pc.System()
-    sys.box = box
-    sys.atoms = atoms
+    sys = pc.System.create.lattice.bcc(repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
     sys.calculate_cna(lattice_constant=None)
     assert sys.atoms.structure[0] == 3
 
@@ -68,9 +52,6 @@ def test_ase_bulks():
     assert cna["hcp"] == 2
 
 def test_cna_diamond():
-    atoms, box = pcs.make_crystal(structure="diamond", repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
-    sys = pc.System()
-    sys.box = box
-    sys.atoms = atoms
+    sys = pc.System.create.lattice.diamond(repetitions=(7,7,7), lattice_constant=4.00, noise=0.1)
     sys.identify_diamond()
     assert sys.atoms.structure[0] == 5

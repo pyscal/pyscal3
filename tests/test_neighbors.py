@@ -1,11 +1,10 @@
 import pyscal3.core as pc
 import os
-from pyscal3.crystal_structures import Structure
 import numpy as np
 from ase.build import bulk
 
 def test_system_init():
-    sys = Structure().lattice.bcc(repetitions = [10,10,10], lattice_constant=3.127)
+    sys = pc.System.create.lattice.bcc(repetitions = [10,10,10], lattice_constant=3.127)
     sys.find_neighbors(method="cutoff", cutoff=3.6)
     a1 = np.array(sys.atoms.neighbors.distance)
     a2 = np.array([2.708061437633939,

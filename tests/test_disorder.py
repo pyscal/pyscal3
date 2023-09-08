@@ -1,7 +1,6 @@
 import pytest
 import numpy as np
 import pyscal3.core as pc
-import pyscal3.crystal_structures as pcs
 
 def test_ordered_disorder():
     sys = pc.System('tests/files/conf.fcc.dump')

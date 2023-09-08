@@ -1,27 +1,22 @@
-from pyscal3.crystal_structures import Structure
 from pyscal3.operations.symmetry import get_symmetry
 from pyscal3.core import System
 
 def test_bcc():
-	struct = Structure()
-	sys = struct.element.Fe()
+	sys = System.create.element.Fe()
 	sym = get_symmetry(sys)
 	assert sym["international_symbol"] == 'Im-3m'	
 
 def test_fcc():
-	struct = Structure()
-	sys = struct.element.Cu()
+	sys = System.create.element.Cu()
 	sym = get_symmetry(sys)
 	assert sym["international_symbol"] == 'Fm-3m'	
 
 def test_hcp():
-	struct = Structure()
-	sys = struct.element.Ti()
+	sys = System.create.element.Ti()
 	sym = get_symmetry(sys)
 	assert sym["international_symbol"] == 'P6_3/mmc'	
 
 def test_diamond():
-	struct = Structure()
-	sys = struct.element.Si()
+	sys = System.create.element.Si()
 	sym = get_symmetry(sys)
 	assert sym["international_symbol"] == 'Fd-3m'	

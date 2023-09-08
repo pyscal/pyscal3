@@ -3,11 +3,10 @@ import os
 import numpy as np
 from ase.build import bulk
 from pyscal3.atoms import Atoms
-from pyscal3.crystal_structures import Structure
 
 
 def test_system_init():
-	sys = Structure().lattice.bcc(repetitions = [10,10,10], lattice_constant=3.127)
+	sys = pc.System.create.lattice.bcc(repetitions = [10,10,10], lattice_constant=3.127)
 	assert len(sys.atoms["positions"]) == 10*10*10*2
 	assert sys.triclinic == 0
 	assert np.abs(sys.boxdims[0] - sys.box[0][0]) < 1E-5
@@ -27,7 +26,7 @@ def test_system_triclinic():
 	assert np.prod(tb) == 1
 
 def test_nop():
-	sys = Structure().lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)
+	sys = pc.System.create.lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)
 
 	assert sys.natoms == 16
 	assert len(sys.atoms['positions']) == 128
@@ -49,12 +48,12 @@ def test_embed():
 	assert np.abs(sys.box[0][0] - 5.105310960166873) < 1E-5
 
 def test_distance():
-	sys = Structure().lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)
+	sys = pc.System.create.lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)
 	dist = sys.get_distance([0.0, 0.0, 0.0], [1.5635, 1.5635, 1.5635])
 	assert np.abs(dist - 2.708061437633939) < 1E-5	
 
 def test_composition():
-	sys = Structure().lattice.l12(repetitions = [2, 2, 2], lattice_constant=3.127)
+	sys = pc.System.create.lattice.l12(repetitions = [2, 2, 2], lattice_constant=3.127)
 	c = sys.concentration
 	assert c[1] == 0.25
 	assert c[2] == 0.75
@@ -64,9 +63,9 @@ def test_composition():
 	assert c[2] == 0.75
 
 def test_volume():
-	sys = Structure().lattice.fcc(repetitions = [10, 10, 10])
+	sys = pc.System.create.lattice.fcc(repetitions = [10, 10, 10])
 	assert sys.volume == 1000
 
 def test_system_init():
-	sys = Structure().custom([1], [[0, 0, 0]])
-	assert sys.natoms == 1
+	sys = pc.System.create.lattice.custom([[0, 0, 0], [0.5, 0.5, 0.5]], [1, 2])
+	assert sys.natoms == 2
