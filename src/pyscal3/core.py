@@ -16,6 +16,7 @@ from scipy.special import sph_harm
 import copy
 from functools import partial, update_wrapper
 
+from pyscal3.attributes import read_yaml
 from pyscal3.atoms import Atoms, AttrSetter
 import pyscal3.csystem as pc
 import pyscal3.traj_process as ptp
@@ -28,11 +29,23 @@ import pyscal3.operations.centrosymmetry
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
+structure_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/structure_data.yaml"))
+element_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/element_data.yaml"))
 
 class System:
     """
     Python class for holding the properties of an atomic configuration 
-    """    
+    """ 
+    #system wide things available before structure creation
+    create = AttrSetter()
+    create.head = pcs
+    mapdict = {}
+    mapdict["lattice"] = {}
+    for key in structure_dict.keys():
+        mapdict["lattice"][key] = update_wrapper(partial(pcs.make_crystal, key), pcs.make_crystal)
+
+    create._add_attribute(mapdict)
+
     def __init__(self, filename=None, format="lammps-dump", 
                                             compressed = False, customkeys=None):
         self.initialized = True
