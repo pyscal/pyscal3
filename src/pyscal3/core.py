@@ -26,6 +26,7 @@ import pyscal3.structure_creator as pcs
 import pyscal3.operations.operations as operations
 import pyscal3.operations.cna as cna
 import pyscal3.operations.centrosymmetry
+import pyscal3.operations.neighbor as neighbor
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -98,8 +99,6 @@ class System:
             element_dict[key]['structure'],
             lattice_constant=element_dict[key]['lattice_constant'],
             element = key), pcs.make_crystal)
-
-
     create._add_attribute(mapdict)
 
     def __init__(self, filename=None, format="lammps-dump", 
@@ -126,14 +125,18 @@ class System:
         self.modify = AttrSetter()
         self.modify.head = operations
         mapdict = {}
-
         #repeat methid
         mapdict["repeat"] = update_wrapper(partial(operations.repeat, self), operations.repeat)
         mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
         mapdict["remap_to_box"] = update_wrapper(partial(operations.remap_to_box, self), operations.remap_to_box)
         mapdict["embed_in_cubic_box"] = update_wrapper(partial(operations.embed_in_cubic_box, self), operations.embed_in_cubic_box)
-
         self.modify._add_attribute(mapdict)
+
+        self.calculate = AttrSetter()
+        mapdict = {}
+        mapdict['distance'] = update_wrapper(partial(neighbor.get_distance, self), neighbor.get_distance)
+        self.calculate._add_attribute(mapdict)
+
 
     def iter_atoms(self):
         return self.atoms.iter_atoms()
@@ -272,38 +275,6 @@ class System:
     
     def delete(self, ids=None, indices=None, condition=None, selection=False):
         self._atoms.delete(ids=ids, indices=indices, condition=condition, selection=selection)
-
-
-    def get_distance(self, pos1, pos2, vector=False):
-        """
-        Get the distance between two atoms.
-
-        Parameters
-        ----------
-        pos1 : list
-                first atom position
-        pos2 : list
-                second atom position
-        vector: bool, optional
-            If True, return the vector between two atoms
-
-        Returns
-        -------
-        distance : double
-                distance between the first and second atom.
-
-        Notes
-        -----
-        Periodic boundary conditions are assumed by default.
-        """
-        diff = pc.get_distance_vector(pos1, pos2, self.triclinic,
-            self.rot, self.rotinv, self.boxdims)
-        dist = np.linalg.norm(diff)
-                
-        if vector:
-            return dist, diff
-        else:
-            return dist
 
 
     def read_inputfile(self, filename, format="lammps-dump", 

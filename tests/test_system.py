@@ -49,7 +49,7 @@ def test_embed():
 
 def test_distance():
 	sys = pc.System.create.lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)
-	dist = sys.get_distance([0.0, 0.0, 0.0], [1.5635, 1.5635, 1.5635])
+	dist = sys.calculate.distance([0.0, 0.0, 0.0], [1.5635, 1.5635, 1.5635])
 	assert np.abs(dist - 2.708061437633939) < 1E-5	
 
 def test_composition():
