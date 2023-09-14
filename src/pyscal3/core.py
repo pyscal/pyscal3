@@ -428,36 +428,8 @@ class System:
         It is used automatically when neighbors are recalculated.
 
         """
-        self.atoms["neighbors"] = []
-        self.atoms["neighbordist"] = []
-        self.atoms["temp_neighbors"] = []
-        self.atoms["temp_neighbordist"] = []
-        self.atoms["neighborweight"] = []
-        self.atoms["diff"] = []
-        self.atoms["r"] = []
-        self.atoms["theta"] = []
-        self.atoms["phi"] = []
-        self.atoms["cutoff"] = []
-        self.neighbors_found = False
+        neighbor.reset_neighbors(self)
 
-        
-        mapdict = {}
-        mapdict["neighbors"] = {}
-        mapdict["neighbors"]["index"] = "neighbors"
-        mapdict["neighbors"]["distance"] = "neighbordist"
-        mapdict["neighbors"]["weight"] = "neighborweight"
-        mapdict["neighbors"]["displacement"] = "diff"
-        mapdict["neighbors"]["cutoff"] = "cutoff"
-
-        mapdict["neighbors"]["angle"] = {}
-        mapdict["neighbors"]["angle"]["polar"] = "theta"
-        mapdict["neighbors"]["angle"]["azimuthal"] = "phi"
-
-        mapdict["neighbors"]["temporary"] = {}
-        mapdict["neighbors"]["temporary"]["index"] = "temp_neighbors"
-        mapdict["neighbors"]["temporary"]["distance"] = "temp_neighbordist"
-
-        self.atoms._add_attribute(mapdict)
 
     def _check_neighbors(self):
         """
