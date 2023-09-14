@@ -28,6 +28,7 @@ import pyscal3.operations.cna as cna
 import pyscal3.operations.centrosymmetry
 import pyscal3.operations.neighbor as neighbor
 import pyscal3.operations.input as inputmethods
+import pyscal3.operations.calculations as calculations
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -119,8 +120,10 @@ class System:
         self._atoms = Atoms()
         
         if filename is not None:
-            self.read_inputfile(filename, format=format, 
-                                            compressed = compressed, customkeys=customkeys)
+            inputmethods.read_inputfile(self, filename, 
+                format=format, 
+                compressed = compressed, 
+                customkeys=customkeys)
 
         #customised methods for the class
         self.modify = AttrSetter()
@@ -143,6 +146,16 @@ class System:
         mapdict['file'] = update_wrapper(partial(inputmethods.read_inputfile, self), inputmethods.read_inputfile)
         mapdict['ase'] = update_wrapper(partial(inputmethods.read_inputfile, self, format='ase'), inputmethods.read_inputfile)
         self.read._add_attribute(mapdict)
+
+        self.write = AttrSetter()
+        mapdict = {}
+        mapdict['ase'] = update_wrapper(partial(convert_snap, self), convert_snap)
+        self.write._add_attribute(mapdict)
+
+        self.calculate = AttrSetter()
+        mapdict = {}
+        mapdict['average_over_neighbors'] = update_wrapper(partial(average_over_neighbors, self), average_over_neighbors)
+        self.write._add_attribute(mapdict)
 
     def iter_atoms(self):
         return self.atoms.iter_atoms()
@@ -339,21 +352,6 @@ class System:
             compressed = compressed, customkeys = customkeys, customvals = customvals,
             timestep = timestep, species = species)
 
-    def to_ase(self, species=None):
-        """
-        Convert system to an ASE Atoms object
-
-        Parameters
-        ----------
-        species : list of string
-            The chemical species
-
-        Returns
-        -------
-        None
-        """
-        return convert_snap(self, species=species)
-
     def reset_neighbors(self):
         """
         Reset the neighbors of all atoms in the system.
@@ -380,45 +378,6 @@ class System:
         """
         if not self.neighbors_found:
             raise ValueError("This calculation needs neighbors to be calculated")
-
-    def average_over_neighbors(self, key, include_self=True):
-        """
-        Perform a simple average over neighbor atoms
-
-        Parameters
-        ----------
-        key: string
-            atom property
-
-        include_self: bool, optional
-            If True, include the host atom in the calculation
-
-        Returns
-        -------
-
-        """
-        print(key)
-
-        self._check_neighbors()
-
-        if not key in self.atoms.keys():
-            raise KeyError("required property not found!")
-
-        test = self.atoms[key][0]
-
-        if isinstance(test, list):
-            raise TypeError("Averaging can only be done over 1D quantities")
-
-        avgarr = []
-        for i in range(len(self.atoms["positions"])):
-            arr = []
-            if include_self:
-                arr.append(self.atoms[key][i])
-            for j in self.atoms["neighbors"][i]:
-                arr.append(self.atoms[key][j])
-            avgarr.append(np.mean(arr))
-        
-        return avgarr 
 
     def find_neighbors(self, method='cutoff', cutoff=0, threshold=2, 
             voroexp=1, padding=1.2, nlimit=6, 
