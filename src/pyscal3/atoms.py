@@ -13,8 +13,6 @@ import warnings
 import os
 from pyscal3.attributes import AttrSetter, read_yaml, MyList
 
-attr_docs = read_yaml(os.path.join(os.path.dirname(__file__), "data/annotations.yaml"))
-
 class Atoms(dict, AttrSetter):
     def __init__(self, atoms=None):
         #self.update(atoms=atoms)
@@ -198,20 +196,6 @@ class Atoms(dict, AttrSetter):
         #atom_dict = {key: self._convert_to_list(self[key][index]) for key in self.keys()}
         return Atoms(atom_dict)
 
-    def _delete_atoms(self, indices):
-        del_real = np.sum([1 for x in indices if x < self._nreal])
-        del_ghost = np.sum([1 for x in indices if x >= self._nreal])
-
-        reverse_indices = [x for x in range(len(self['positions'])) if x not in indices]
-
-        for key in self.keys():
-            self[key] = self[key][reverse_indices]
-
-        td = len(indices)
-        self._nreal = int(self.nreal - del_real)
-        self._nghost = int(self.nghost - del_ghost)
-
-
     def iter_atoms(self):
         for index in range(self.nreal):
             atom_dict = {}
@@ -220,94 +204,25 @@ class Atoms(dict, AttrSetter):
                     atom_dict[key] = self._convert_to_list(self[key][index]) 
             yield Atoms(atom_dict)
 
-    def _generate_bool_list(self, ids=None, indices=None, condition=None, selection=False):
-        #necessary checks
-        non_nones = sum(x is not None for x in [ids, indices, condition])
-        if non_nones > 1:
-            raise ValueError("Only one of ids, indices or condition should be provided")
-        elif ((non_nones == 0) and (selection==False)):
-            warnings.warn("No conditions provided, all atoms will be included")
-        #generate a list of indices
-        if selection:
-            indices = [x for x in range(self.nreal) if self["condition"][x]]
-        elif ids is not None:
-            if np.isscalar(ids):
-                ids = [ids]
-            indices = [x for x in range(len(self["ids"])) if self["ids"][x] in ids]
-            if len(indices) == 0:
-                raise ValueError("No ids found to delete")
-            if len(indices) != len(ids):
-                warnings.warn("Not all ids were found")
-        elif condition is not None:
-            indices = [x for x in range(self.nreal) if condition(self._get_atoms(x))]
-        elif indices is None:
-            indices = [x for x in range(self.nreal)]
-        
-        if np.isscalar(indices):
-            indices = [indices]
+    #def _apply_mask(self, masks, mask_type):
+    #    if (mask_type == 'primary') or (mask_type == 'all'):
+    #        for i in range(self.ntotal):
+    #            self["mask_1"][i] = masks[self["head"][i]]
+    #    if (mask_type == 'secondary') or (mask_type == 'all'):
+    #        for i in range(self.ntotal):
+    #            self["mask_2"][i] = masks[self["head"][i]]
 
-        bool_list = [ True if x in indices else False for x in range(self.nreal)]
-        return bool_list
-
-    def _apply_mask(self, masks, mask_type):
-        if (mask_type == 'primary') or (mask_type == 'all'):
-            for i in range(self.ntotal):
-                self["mask_1"][i] = masks[self["head"][i]]
-        if (mask_type == 'secondary') or (mask_type == 'all'):
-            for i in range(self.ntotal):
-                self["mask_2"][i] = masks[self["head"][i]]
-
-    def apply_mask(self, mask_type="primary", ids=None, indices=None, condition=None, selection=False):
-        masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition, selection=selection)
-        self._apply_mask(masks, mask_type)
+    #def apply_mask(self, mask_type="primary", ids=None, indices=None, condition=None, selection=False):
+    #    masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition, selection=selection)
+    #    self._apply_mask(masks, mask_type)
 
 
-    def remove_mask(self, mask_type="primary", ids=None, indices=None, condition=None, selection=False):
-        masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition, selection=selection)
-        masks = [not x for x in masks]
-        self._apply_mask(masks, mask_type)
+    #def remove_mask(self, mask_type="primary", ids=None, indices=None, condition=None, selection=False):
+    #    masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition, selection=selection)
+    #    masks = [not x for x in masks]
+    #    self._apply_mask(masks, mask_type)
 
-    def _apply_selection(self, condition):
-        for i in range(self.ntotal):
-            self["condition"][i] = condition[self["head"][i]]
-    
-    def _validate_condition(self, condition):
-        if not (len(condition)==self.nreal):
-            raise ValueError("condition should have same length as atoms")
-        for c, x in enumerate(condition):
-            try:
-                x = bool(x)
-                condition[c] = x
-            except:
-                pass 
-            if not isinstance(x, bool):
-                raise ValueError("Condition elements should be boolean")
-        return condition
 
-    def apply_selection(self, ids=None, indices=None, condition=None):
-        if isinstance(condition, (list, np.ndarray)):
-            masks = self._validate_condition(condition)
-        else:
-            masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition)
-        self._apply_selection(masks)
-    
-    def remove_selection(self, ids=None, indices=None, condition=None):
-        if isinstance(condition, (list, np.ndarray)):
-            masks = self._validate_condition(condition)
-        else:
-            masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition)
-        masks = [not x for x in masks]
-        self._apply_selection(masks)
-
-    def delete(self, ids=None, indices=None, condition=None, selection=False):
-        #delete atoms
-        #reassign ids
-        #reassign indices
-        #reassign heads
-        masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition, selection=selection)
-        delete_list = [masks[self["head"][x]] for x in range(self.ntotal)]
-        delete_ids = [x for x in range(self.ntotal) if masks[x]]
-        self._delete_atoms(delete_ids)
     
     @property
     def _type_dict(self):
