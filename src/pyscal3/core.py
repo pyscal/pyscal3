@@ -139,6 +139,7 @@ class System:
         self.calculate = AttrSetter()
         mapdict = {}
         mapdict['distance'] = update_wrapper(partial(neighbor.get_distance, self), neighbor.get_distance)
+        mapdict['average_over_neighbors'] = update_wrapper(partial(calculations.average_over_neighbors, self), calculations.average_over_neighbors)
         self.calculate._add_attribute(mapdict)
 
         self.read = AttrSetter()
@@ -150,11 +151,6 @@ class System:
         self.write = AttrSetter()
         mapdict = {}
         mapdict['ase'] = update_wrapper(partial(convert_snap, self), convert_snap)
-        self.write._add_attribute(mapdict)
-
-        self.calculate = AttrSetter()
-        mapdict = {}
-        mapdict['average_over_neighbors'] = update_wrapper(partial(average_over_neighbors, self), average_over_neighbors)
         self.write._add_attribute(mapdict)
 
     def iter_atoms(self):
@@ -784,7 +780,7 @@ class System:
 
         if averaged:
             #average the disorder
-            avg_arr = self.average_over_neighbors("disorder")
+            avg_arr = self.calculate.average_over_neighbors("disorder")
             self.atoms["avg_disorder"] = avg_arr
             mapdict["steinhardt"]["disorder"]["average"] = "avg_disorder"
         self.atoms._add_attribute(mapdict)

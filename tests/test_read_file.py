@@ -25,5 +25,5 @@ def test_system_init():
 	assert sys.atoms.vx[0] == '0.0394436'
 
 	sys = pc.System("tests/files/conf.dump", customkeys=["vx", "vy"])
-	aseobj = sys.to_ase(species=["Au"])
+	aseobj = sys.write.ase(species=["Au"])
 	assert np.sum(sys.atoms.positions[0]-aseobj.positions[0]) < 1E-5
