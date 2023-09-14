@@ -37,17 +37,17 @@ def test_ase_bulks():
     ti_hcp = bulk("Ti")
 
     sys = pc.System()
-    sys.read_inputfile(al_fcc, format="ase")
+    sys.read.ase(al_fcc)
     cna = sys.calculate_cna()
     assert cna["fcc"] == 1
 
     sys = pc.System()
-    sys.read_inputfile(fe_bcc, format="ase")
+    sys.read.ase(fe_bcc)
     cna = sys.calculate_cna()
     assert cna["bcc"] == 1
 
     sys = pc.System()
-    sys.read_inputfile(ti_hcp, format="ase")
+    sys.read.ase(ti_hcp)
     cna = sys.calculate_cna()
     assert cna["hcp"] == 2
 
