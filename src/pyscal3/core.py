@@ -25,7 +25,7 @@ import pyscal3.structure_creator as pcs
 
 import pyscal3.operations.operations as operations
 import pyscal3.operations.cna as cna
-import pyscal3.operations.centrosymmetry
+import pyscal3.operations.centrosymmetry as centrosymmetry
 import pyscal3.operations.neighbor as neighbor
 import pyscal3.operations.input as inputmethods
 import pyscal3.operations.calculations as calculations
@@ -156,6 +156,7 @@ class System:
         mapdict['chi_params'] = update_wrapper(partial(calculations.calculate_chiparams, self), calculations.calculate_chiparams)
         mapdict['common_neighbor_analysis'] = update_wrapper(partial(cna.calculate_cna, self), cna.calculate_cna)
         mapdict['diamond_structure'] = update_wrapper(partial(cna.identify_diamond, self), cna.identify_diamond)
+        mapdict['centrosymmetry'] = update_wrapper(partial(centrosymmetry.calculate_centrosymmetry, self), cna.calculate_centrosymmetry)
         self.calculate._add_attribute(mapdict)
 
         self.analyze = AttrSetter()
