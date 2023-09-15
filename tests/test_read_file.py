@@ -18,7 +18,7 @@ def test_system_init():
 	assert sys.natoms == 42
 
 	sys = pc.System("tests/files/conf.dump", customkeys=["vx", "vy"])
-	sys.to_file("test.dump", customkeys=["vx"])
+	sys.write.file("test.dump", customkeys=["vx"])
 
 	sys = pc.System("test.dump", customkeys=["vx"])
 	assert sys.natoms == 500
