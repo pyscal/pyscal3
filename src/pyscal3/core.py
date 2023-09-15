@@ -156,7 +156,7 @@ class System:
         mapdict['chi_params'] = update_wrapper(partial(calculations.calculate_chiparams, self), calculations.calculate_chiparams)
         mapdict['common_neighbor_analysis'] = update_wrapper(partial(cna.calculate_cna, self), cna.calculate_cna)
         mapdict['diamond_structure'] = update_wrapper(partial(cna.identify_diamond, self), cna.identify_diamond)
-        mapdict['centrosymmetry'] = update_wrapper(partial(centrosymmetry.calculate_centrosymmetry, self), cna.calculate_centrosymmetry)
+        mapdict['centrosymmetry'] = update_wrapper(partial(centrosymmetry.calculate_centrosymmetry, self), centrosymmetry.calculate_centrosymmetry)
         self.calculate._add_attribute(mapdict)
 
         self.analyze = AttrSetter()
