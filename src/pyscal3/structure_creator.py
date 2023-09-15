@@ -15,7 +15,8 @@ def make_crystal(structure,
     noise = 0, 
     element=None,
     return_structure_dict=False, 
-    structures=structures):
+    structures=structures,
+    primitive=False):
     """
     Create a basic crystal structure and return it as a list of `Atom` objects
     and box dimensions.
@@ -68,7 +69,14 @@ def make_crystal(structure,
         nz = repetitions[2]
 
     if structure in structures.keys():
-        sdict = copy.copy(structures[structure])
+        if primitive:
+            if 'primitive' not in structures[structure].keys():
+                raise ValueError('primitive not found, try setting primitive=False')
+            sdict = copy.copy(structures[structure]['primitive']) 
+        else:
+            if 'conventional' not in structures[structure].keys():
+                raise ValueError('conventional not found, try setting primitive=True')
+            sdict = copy.copy(structures[structure]['conventional']) 
     else:
         raise ValueError("Unknown crystal structure")
     
@@ -170,10 +178,13 @@ def general_lattice(positions,
         raise ValueError("types and positions should have same length!")
 
     sdict = {"custom":
-                {"natoms": len(positions),
-                 "species": types,
-                 "scaling_factors": scaling_factors,
-                 "positions": positions}
+                {"conventional":
+                    {"natoms": len(positions),
+                     "species": types,
+                     "scaling_factors": scaling_factors,
+                     "positions": positions
+                    }
+                }
             }
 
     atoms, box = make_crystal("custom", lattice_constant=lattice_constant,

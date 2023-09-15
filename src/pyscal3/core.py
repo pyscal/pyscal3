@@ -41,7 +41,8 @@ def _make_crystal(structure,
     repetitions = None, 
     ca_ratio = 1.633, 
     noise = 0, 
-    element=None):
+    element=None,
+    primitive=False):
     
     atoms, box, sdict = pcs.make_crystal(structure, 
         lattice_constant=lattice_constant,
@@ -49,7 +50,9 @@ def _make_crystal(structure,
         ca_ratio=ca_ratio,
         noise=noise, 
         element=element, 
-        return_structure_dict=True)
+        return_structure_dict=True,
+        primitive=primitive)
+    
     s = System()
     s.box = box
     s.atoms = atoms
