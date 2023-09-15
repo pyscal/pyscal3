@@ -52,7 +52,7 @@ def calculate_cna(system, lattice_constant=None):
             system.rot, system.rotinv, system.boxdims)
 
     else:
-        self.lattice_constant = lattice_constant
+        system.lattice_constant = lattice_constant
         pc.get_cna_neighbors(system.atoms, system.triclinic, 
             system.rot, system.rotinv, system.boxdims,
             lattice_constant, 1)

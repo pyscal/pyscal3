@@ -154,7 +154,15 @@ class System:
         mapdict['radial_distribution_function'] = update_wrapper(partial(calculations.calculate_rdf, self), calculations.calculate_rdf)        
         mapdict['angular_criteria'] = update_wrapper(partial(calculations.calculate_angularcriteria, self), calculations.calculate_angularcriteria)        
         mapdict['chi_params'] = update_wrapper(partial(calculations.calculate_chiparams, self), calculations.calculate_chiparams)
+        mapdict['common_neighbor_analysis'] = update_wrapper(partial(cna.calculate_cna, self), cna.calculate_cna)
+        mapdict['diamond_structure'] = update_wrapper(partial(cna.identify_diamond, self), cna.identify_diamond)
         self.calculate._add_attribute(mapdict)
+
+        self.analyze = AttrSetter()
+        mapdict = {}
+        mapdict['common_neighbor_analysis'] = update_wrapper(partial(cna.calculate_cna, self), cna.calculate_cna)
+        mapdict['diamond_structure'] = update_wrapper(partial(cna.identify_diamond, self), cna.identify_diamond)
+        self.analyze._add_attribute(mapdict)
 
         self.read = AttrSetter()
         mapdict = {}
@@ -340,73 +348,6 @@ class System:
         if not self.neighbors_found:
             raise ValueError("This calculation needs neighbors to be calculated")
 
-
-
-
-    def calculate_cna(self, lattice_constant=None):
-        """
-        Calculate the Common Neighbor Analysis indices
-
-        Parameters
-        ----------
-
-        lattice_constant : float, optional
-            lattice constant to calculate CNA. If not specified,
-            adaptive CNA will be used
-
-        Returns
-        -------
-        resdict: dict
-            dictionary of calculated structure
-
-        Notes
-        -----
-        Performs the common neighbor analysis [1][2] or the adaptive common neighbor
-        analysis [2] and assigns a structure to each atom.
-        
-        If `lattice_constant` is specified, a convential common neighbor analysis is
-        used. If `lattice_constant` is not specified, adaptive common neighbor analysis is used. 
-        The assigned structures can be accessed by :attr:`~pyscal.catom.Atom.structure`.
-        The values assigned for stucture are 0 Unknown, 1 fcc, 2 hcp, 3 bcc, 4 icosahedral.
-
-        References
-        ----------
-        .. [1] Faken, Jonsson, CMS 2, 1994
-        .. [2] Honeycutt, Andersen, JPC 91, 1987
-        .. [3] Stukowski, A, Model Simul Mater SC 20, 2012
-
-        """
-        resdict = cna.calculate_cna(self)
-        return resdict
-
-    def identify_diamond(self):
-        """
-        Identify diamond structure
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        diamondstructure : dict
-            dict of structure signature
-
-        Notes
-        -----
-        Identify diamond structure using the algorithm mentioned in [1]. It is an
-        extended CNA method. The integers 5, 6, 7, 8, 9 and 10 are assigned to the
-        structure variable of the atom. 5 stands for cubic diamond, 6 stands for first
-        nearest neighbors of cubic diamond and 7 stands for second nearest neighbors
-        of cubic diamond. 8 signifies hexagonal diamond, the first nearest neighbors
-        are marked with 9 and second nearest neighbors with 10.
-
-        References
-        ----------
-        .. [1] Maras et al, CPC 205, 2016
-        """
-        resdict = cna.identify_diamond(self)
-        return resdict 
 
     def calculate_centrosymmetry(self, nmax=12):
         """
