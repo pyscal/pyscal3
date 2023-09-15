@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 import pyscal3.csystem as pc
 
 def average_over_neighbors(system, key, include_system=True):
@@ -213,4 +214,187 @@ def calculate_disorder(system, averaged=False, q=6):
         avg_arr = system.calculate.average_over_neighbors("disorder")
         system.atoms["avg_disorder"] = avg_arr
         mapdict["steinhardt"]["disorder"]["average"] = "avg_disorder"
+    system.atoms._add_attribute(mapdict)
+
+def calculate_rdf(system, rmin=0, rmax=5.00, bins=100):
+    """
+    Calculate the radial distribution function.
+    
+    Parameters
+    ----------
+    rmin : float, optional
+        minimum value of the distance histogram. Default 0.0.
+    
+    rmax : float, optional
+        maximum value of the distance histogram. Default 5.0
+
+    bins : int
+        number of bins in the histogram
+            
+    Returns
+    -------
+    rdf : array of ints
+        Radial distribution function
+    
+    r : array of floats
+        radius in distance units
+    """
+    system.find.neighbors(method="cutoff", cutoff=rmax)
+    distances = list(itertools.chain(*system.atoms["neighbordist"]))
+
+    hist, bin_edges = np.histogram(distances, bins=bins, 
+        range=(rmin, rmax), density=True)
+    edgewidth = np.abs(bin_edges[1]-bin_edges[0])
+    hist = hist.astype(float)
+    r = bin_edges[:-1]
+
+    #get box density
+    rho = system.natoms/system.volume
+    shell_vols = (4./3.)*np.pi*((r+edgewidth)**3 - r**3)
+    shell_rho = hist/shell_vols
+    #now divide to get final value
+    rdf = shell_rho/rho
+    return rdf, r
+
+def calculate_angularcriteria(system):
+    """
+    Calculate the angular criteria for each atom
+    
+    Parameters
+    ----------
+    None
+    
+    Returns
+    -------
+    None
+    
+    Notes
+    -----
+    Calculates the angular criteria for each atom as defined in [1]_. Angular criteria is
+    useful for identification of diamond cubic structures. Angular criteria is defined by,
+    
+    .. math::
+        A = \sum_{i=1}^6 (\cos(\\theta_i) + \\frac{1}{3})^2
+    
+    where cos(theta) is the angle size suspended by each pair of neighbors of the central
+    atom. A will have a value close to 0 for structures if the angles are close to 109 degrees.
+    The calculated A parameter for each atom can be accessed by system.angular
+    
+    References
+    ----------
+    .. [1] Uttormark, MJ, Thompson, MO, Clancy, P, Phys. Rev. B 47, 1993
+    """
+    system._check_neighbors()
+    angulars = []
+
+    for count, pos1 in enumerate(system.atoms["positions"]):
+        
+        dists = []
+        distneighs = []
+        distvectors = []
+
+        for count2, neigh in enumerate(system.atoms["neighbors"][count]):
+            pos2 = system.atoms["positions"][neigh]
+            dist = system.atoms["neighbordist"][count][count2]
+            vectors = system.atoms["diff"][count][count2]
+            dists.append(dist)
+            distneighs.append(neigh)
+            distvectors.append(vectors)
+
+        args = np.argsort(dists)
+        #find top four
+        topfourargs = np.array(args)[:4]
+
+        combos = list(itertools.combinations(topfourargs, 2))
+        costhetasum = 0
+
+        for combo in combos:
+            vec1 = distvectors[combo[0]]
+            vec2 = distvectors[combo[1]]
+            modvec1 = np.sqrt(np.sum([x**2 for x in vec1]))
+            modvec2 = np.sqrt(np.sum([x**2 for x in vec2]))
+            costheta = np.dot(vec1, vec2)/(modvec1*modvec2)
+            costhetasum += (costheta +(1./3.))**2
+        angulars.append(costhetasum)
+
+    system.atoms["angular"] = angulars
+    
+    mapdict = {}
+    mapdict["angular_parameters"] = {}
+    mapdict["angular_parameters"]["diamond_angle"] = "angular"
+    system.atoms._add_attribute(mapdict)
+
+def calculate_chiparams(system, angles=False):
+    """
+    Calculate the chi param vector for each atom
+    
+    Parameters
+    ----------
+    angles : bool, optional
+        If True, return the list of cosines of all neighbor pairs
+    
+    Returns
+    -------
+    angles : array of floats
+        list of all cosine values, returned only if `angles` is True.
+    
+    Notes
+    -----
+    This method tries to distinguish between crystal structures by finding the cosines of angles
+    formed by an atom with its neighbors. These cosines are then historgrammed with bins
+    `[-1.0, -0.945, -0.915, -0.755, -0.705, -0.195, 0.195, 0.245, 0.795, 1.0]` to find a vector for
+    each atom that is indicative of its local coordination. Compared to chi parameters from chi_0 to
+    chi_7 in the associated publication, the vector here is from chi_0 to chi_8. This is due to an additional
+    chi parameter which measures the number of neighbors between cosines -0.705 to -0.195.
+    Parameter `nlimit` specifies the number of nearest neighbors to be included in the analysis to find the cutoff.
+    If parameter `angles` is true, an array of all cosine values is returned. The publication further provides
+    combinations of chi parameters for structural identification which is not implemented here. The calculated
+    chi params can be accessed using :attr:`~pyscal.catom.chiparams`.
+    
+    References
+    ----------
+    .. [1] Ackland, Jones, Phys. Rev. B 73, 2006
+    """
+
+    system._check_neighbors()
+
+    bins = [-1.0, -0.945, -0.915, -0.755, -0.705, -0.195, 0.195, 0.245, 0.795, 1.0]
+    chiparams = []
+    cosines = []
+
+    for count, pos in enumerate(system.atoms["positions"]):
+
+        dists = system.atoms["neighbordist"][count]
+        neighs = system.atoms["neighbors"][count]
+
+        args = range(len(dists))
+        combos = list(itertools.combinations(args, 2))
+        costhetas = []
+        
+        for combo in combos:
+            vec1 = system.atoms["diff"][count][combo[0]]
+            vec2 = system.atoms["diff"][count][combo[1]]
+            modvec1 = np.linalg.norm(vec1)
+            modvec2 = np.linalg.norm(vec2)
+            costheta = np.dot(vec1, vec2)/(modvec1*modvec2)
+            #found costheta
+            costhetas.append(costheta)
+
+
+        #now add according to classification in paper
+        chivector = np.histogram(costhetas, bins=bins)
+        chiparams.append(chivector[0])
+        if angles:
+            cosines.append(costhetas)
+    
+    system.atoms["chiparams"] = chiparams
+    
+    mapdict = {}
+    mapdict["angular_parameters"] = {}
+    mapdict["angular_parameters"]["chi_params"] = "chiparams"
+    
+    if angles:
+        system.atoms["cosines"] = cosines
+        mapdict["angular_parameters"]["cosines"] = "cosines"
+
     system.atoms._add_attribute(mapdict)
