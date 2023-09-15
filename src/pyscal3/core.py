@@ -146,6 +146,8 @@ class System:
         mapdict = {}
         mapdict['distance'] = update_wrapper(partial(neighbor.get_distance, self), neighbor.get_distance)
         mapdict['average_over_neighbors'] = update_wrapper(partial(calculations.average_over_neighbors, self), calculations.average_over_neighbors)
+        mapdict['steinhardt_parameter'] = update_wrapper(partial(calculations.calculate_q, self), calculations.calculate_q)
+        mapdict['disorder'] = update_wrapper(partial(calculations.calculate_disorder, self), calculations.calculate_disorder)        
         self.calculate._add_attribute(mapdict)
 
         self.read = AttrSetter()
@@ -333,182 +335,6 @@ class System:
             raise ValueError("This calculation needs neighbors to be calculated")
 
 
-    def calculate_q(self, q, averaged=False, continuous_algorithm=False):
-        """
-        Find the Steinhardt parameter q_l for all atoms.
-
-        Parameters
-        ----------
-        q : int or list of ints
-            A list of all Steinhardt parameters to be found.
-
-        averaged : bool, optional
-            If True, return the averaged q values, default False
-        
-        continuous_algorithm: bool, optional
-            See Notes for description.
-
-        Returns
-        -------
-        q : list of floats
-            calculated q values
-
-        Notes
-        -----
-        Enables calculation of the Steinhardt parameters [1] q. The type of
-        q values depend on the method used to calculate neighbors. See the description
-        :func:`~pyscal.core.System.find_neighbors` for more details. 
-
-        The option `continuous_algorithm` specifies which algorithm to use for calculations. If False, 
-        an algorithm [3] is used. The C++ algorithm is faster is a large, consecutive number of q values (> 200)
-        are to be calculated.
-
-        This function creates three new attributes for this class: `qx`, `qx_real` and `qx_imag`,
-        where `stands` for the q number.   
-
-        References
-        ----------
-        .. [1] Steinhardt, PJ, Nelson, DR, Ronchetti, M. Phys Rev B 28, 1983
-        .. [2] Lechner, W, Dellago, C, J Chem Phys, 2013
-        """
-        if isinstance(q, int):
-            qq = [q]
-        else:
-            qq = q
-
-        self._check_neighbors()
-
-        if averaged:
-            self._calculate_aq(qq)
-            qvals = [self.atoms["avg_q%d"%x] for x in qq]
-        else:    
-            if continuous_algorithm:
-                lm = max(qq)
-                pc.calculate_q(self.atoms, lm)
-            else:
-                self._calculate_q(qq)
-            qvals = [self.atoms["q%d"%x] for x in qq]
-        return qvals
-
-    def _calculate_q(self, qq):
-        """
-        Private method for calculation of qvals
-        """
-        for val in qq:
-            pc.calculate_q_single(self.atoms, val)
-  
-        mapdict = {}
-        mapdict["steinhardt"] = {}
-        mapdict["steinhardt"]["generic"] = {}
-        for val in qq:
-            key1a = "q%d_norm"%val
-            key1b = "q%d"%val
-            key2 = "q%d_real"%val
-            key3 = "q%d_imag"%val
-            mapdict["steinhardt"]["generic"][key1a] = key1b
-            mapdict["steinhardt"]["generic"][key2] = key2
-            mapdict["steinhardt"]["generic"][key3] = key3
-        self.atoms._add_attribute(mapdict)
-
-
-    def _calculate_aq(self, qq):
-        """
-        Private method for calculation of avged qvals
-        """
-
-        todo_q = []
-        for q in qq:
-            keys = ["q%d"%q, "q%d_real"%q, "q%d_imag"%q]
-            prod = []
-            for key in keys:
-                if key in self.atoms.keys():
-                    prod.append(True)
-                else:
-                    prod.append(False)
-            prod = np.prod(prod)
-            if not prod:
-                todo_q.append(q)
-
-        _ = self._calculate_q(todo_q)
-
-        #loop over atoms
-        for val in qq:
-            pc.calculate_aq_single(self.atoms, val)
-
-        mapdict = {}
-        mapdict["steinhardt"] = {}
-        mapdict["steinhardt"]["average"] = {}
-        for val in qq:
-            key1a = "q%d_norm"%val
-            key1b = "q%d"%val
-            key2 = "q%d_real"%val
-            key3 = "q%d_imag"%val
-            mapdict["steinhardt"]["average"][key1a] = key1b
-            mapdict["steinhardt"]["average"][key2] = key2
-            mapdict["steinhardt"]["average"][key3] = key3
-        self.atoms._add_attribute(mapdict)
-
-    def calculate_disorder(self, averaged=False, q=6):
-        """
-        Calculate the disorder criteria for each atom
-        
-        Parameters
-        ----------
-        averaged : bool, optional
-            If True, calculate the averaged disorder. Default False.
-        q : int, optional
-            The Steinhardt parameter value over which the bonds have to be calculated.
-            Default 6.
-        
-        Returns
-        -------
-        None
-        
-        Notes
-        -----
-        Calculate the disorder criteria as introduced in [1]. The disorder criteria value for each atom is defined by,
-        .. math::
-            D_j = \\frac{1}{N_b^j} \sum_{i=1}^{N_b} [ S_{jj} + S_{kk} -2S_{jk}]
-        where .. math:: S_{ij} = \sum_{m=-6}^6 q_{6m}(i) q_{6m}^*(i)
-        
-        Any q value other than six can also be used. This can be specified using the `q` argument.
-
-        The keyword `averaged` is True, the disorder value is averaged over the atom and its neighbors. 
-        For ordered systems, the value of disorder would be zero which would increase
-        and reach one for disordered systems.
-
-        This function creates two new attributes for this class: `disorder` and `avg_disorder`.
-        
-        References
-        ----------
-        .. [1] Kawasaki, T, Onuki, A, J. Chem. Phys. 135, 2011
-        """
-        #now routine for calculation of disorder
-
-        keys = ["q%d_real"%q, "q%d_imag"%q]
-        prod = []
-        for key in keys:
-            if key in self.atoms.keys():
-                prod.append(True)
-            else:
-                prod.append(False)
-        prod = np.prod(prod)
-        if not prod:
-            self.calculate_q(q)
-
-        pc.calculate_disorder(self.atoms, q)
-
-        mapdict = {}
-        mapdict["steinhardt"] = {}
-        mapdict["steinhardt"]["disorder"] = {}
-        mapdict["steinhardt"]["disorder"]["norm"] = "disorder"
-
-        if averaged:
-            #average the disorder
-            avg_arr = self.calculate.average_over_neighbors("disorder")
-            self.atoms["avg_disorder"] = avg_arr
-            mapdict["steinhardt"]["disorder"]["average"] = "avg_disorder"
-        self.atoms._add_attribute(mapdict)
 
 
     def find_solids(self, bonds=0.5, threshold=0.5, avgthreshold=0.6, 
@@ -616,7 +442,7 @@ class System:
         else:
             compare_criteria = 1
 
-        self.calculate_q(q)
+        self.calculate.steinhardt_parameter(q)
 
         #calculate solid neighs
         pc.calculate_bonds(self.atoms, q, 

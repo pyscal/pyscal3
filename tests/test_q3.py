@@ -10,5 +10,5 @@ def test_q_3():
     #sys.get_neighbors(method = 'voronoi')
     sys.find.neighbors(method = 'cutoff', cutoff=0.9)
 
-    q = sys.calculate_q(3, averaged=True)
+    q = sys.calculate.steinhardt_parameter(3, averaged=True)
     assert np.round(np.mean(np.array(q)), decimals=2) == 0.00
