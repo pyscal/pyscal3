@@ -118,6 +118,7 @@ class Atoms(dict, AttrSetter):
 
     @property
     def nreal(self):
+        print(self.keys())
         return len([1 for x in self['ghost'] if x==False])
     
     @property

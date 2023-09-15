@@ -44,12 +44,12 @@ def test_embed():
 	sys = pc.System()
 	sys.box = np.array(cu.cell)
 	sys.atoms = Atoms({"positions": cu.positions})
-	sys.embed_in_cubic_box()
+	sys.modify.embed_in_cubic_box()
 	assert np.abs(sys.box[0][0] - 5.105310960166873) < 1E-5
 
 def test_distance():
 	sys = pc.System.create.lattice.bcc(repetitions = [2, 2, 2], lattice_constant=3.127)
-	dist = sys.get_distance([0.0, 0.0, 0.0], [1.5635, 1.5635, 1.5635])
+	dist = sys.calculate.distance([0.0, 0.0, 0.0], [1.5635, 1.5635, 1.5635])
 	assert np.abs(dist - 2.708061437633939) < 1E-5	
 
 def test_composition():

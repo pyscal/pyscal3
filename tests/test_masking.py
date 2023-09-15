@@ -1,6 +1,5 @@
 import pyscal3.core as pc
 import os
-import pyscal3.crystal_structures as pcs
 import numpy as np
 
 def test_masking():

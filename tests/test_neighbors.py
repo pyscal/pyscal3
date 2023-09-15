@@ -5,7 +5,7 @@ from ase.build import bulk
 
 def test_system_init():
     sys = pc.System.create.lattice.bcc(repetitions = [10,10,10], lattice_constant=3.127)
-    sys.find_neighbors(method="cutoff", cutoff=3.6)
+    sys.find.neighbors(method="cutoff", cutoff=3.6)
     a1 = np.array(sys.atoms.neighbors.distance)
     a2 = np.array([2.708061437633939,
  3.127,
@@ -24,7 +24,7 @@ def test_system_init():
     assert np.sum(a1-a2) < 1E-5
     assert np.sum(sys.atoms.neighbors.distance[0]-a2) < 1E-5
 
-    sys.find_neighbors(method="cutoff", cutoff=3.6)
+    sys.find.neighbors(method="cutoff", cutoff=3.6)
     a1 = np.array(sys.atoms.neighbors.distance[0])
     a2 = np.array([2.7080614376339356,
  2.708061437633937,
@@ -42,7 +42,7 @@ def test_system_init():
  3.127])
     assert np.sum(a1-a2) < 1E-5
 
-    sys.find_neighbors(method="cutoff", cutoff='sann')
+    sys.find.neighbors(method="cutoff", cutoff='sann')
     a1 = np.array(sys.atoms.neighbors.distance[0])
     a2 = np.array([2.7080614376339356,
  2.708061437633937,
@@ -60,7 +60,7 @@ def test_system_init():
  4.422245809540667])
     assert np.sum(a1-a2) < 1E-5
 
-    sys.find_neighbors(method="number", nmax=8)
+    sys.find.neighbors(method="number", nmax=8)
     a1 = np.array(sys.atoms.neighbors.distance[0])
     a2 = np.array([2.7080614376339356,
  2.708061437633937,
