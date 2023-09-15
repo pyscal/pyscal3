@@ -88,7 +88,7 @@ def make_crystal(structure,
 
     #from here, the creation starts
     box = lattice_constant*np.array(sdict["box"])
-    pos = lattice_constant*np.array(sdict["positions"])
+    pos = np.array([_unfold_positions(p, box) for p in sdict["positions"]])
     pos = np.array([_generate_noise(x, noise) for x in pos])
     nop = len(pos)
     ids = [x+1 for x in range(nop)]
@@ -219,3 +219,6 @@ def _update_list_of_elements():
                     el_dict[el]["structure"] = str(struct.lower())
                     el_dict[el]["lattice_constant"] = float(lc)
     return el_dict
+
+def _unfold_positions(p, box):
+    return p[0]*box[0] + p[1]*box[1] + p[2]*box[2]
