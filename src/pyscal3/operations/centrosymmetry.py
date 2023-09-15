@@ -40,7 +40,7 @@ def calculate_centrosymmetry(system, nmax=12):
         raise ValueError("nmax has to even integer")
 
     system.atoms.create_attribute('centrosymmetry', fill_with = 0)
-    system.find_neighbors(method='number', nmax=nmax, assign_neighbor=True)
+    system.find.neighbors(method='number', nmax=nmax, assign_neighbor=True)
     pc.calculate_centrosymmetry(system.atoms, nmax)
 
     return system.atoms.centrosymmetry

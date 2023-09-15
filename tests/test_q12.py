@@ -8,7 +8,7 @@ def test_q_12():
     sys = pc.System.create.lattice.fcc(repetitions = [4, 4, 4])
 
     #sys.get_neighbors(method = 'voronoi')
-    sys.find_neighbors(method = 'cutoff', cutoff=0.9)
+    sys.find.neighbors(method = 'cutoff', cutoff=0.9)
     q = sys.calculate_q(12)
     assert np.round(np.mean(np.array(q)), decimals=2) == 0.60 , "Calculated q4 value is wrong!"
 

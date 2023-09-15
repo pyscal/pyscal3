@@ -29,6 +29,7 @@ import pyscal3.operations.centrosymmetry
 import pyscal3.operations.neighbor as neighbor
 import pyscal3.operations.input as inputmethods
 import pyscal3.operations.calculations as calculations
+import pyscal3.operations.identify as identify
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -135,6 +136,11 @@ class System:
         mapdict["remap_to_box"] = update_wrapper(partial(operations.remap_to_box, self), operations.remap_to_box)
         mapdict["embed_in_cubic_box"] = update_wrapper(partial(operations.embed_in_cubic_box, self), operations.embed_in_cubic_box)
         self.modify._add_attribute(mapdict)
+
+        self.find = AttrSetter()
+        mapdict = {}
+        mapdict['neighbors'] = update_wrapper(partial(identify.find_neighbors, self), identify.find_neighbors)
+        self.find._add_attribute(mapdict)
 
         self.calculate = AttrSetter()
         mapdict = {}
@@ -326,238 +332,6 @@ class System:
         if not self.neighbors_found:
             raise ValueError("This calculation needs neighbors to be calculated")
 
-    def find_neighbors(self, method='cutoff', cutoff=0, threshold=2, 
-            voroexp=1, padding=1.2, nlimit=6, 
-            cells=None, nmax=12, assign_neighbor=True):
-        """
-
-        Find neighbors of all atoms in the :class:`~pyscal.core.System`.
-
-        Parameters
-        ----------
-        method : {'cutoff', 'voronoi', 'number'}
-            `cutoff` method finds neighbors of an atom within a specified or adaptive cutoff distance from the atom.
-            `voronoi` method finds atoms that share a Voronoi polyhedra face with the atom. Default, `cutoff`
-            `number` method finds a specified number of closest neighbors to the given atom. Number only populates
-            
-
-        cutoff : { float, 'sann', 'adaptive'}
-            the cutoff distance to be used for the `cutoff` based neighbor calculation method described above.
-            If the value is specified as 0 or `adaptive`, adaptive method is used.
-            If the value is specified as `sann`, sann algorithm is used.
-
-        threshold : float, optional
-            only used if ``cutoff=adaptive``. A threshold which is used as safe limit for calculation of cutoff.
-
-        voroexp : int, optional
-            only used if ``method=voronoi``. Power of the neighbor weight used to weight the contribution of each atom towards
-            Steinhardt parameter values. Default 1.
-
-        padding : double, optional
-            only used if ``cutoff=adaptive`` or ``cutoff=number``. A safe padding value used after an adaptive cutoff is found. Default 1.2.
-
-        nlimit : int, optional
-            only used if ``cutoff=adaptive``. The number of particles to be considered for the calculation of adaptive cutoff.
-            Default 6.
-        
-        cells : bool, optional
-            If True, always use cell lists. Default None.
-
-        nmax : int, optional
-            only used if ``cutoff=number``. The number of closest neighbors to be found for each atom. Default 12
-        
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        RuntimeWarning
-            raised when `threshold` value is too low. A low threshold value will lead to 'sann' algorithm not converging
-            when finding a neighbor. This function will try to automatically increase `threshold` and check again.
-
-        RuntimeError
-            raised when neighbor search was unsuccessful. This is due to a low `threshold` value.
-
-        Notes
-        -----
-        This function calculates the neighbors of each particle. There are several ways to do this. A complete description of
-        the methods can be `found here <https://pyscal.readthedocs.io/en/latest/nearestneighbormethods.html>`_.
-
-        Method cutoff and specifying a cutoff radius uses the traditional approach being the one in which the neighbors of an atom
-        are the ones that lie in the cutoff distance around it.
-
-        In order to reduce time during the distance sorting during thefind_neighbors adaptive methods, pyscal sets an initial guess for a cutoff distance.
-        This is calculated as,
-
-        .. math:: r_{initial} = threshold * (simulation~box~volume/ number~of~particles)^{(1/3)}
-
-        threshold is a safe multiplier used for the guess value and can be set using the `threshold` keyword.
-
-        In Method cutoff, if ``cutoff='adaptive'``, an adaptive cutoff is found during runtime for each atom [1].
-        Setting the cutoff radius to 0 also uses this algorithm. The cutoff for an atom i is found using,
-
-        .. math:: r_c(i) = padding * ((1/nlimit) * \sum_{j=1}^{nlimit}(r_{ij}))
-
-        padding is a safe multiplier to the cutoff distance that can be set through the keyword `padding`. `nlimit` keyword sets the
-        limit for the top nlimit atoms to be taken into account to calculate the cutoff radius.
-
-        In Method cutoff, if ``cutoff='sann'``, sann algorithm is used [2]. There are no parameters to tune sann algorithm.
-
-        The second approach is using Voronoi polyhedra which also assigns a weight to each neighbor in the ratio of the face area between the two atoms.
-        Higher powers of this weight can also be used [3]. The keyword `voroexp`
-        can be used to set this weight.
-        
-        If method is `number`, instead of using a cutoff value for finding neighbors, a specified number of closest atoms are
-        found. This number can be set through the argument `nmax`.
-
-        If `cells` is None, cell lists are used if number of atoms are higher than 2500. If True, cell lists are always used.
-
-        .. warning::
-
-            Adaptive and number cutoff uses a padding over the intial guessed "neighbor distance". By default it is 2. In case
-            of a warning that ``threshold`` is inadequate, this parameter should be further increased. High/low value
-            of this parameter will correspond to the time taken for finding neighbors.
-
-        References
-        ----------
-        .. [1] Stukowski, A, Model Simul Mater SC 20, 2012
-        .. [2] van Meel, JA, Filion, L, Valeriani, C, Frenkel, D, J Chem Phys 234107, 2012
-        .. [3] Haeberle, J, Sperl, M, Born, P, arxiv 2019
-
-        """
-        #first reset all neighbors
-        self.reset_neighbors()
-        self.filter = 0
-
-        if threshold < 1:
-            raise ValueError("value of threshold should be at least 1.00")
-
-        if cells is None:
-            cells = (self.natoms > 250)
-
-        if method == 'cutoff':            
-            if cutoff=='sann':    
-                finished = False
-                for i in range(1, 10):
-                    finished = pc.get_all_neighbors_sann(self.atoms, 0.0, 
-                        self.triclinic, self.rot, self.rotinv,
-                        self.boxdims, threshold*i, cells)
-                    if finished:
-                        if i>1:
-                            warnings.warn("found neighbors with higher threshold than default/user input")
-                        break
-                    warnings.warn("Could not find sann cutoff. trying with a higher threshold", RuntimeWarning)
-                else:
-                    raise RuntimeError("sann cutoff could not be converged. This is most likely, \
-                        due to a low threshold value. Try increasing it.")
-            
-            elif cutoff=='adaptive' or cutoff==0:
-                finished = pc.get_all_neighbors_adaptive(self.atoms, 0.0,
-                    self.triclinic, self.rot, self.rotinv,
-                    self.boxdims, threshold, nlimit, padding, cells)
-                if not bool(finished):
-                    raise RuntimeError("Could not find adaptive cutoff")
-            else:
-                if cells:
-                    pc.get_all_neighbors_cells(self.atoms, cutoff,
-                        self.triclinic, self.rot, self.rotinv, self.boxdims)
-                else:
-                    pc.get_all_neighbors_normal(self.atoms, cutoff,
-                        self.triclinic, self.rot, self.rotinv, self.boxdims)
-
-        elif method == 'number':
-            finished = pc.get_all_neighbors_bynumber(self.atoms, 0.0, 
-                self.triclinic, self.rot, self.rotinv,
-                self.boxdims, threshold, nmax, cells, assign_neighbor)
-            if not finished:
-                raise RuntimeError("Could not find enough neighbors - try increasing threshold")
-
-        
-        elif method == 'voronoi':
-            clean_vertices = (cutoff>0)
-            #CLEANING is TURNED OFF
-            #if not clean_vertices:
-                #copy the simulation cell
-            backupbox = self._box.copy()
-            if self.triclinic:
-                if not self.ghosts_created:
-                    atoms, box = operations.repeat(self, (2, 2, 2), atoms=self.atoms, ghost=True, return_atoms=True)
-                    self.actual_box = self.box.copy()
-                    self.internal_box = box
-                    self._atoms = atoms
-                    self = self.embed_in_cubic_box()
-            pc.get_all_neighbors_voronoi(self.atoms, 0.0,
-                self.triclinic, self.rot, self.rotinv,
-                self.boxdims, voroexp)
-
-            if self.triclinic:
-                self._box = backupbox
-
-            #now clean up
-            #else:
-            #    real_atomdict = {"positions":copy.copy(self.atoms.positions_for_all), 
-            #     "ghost":copy.copy(self.atoms.positions_for_ghost)}
-                #we need to call the method
-                #this means alles good
-            #    if self.actual_box is None:
-            #        if self.triclinic:
-            #            new_box = self.embed_in_cubic_box(inputbox=self._box, return_box=True)
-            #            rot = np.array(new_box).T
-            #            rotinv = np.linalg.inv(rot)
-            #        else:
-            #            new_box = self._box
-            #            rot = [[0,0,0], [0,0,0], [0,0,0]]
-            #            rotinv = [[0,0,0], [0,0,0], [0,0,0]]
-            #    #ghosts are present
-            #    else:
-            #        if self.triclinic:
-            #            new_box = self.embed_in_cubic_box(inputbox=self.actual_box, return_box=True)
-            #            rot = np.array(new_box).T
-            #            rotinv = np.linalg.inv(rot)
-            #        else:
-            #            new_box = self.actual_box
-            #            rot = [[0,0,0], [0,0,0], [0,0,0]]
-            #            rotinv = [[0,0,0], [0,0,0], [0,0,0]]
-
-            #    boxdims = [0,0,0]
-            #    boxdims[0] = np.sum(np.array(new_box[0])**2)**0.5
-            #    boxdims[1] = np.sum(np.array(new_box[1])**2)**0.5
-            #    boxdims[2] = np.sum(np.array(new_box[2])**2)**0.5
-                
-            #    pc.get_all_neighbors_voronoi(real_atomdict, 0.0,
-            #        self.triclinic, rot, rotinv,
-            #        boxdims, 1)                
-                
-            #    pc.clean_voronoi_vertices(real_atomdict, 
-            #        self.atoms, 0.0,
-            #        self.triclinic, rot, rotinv,
-            #        boxdims, cutoff)
-
-                #unique_vertices = []
-                #for i in range(len(self.vertex_is_unique)):
-                #    for j in range(len(self.vertex_is_unique[i])):
-                #        if self.vertex_is_unique[i][j]:
-                #            unique_vertices.append(self.vertex_positions[i][j])
-
-                #self.atoms["vertex_positions_unique_skipcheck"] = unique_vertices
-
-            #assign extra options
-            mapdict = {}
-            mapdict["voronoi"] = {}
-            mapdict["voronoi"]["volume"] = "voronoi_volume"
-            mapdict["voronoi"]["face"] = {}
-            mapdict["voronoi"]["face"]["vertices"] = "face_vertices"
-            mapdict["voronoi"]["face"]["perimeters"] = "face_perimeters"
-            mapdict["voronoi"]["vertex"] = {}
-            mapdict["voronoi"]["vertex"]["vectors"] = "vertex_vectors"
-            mapdict["voronoi"]["vertex"]["numbers"] = "vertex_numbers"
-            mapdict["voronoi"]["vertex"]["positions"] = "vertex_positions"
-            #mapdict["voronoi"]["vertex"]["unique_positions"] = "vertex_positions_unique_nofilter"
-            self.atoms._add_attribute(mapdict)
-
-        self.neighbors_found = True
 
     def calculate_q(self, q, averaged=False, continuous_algorithm=False):
         """
@@ -964,7 +738,7 @@ class System:
         r : array of floats
             radius in distance units
         """
-        self.find_neighbors(method="cutoff", cutoff=rmax)
+        self.find.neighbors(method="cutoff", cutoff=rmax)
         distances = list(itertools.chain(*self.atoms["neighbordist"]))
 
         hist, bin_edges = np.histogram(distances, bins=bins, 

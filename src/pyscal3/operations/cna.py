@@ -37,7 +37,7 @@ def calculate_cna(system, lattice_constant=None):
     """
     system.atoms.create_attribute('structure', fill_with = 0)
     #run to calculate temp neighbors
-    system.find_neighbors(method='number', nmax=14, assign_neighbor=False)
+    system.find.neighbors(method='number', nmax=14, assign_neighbor=False)
 
     if lattice_constant is None:
         #we need adaptive calculation
@@ -103,7 +103,7 @@ def identify_diamond(system):
     """
     system.atoms.create_attribute('structure', fill_with = 0)
     #run to calculate temp neighbors
-    system.find_neighbors(method='number', nmax=4, assign_neighbor=False)
+    system.find.neighbors(method='number', nmax=4, assign_neighbor=False)
 
     pc.identify_diamond_cna(system.atoms, system.triclinic, 
             system.rot, system.rotinv, system.boxdims)
