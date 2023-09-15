@@ -56,17 +56,9 @@ def make_crystal(structure,
 
     """
     if repetitions == None:
-        nx = 1
-        ny = 1
-        nz = 1
+        repetitions = [1, 1, 1]
     elif isinstance(repetitions, int):
-        nx = repetitions
-        ny = repetitions
-        nz = repetitions
-    else:
-        nx = repetitions[0]
-        ny = repetitions[1]
-        nz = repetitions[2]
+        repetitions = [repetitions, repetitions, repetitions]
 
     if structure in structures.keys():
         if primitive:
@@ -92,42 +84,39 @@ def make_crystal(structure,
     else:
         element = [None for x in range(len(unique_types))]
     element_dict = dict([x for x in zip(unique_types, element)])
+    
+
+    #from here, the creation starts
+    box = lattice_constant*np.array(sdict["box"])
+    pos = lattice_constant*np.array(sdict["positions"])
+    pos = np.array([_generate_noise(x, noise) for x in pos])
+    nop = len(pos)
+    ids = [x+1 for x in range(nop)]
+    types = sdict['species']
+    species = [element_dict[typ] for typ in types] 
+
+    for d in range(3):
         
-    m = 0
-    co = 1
-    natoms = sdict["natoms"]*nx*ny*nz
-    positions = []
-    types = []
-    ids = []
-    species = []
+        pos_list = []
+        new_id_list = []
 
-    xh = nx*lattice_constant*sdict["scaling_factors"][0]
-    yh = ny*lattice_constant*sdict["scaling_factors"][1]
-    zh = nz*lattice_constant*sdict["scaling_factors"][2]
-    sdict["positions"] = lattice_constant*np.array(sdict["positions"])
-    box = [[xh, 0, 0], [0, yh, 0], [0, 0, zh]]
+        for i in range(1, repetitions[d]):
+            npos = copy.copy(pos)
+            npos = npos + i*box[d]
+            pos_list.append([_generate_noise(n, noise) for n in npos])
+            new_ids = [idstart+i for i in range(len(pos))]
+            new_id_list.append(new_ids)
+            #change id start
+            idstart = idstart + len(new_ids)
 
-    #create structure
-    for i in range(1, nx+1):
-        for j in range(1, ny+1):
-            for k in range(1, nz+1):
-                for l in range(1, sdict["natoms"]+1):
-                    m += 1
-                    posx = ((sdict["positions"][l-1][0])+(lattice_constant*sdict["scaling_factors"][0]*(float(i)-1)))
-                    posy = ((sdict["positions"][l-1][1])+(lattice_constant*sdict["scaling_factors"][1]*(float(j)-1)))
-                    posz = ((sdict["positions"][l-1][2])+(lattice_constant*sdict["scaling_factors"][2]*(float(k)-1)))
-                    if noise > 0:
-                        posx = np.random.normal(loc=posx, scale=noise)
-                        posy = np.random.normal(loc=posy, scale=noise)
-                        posz = np.random.normal(loc=posz, scale=noise)
+        pos = np.concatenate((pos, *pos_list))
+        ids = np.concatenate((ids, *new_id_list))
+        types = np.concatenate((types, np.tile(types, len(pos_list))))
+        species = np.concatenate((species, np.tile(species, len(pos_list))))
+
                     
-                    positions.append([posx, posy, posz])
-                    ids.append(co)
-                    types.append(sdict["species"][l-1])
-                    species.append(element_dict[sdict["species"][l-1]])
-                    co += 1
     atoms = {}
-    atoms['positions'] = positions
+    atoms['positions'] = pos
     atoms['ids'] = ids
     atoms['types'] = types
     atoms['species'] = species
@@ -196,6 +185,13 @@ def general_lattice(positions,
 
     return atoms, box
 
+
+def _generate_noise(p, noise):
+    if noise > 0:
+        p[0] = np.random.normal(loc=p[0], scale=noise)
+        p[1] = np.random.normal(loc=p[1], scale=noise)
+        p[2] = np.random.normal(loc=p[2], scale=noise)
+    return p
 
 def _update_list_of_elements():
     """

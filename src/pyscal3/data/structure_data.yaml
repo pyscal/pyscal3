@@ -17,14 +17,24 @@ bcc:
 
 fcc: 
   conventional:
-    natoms: 4
     species: [1, 1, 1, 1]
-    scaling_factors: [1.0, 1.0, 1.0]
+    box: 
+      - [1.0, 0.0, 0.0]
+      - [0.0, 1.0, 0.0]
+      - [0.0, 0.0, 1.0]
     positions: 
       - [0.0, 0.0, 0.0]
       - [0.5, 0.0, 0.5]
       - [0.0, 0.5, 0.5]
       - [0.5, 0.5, 0.0]
+  primitive:
+    species: [1]
+    box: 
+      - [0.0, 0.5, 0.5]
+      - [0.5, 0.0, 0.5]
+      - [0.5, 0.5, 0.0]
+    positions: 
+      - [0.0, 0.0, 0.0]
 
 hcp: 
   conventional:
