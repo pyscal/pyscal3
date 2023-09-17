@@ -41,7 +41,8 @@ def _make_crystal(structure,
     repetitions = None, 
     ca_ratio = 1.633, 
     noise = 0, 
-    element=None):
+    element=None,
+    primitive=False):
     
     atoms, box, sdict = pcs.make_crystal(structure, 
         lattice_constant=lattice_constant,
@@ -49,7 +50,9 @@ def _make_crystal(structure,
         ca_ratio=ca_ratio,
         noise=noise, 
         element=element, 
-        return_structure_dict=True)
+        return_structure_dict=True,
+        primitive=primitive)
+    
     s = System()
     s.box = box
     s.atoms = atoms
@@ -60,7 +63,7 @@ def _make_crystal(structure,
 
 def _make_general_lattice(positions,
     types, 
-    scaling_factors=[1.0, 1.0, 1.0],
+    box,
     lattice_constant = 1.00, 
     repetitions = None, 
     noise = 0,
@@ -68,7 +71,7 @@ def _make_general_lattice(positions,
 
     atoms, box, sdict = pcs.general_lattice(positions,
         types,
-        scaling_factors=scaling_factors,
+        box,
         lattice_constant=lattice_constant,
         repetitions=repetitions,
         noise=noise,

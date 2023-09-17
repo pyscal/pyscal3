@@ -12,7 +12,7 @@ def test_fcc():
 	assert sym["international_symbol"] == 'Fm-3m'	
 
 def test_hcp():
-	sys = System.create.element.Ti()
+	sys = System.create.element.Mg()
 	sym = get_symmetry(sys)
 	assert sym["international_symbol"] == 'P6_3/mmc'	
 
