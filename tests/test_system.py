@@ -67,5 +67,6 @@ def test_volume():
 	assert sys.volume == 1000
 
 def test_system_init():
-	sys = pc.System.create.lattice.custom([[0, 0, 0], [0.5, 0.5, 0.5]], [1, 2])
+	sys = pc.System.create.lattice.custom([[0, 0, 0], [0.5, 0.5, 0.5]], [1, 2], 
+		[[1,0,0], [0,1,0], [0,0,1]])
 	assert sys.natoms == 2
