@@ -413,7 +413,6 @@ vector<cell> set_up_cells(const vector<vector<double>>& positions,
       double lx, ly, lz;
       vector<int> cc;
       vector<cell> cells;
-      
       //find of all find the number of cells in each direction
       nx = box[0]/neighbordistance;
       ny = box[1]/neighbordistance;
@@ -423,7 +422,7 @@ vector<cell> set_up_cells(const vector<vector<double>>& positions,
       lx = box[0]/nx;
       ly = box[1]/ny;
       lz = box[2]/nz;
-
+      
       //find the total number of cells
       total_cells = nx*ny*nz;
       cells.resize(total_cells);
@@ -447,12 +446,11 @@ vector<cell> set_up_cells(const vector<vector<double>>& positions,
            }
          }
       }
-      
       int cx, cy, cz;
       double dx, dy, dz;
       int ind;
       int nop = positions.size();
-
+      
       //now loop over all atoms and assign cells
       for(int ti=0; ti<nop; ti++){
 
@@ -468,22 +466,21 @@ vector<cell> set_up_cells(const vector<vector<double>>& positions,
               dy = 0;
           if( abs(dz-0) < 1E-6)
               dz = 0;
-
+          
           if (dx < 0) dx+=box[0];
           else if (dx >= box[0]) dx-=box[0];
           if (dy < 0) dy+=box[1];
           else if (dy >= box[1]) dy-=box[1];
           if (dz < 0) dz+=box[2];
           else if (dz >= box[2]) dz-=box[2];
-
+          
           //now find c vals
           cx = dx/lx;
           cy = dy/ly;
           cz = dz/lz;
-
+          
           //now get cell index
           ind = cell_index(cx, cy, cz, nx, ny, nz);
-          
           //now add the atom to the corresponding cells
           cells[ind].members.emplace_back(ti);
 
@@ -498,7 +495,6 @@ void get_all_neighbors_cells(py::dict& atoms,
     const vector<vector<double>> rot, 
     const vector<vector<double>> rotinv,
     const vector<double> box){
-
     double d;
     double diffx,diffy,diffz;
     double tempr,temptheta,tempphi;
@@ -509,7 +505,6 @@ void get_all_neighbors_cells(py::dict& atoms,
     vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
     vector<bool> mask_1 = atoms[py::str("mask_1")].cast<vector<bool>>();
     vector<bool> mask_2 = atoms[py::str("mask_2")].cast<vector<bool>>();
-
     int nop = positions.size();
     vector<vector<int>> neighbors(nop);
     vector<vector<double>> neighbordist(nop);
@@ -519,11 +514,9 @@ void get_all_neighbors_cells(py::dict& atoms,
     vector<vector<double>> phi(nop);
     vector<vector<double>> theta(nop);
     vector<double> cutoff(nop); 
-    
     vector<cell> cells = set_up_cells(positions, box, neighbordistance);
     int total_cells = cells.size();
     int subcell;
-
     //now loop to find distance
     for(int i=0; i<total_cells; i++){
         //for each member in cell i
@@ -587,7 +580,6 @@ void get_all_neighbors_cells(py::dict& atoms,
             }
         }
     }
-
     //calculation over lets assign
     atoms[py::str("neighbors")] = neighbors;
     atoms[py::str("neighbordist")] = neighbordist;

@@ -88,42 +88,40 @@ def make_crystal(structure,
 
     #from here, the creation starts
     box = lattice_constant*np.array(sdict["box"])
+
     pos = np.array([_unfold_positions(p, box) for p in sdict["positions"]])
     pos = np.array([_generate_noise(x, noise) for x in pos])
     nop = len(pos)
-    ids = [x+1 for x in range(nop)]
     types = sdict['species']
     species = [element_dict[typ] for typ in types] 
 
-    for d in range(3):
-        
+    for d in range(3):        
         pos_list = []
-        new_id_list = []
-
         for i in range(1, repetitions[d]):
             npos = copy.copy(pos)
             npos = npos + i*box[d]
             pos_list.append([_generate_noise(n, noise) for n in npos])
-            new_ids = [idstart+i for i in range(len(pos))]
-            new_id_list.append(new_ids)
-            #change id start
-            idstart = idstart + len(new_ids)
 
         pos = np.concatenate((pos, *pos_list))
-        ids = np.concatenate((ids, *new_id_list))
         types = np.concatenate((types, np.tile(types, len(pos_list))))
         species = np.concatenate((species, np.tile(species, len(pos_list))))
 
                     
     atoms = {}
     atoms['positions'] = pos
-    atoms['ids'] = ids
+    atoms['ids'] = [x+1 for x in range(len(pos))]
     atoms['types'] = types
     atoms['species'] = species
     atoms['ghost'] = [False for x in range(len(types))]
 
     patoms = Atoms()
     patoms.from_dict(atoms)
+
+    #scale box 
+    box[0] = repetitions[0]*np.array(box[0])
+    box[1] = repetitions[1]*np.array(box[1])
+    box[2] = repetitions[2]*np.array(box[2])
+
     if return_structure_dict:
         return patoms, box, sdict
 
@@ -131,7 +129,7 @@ def make_crystal(structure,
 
 def general_lattice(positions,
     types, 
-    scaling_factors=[1.0, 1.0, 1.0],
+    box,
     lattice_constant = 1.00, 
     repetitions = None, 
     noise = 0,
@@ -168,10 +166,10 @@ def general_lattice(positions,
 
     sdict = {"custom":
                 {"conventional":
-                    {"natoms": len(positions),
+                    {
                      "species": types,
-                     "scaling_factors": scaling_factors,
-                     "positions": positions
+                     "positions": positions,
+                     "box": box,
                     }
                 }
             }
