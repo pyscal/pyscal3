@@ -92,31 +92,40 @@ class GrainBoundary:
             raise TypeError("GB cannot be created with the given input!")
         return valid
     
-    def populate_grain_boundary(self, lattice, element=None, repetitions=(1,1,1), lattice_parameter=1, overlap=0.0):
+    def populate_grain_boundary(self, lattice, element=None, 
+        repetitions=(1,1,1), lattice_parameter=1, overlap=0.0):
         if lattice in pcs.structures.keys():
             structure = lattice
             element = element
-            basis = pcs.structures[lattice]['positions']
-            sdict = pcs.structures[lattice]
+            if 'conventional' not in pcs.structures[lattice].keys():
+                raise ValueError("GBs can only be filled with conventional lattice, choose another structure") 
+            basis = pcs.structures[lattice]['conventional']['positions']
+            sdict = pcs.structures[lattice]['conventional']
+        
         elif lattice in pcs.elements.keys():
             structure = pcs.elements[lattice]['structure']
             element = lattice
-            lattice_parameter = pcs.elements[lattice]['lattice_constant']
-            basis = pcs.structures[structure]['positions']
-            sdict = pcs.structures[structure]
+            if 'conventional' not in pcs.structures[lattice].keys():
+                raise ValueError("GBs can only be filled with conventional lattice, choose another structure") 
+            lattice_parameter = pcs.elements[lattice]['conventional']['lattice_constant']
+            basis = pcs.structures[structure]['conventional']['positions']
+            sdict = pcs.structures[structure]['conventional']
         else:
             raise ValueError("Unknown lattice type")
+
         box, atoms1, atoms2 = csl.populate_gb(self._ortho_1, self._ortho_2, 
                         np.array(basis),
                         lattice_parameter,
                         dim=repetitions, 
                         overlap=overlap)
+        
         atoms = Atoms()
         total_atoms = np.concatenate((atoms1, atoms2))
         if element is not None:
             atoms.from_dict({"positions": total_atoms, "species": [element for x in range(len(total_atoms))]})
         else:
             atoms.from_dict({"positions": total_atoms})
+        
         sys = System()
         sys.box = box
         sys.atoms = atoms
