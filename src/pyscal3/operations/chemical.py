@@ -10,7 +10,7 @@ def calculate_sro(system, reference_type=1, compare_type=2, average=True):
         type of the atom to be used a reference. default 1
 
     compare_type: int, optional
-    	type of the atom to be compared to. default 2
+        type of the atom to be compared to. default 2
 
     average: bool, optional
         if True, average over all atoms of the reference type in the system.
@@ -49,30 +49,36 @@ def calculate_sro(system, reference_type=1, compare_type=2, average=True):
 
     """
 
-	def _get_dict(val, cdict):
-	    cx, cxc = np.unique(val, return_counts=True)
-	    cx = list(cx)
-	    cxc = list(cxc)
-	    for key, val in cdict.items():
-	        if key not in cx:
-	            cx.append(key)
-	            cxc.append(0)
-	    d = dict([(x, cxc[c]/np.sum(cxc)) for c, x in enumerate(cx)])
-	    return d
+    def _get_dict(val, cdict):
+        cx, cxc = np.unique(val, return_counts=True)
+        cx = list(cx)
+        cxc = list(cxc)
+        for key, val in cdict.items():
+            if key not in cx:
+                cx.append(key)
+                cxc.append(0)
+        d = dict([(x, cxc[c]/np.sum(cxc)) for c, x in enumerate(cx)])
+        return d
 
     system._check_neighbors()
     
     cdict = system.composition
 
     neighbortypes = system.atoms["types"][system.atoms['neighbors']]
-	comp_dicts = [_get_dict(neighbortype, cdict) for neighbortype in neighbortypes]
+    comp_dicts = [_get_dict(neighbortype, cdict) for neighbortype in neighbortypes]
     local_comp = np.array([d[reference_type] for d in comp_dicts])
-	global_comp = cdict[reference_type]
+    global_comp = cdict[reference_type]
 
-	if reference_type == compare_type:
-		sro = (local_comp - global_comp)/(1 - global_comp)
-	else:
-		sro = 1 - (local_comp/global_comp)
+    if reference_type == compare_type:
+        sro = (local_comp - global_comp)/(1 - global_comp)
+    else:
+        sro = 1 - (local_comp/global_comp)
+
+    system.atoms["sro"]= sro
+    mapdict = {}
+    mapdict['chemical'] = {}
+    mapdict['chemical']['short_range_order'] = "sro"
+    system.atoms._add_attribute(mapdict)
 
     if average:
         np.mean(sro)
