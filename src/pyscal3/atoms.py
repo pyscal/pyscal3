@@ -332,6 +332,12 @@ class Atoms(dict, AttrSetter):
             concdict = {str(t): typecounts[c]/np.sum(typecounts) for c, t in enumerate(types)}
         return concdict
 
+    @property
+    def composition_ints(self):
+        typelist = self["types"][:self.nreal]
+        types, typecounts = np.unique(typelist, return_counts=True)
+        concdict = dict([(t, typecounts[c]/np.sum(typecounts)) for c, t in enumerate(types)])
+        return concdict
 
 
 
