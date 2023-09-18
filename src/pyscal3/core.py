@@ -31,6 +31,7 @@ import pyscal3.operations.input as inputmethods
 import pyscal3.operations.calculations as calculations
 import pyscal3.operations.identify as identify
 import pyscal3.operations.voronoi as voronoi
+import pyscal3.operations.chemical as chemical
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -168,7 +169,13 @@ class System:
         mapdict = {}
         mapdict['common_neighbor_analysis'] = update_wrapper(partial(cna.calculate_cna, self), cna.calculate_cna)
         mapdict['diamond_structure'] = update_wrapper(partial(cna.identify_diamond, self), cna.identify_diamond)
+        mapdict['short_range_order'] = update_wrapper(partial(chemical.calculate_sro, self), chemical.calculate_sro)
         self.analyze._add_attribute(mapdict)
+
+        self.chemical = AttrSetter()
+        mapdict = {}
+        mapdict['short_range_order'] = update_wrapper(partial(chemical.calculate_sro, self), chemical.calculate_sro)
+        self.chemical._add_attribute(mapdict)
 
         self.read = AttrSetter()
         mapdict = {}
@@ -291,6 +298,8 @@ class System:
             #print(needed_atoms)
             needed_cells = np.ceil(needed_atoms/len(atoms['positions']))
             nx = int(needed_cells**(1/3))
+            if nx < 2:
+                nx = 2
             if np.sum(self.box) == 0:
                 raise ValueError("Simulation box should be initialized before atoms")
             atoms, box = operations.repeat(self, (nx, nx, nx), atoms=atoms, ghost=True, return_atoms=True)
