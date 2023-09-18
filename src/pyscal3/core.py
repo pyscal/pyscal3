@@ -195,6 +195,14 @@ class System:
         mapdict['file'] = update_wrapper(partial(inputmethods.to_file, self), inputmethods.to_file)
         self.write._add_attribute(mapdict)
 
+        self.show = AttrSetter()
+        mapdict = {}
+        mapdict['all'] = update_wrapper(partial(visualize.plot_simple, self), visualize.plot_simple)
+        mapdict['property'] = update_wrapper(partial(visualize.plot_by_property, self), visualize.plot_by_property)
+        mapdict['selection'] = update_wrapper(partial(visualize.plot_by_selection, self), visualize.plot_by_selection)
+        self.show._add_attribute(mapdict)
+
+
     def iter_atoms(self):
         return self.atoms.iter_atoms()
 
@@ -363,10 +371,6 @@ class System:
         """
         if not self.neighbors_found:
             raise ValueError("This calculation needs neighbors to be calculated")
-
-
-    def show(self, *args, **kwargs):
-        return visualize.plot_system(self, *args, **kwargs)
 
 
     
