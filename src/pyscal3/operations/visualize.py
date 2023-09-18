@@ -4,6 +4,51 @@ import warnings
 import matplotlib.pyplot as plt
 import matplotlib
 
+def plot_by_selection(sys, height=500, width=500, size=5, ):
+
+    try:
+        import ipyvolume as ipv
+    except ImportError:
+        print("Install ipyvolume for visualisation")
+
+    cFalse = '#b0bec5'
+    cTrue = '#ef5350'
+
+    scatter = ipv.scatter(sys.atoms.positions[:,0][sys.atoms.selection], 
+                          sys.atoms.positions[:,1][sys.atoms.selection], 
+                          sys.atoms.positions[:,2][sys.atoms.selection], 
+                          marker='sphere',
+                          size=size,
+                          lighting=True,
+                          color=cTrue)
+
+    scatter = ipv.scatter(sys.atoms.positions[:,0][np.logical_not(sys.atoms.selection)], 
+                          sys.atoms.positions[:,1][np.logical_not(sys.atoms.selection)], 
+                          sys.atoms.positions[:,2][np.logical_not(sys.atoms.selection)], 
+                          marker='sphere',
+                          size=size,
+                          lighting=True,
+                          color=cFalse)
+
+    #plotting box
+    box = sys.box.copy()
+    origin = np.array([0,0,0])
+    combos = list(itertools.combinations(range(3), 2))
+    for combo in combos:
+        f1 = [origin, box[combo[0]], box[combo[0]]+box[combo[1]], box[combo[1]], origin]
+        s = combo[0] + combo[1]
+        t = 3-s
+        f2 = [origin + box[t], box[combo[0]]+ box[t],  box[combo[0]]+box[combo[1]]+ box[t], box[combo[1]]+ box[t], origin + box[t]]        
+        unn = np.vstack((f1, f2))
+        ipv.plot(unn[:,0], unn[:,1], unn[:,2], color='#546e7a')
+    
+    ipv.style.box_off()
+    ipv.style.axes_off()
+    ipv.squarelim()
+    
+    #done
+    return ipv.gcf()
+
 def plot_by_property(sys, colorby, ids=None, 
     indices=None, 
     condition=None, 
@@ -16,16 +61,16 @@ def plot_by_property(sys, colorby, ids=None,
     except ImportError:
         print("Install ipyvolume for visualisation")
     
-    colorby = colorby.copy()
+    colorby = colorby.copy().astype(int)
 
     sys.apply_selection(ids=ids, indices=indices, condition=condition)
     colorby = [x for count, x in enumerate(colorby) if sys.atoms.selection[count]]
-    
+
+    fig = ipv.figure(debug=False, width=width, height=height)
+ 
     prop = (colorby.copy() - min(colorby))/(max(colorby) - min(colorby))
     cmap = matplotlib.cm.get_cmap(cmap)
     colors = [cmap(x) for x in prop]
-
-    fig = ipv.figure(debug=False, width=width, height=height)
 
     scatter = ipv.scatter(sys.atoms.positions[:,0][sys.atoms.selection], 
                           sys.atoms.positions[:,1][sys.atoms.selection], 
@@ -35,7 +80,8 @@ def plot_by_property(sys, colorby, ids=None,
                           lighting=True,
                           color=colors)
 
-    
+    sys.remove_selection()
+
     #plotting box
     box = sys.box.copy()
     origin = np.array([0,0,0])
