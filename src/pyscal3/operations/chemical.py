@@ -62,7 +62,7 @@ def calculate_sro(system, reference_type=1, compare_type=2, average=True):
 
     system._check_neighbors()
     
-    cdict = system.composition
+    cdict = system.atoms.composition_ints
 
     neighbortypes = system.atoms["types"][system.atoms['neighbors']]
     comp_dicts = [_get_dict(neighbortype, cdict) for neighbortype in neighbortypes]
