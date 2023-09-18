@@ -30,6 +30,7 @@ import pyscal3.operations.neighbor as neighbor
 import pyscal3.operations.input as inputmethods
 import pyscal3.operations.calculations as calculations
 import pyscal3.operations.identify as identify
+import pyscal3.operations.voronoi as voronoi
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -160,6 +161,7 @@ class System:
         mapdict['common_neighbor_analysis'] = update_wrapper(partial(cna.calculate_cna, self), cna.calculate_cna)
         mapdict['diamond_structure'] = update_wrapper(partial(cna.identify_diamond, self), cna.identify_diamond)
         mapdict['centrosymmetry'] = update_wrapper(partial(centrosymmetry.calculate_centrosymmetry, self), centrosymmetry.calculate_centrosymmetry)
+        mapdict['voronoi_vector'] = update_wrapper(partial(voronoi.calculate_vorovector, self), voronoi.calculate_vorovector)
         self.calculate._add_attribute(mapdict)
 
         self.analyze = AttrSetter()

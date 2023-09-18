@@ -14,6 +14,12 @@ def test_voronoi_props():
     assert (sys.atoms.voronoi.face.perimeters[0][0]-6.6333687143110005 < 1E-5)
     assert sys.atoms.voronoi.face.vertices[0][0] == 6
 
+def test_voronoi_vector():
+    sys = pc.System.create.lattice.fcc(repetitions=(4,4,4))
+    sys.find.neighbors(method='voronoi')
+    sys.calculate.voronoi_vector()
+    assert sys.atoms.voronoi.vector[0][1] == 12
+
 #def test_voronoi_vertices():
 #    nx = np.random.randint(1, 10)
 #    nverts = (nx**3*12)
