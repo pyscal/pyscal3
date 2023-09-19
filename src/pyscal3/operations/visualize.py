@@ -281,6 +281,8 @@ def plot_simple(sys, colors=None,
                         b=10, t=10)
                       )
     fig.update_layout(showlegend=False)
+    fig['layout'].update(scene=dict(aspectmode="data"))
+    
     return fig.show()
 
     
