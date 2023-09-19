@@ -22,6 +22,7 @@ import pyscal3.csystem as pc
 import pyscal3.traj_process as ptp
 from pyscal3.formats.ase import convert_snap
 import pyscal3.structure_creator as pcs
+from pyscal3.grain_boundary import GrainBoundary
 
 import pyscal3.operations.operations as operations
 import pyscal3.operations.cna as cna
@@ -33,6 +34,7 @@ import pyscal3.operations.identify as identify
 import pyscal3.operations.voronoi as voronoi
 import pyscal3.operations.chemical as chemical
 import pyscal3.operations.visualize as visualize
+
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
 
@@ -86,7 +88,38 @@ def _make_general_lattice(positions,
     s.atoms._lattice = 'custom'
     s.atoms._lattice_constant = lattice_constant
     s._structure_dict = sdict
-    return s     
+    return s
+
+def _make_grain_boundary(axis, 
+    sigma, gb_plane,
+    structure = None,
+    element = None, 
+    lattice_constant = 1,
+    repetitions = (1,1,1),
+    overlap=0.0):
+
+    gb = GrainBoundary()
+    gb.create_grain_boundary(axis=axis, sigma=sigma, 
+                             gb_plane=gb_plane)
+
+    if structure is not None:
+        atoms, box, sdict = gb.populate_grain_boundary(structure, 
+                                        repetitions = repetitions,
+                                        lattice_parameter = lattice_constant,
+                                        overlap=overlap)
+    elif element is not None:
+        atoms, box, sdict = gb.populate_grain_boundary(element, 
+                                        repetitions=repetitions,
+                                        overlap=overlap)
+    s = System()
+    s.box = box
+    s.atoms = atoms
+    s.atoms._lattice = structure
+    s.atoms._lattice_constant = lattice_constant
+    s._structure_dict = sdict
+    #s = operations.remap_to_box(s)
+    return s
+
 
 class System:
     """
@@ -108,6 +141,9 @@ class System:
             element_dict[key]['structure'],
             lattice_constant=element_dict[key]['lattice_constant'],
             element = key), pcs.make_crystal)
+
+    mapdict["grain_boundary"] = _make_grain_boundary
+
     create._add_attribute(mapdict)
 
     def __init__(self, filename=None, format="lammps-dump", 

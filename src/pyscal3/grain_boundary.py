@@ -1,8 +1,11 @@
 import numpy as np
 import os
 import pyscal3.csl as csl
-import pyscal3.crystal_structures as pcs
-from pyscal3.core import System, Atoms
+from pyscal3.core import Atoms
+from pyscal3.attributes import read_yaml
+
+structure_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/structure_data.yaml"))
+element_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/element_data.yaml"))
 
 class GrainBoundary:
     def __init__(self):
@@ -94,22 +97,22 @@ class GrainBoundary:
     
     def populate_grain_boundary(self, lattice, element=None, 
         repetitions=(1,1,1), lattice_parameter=1, overlap=0.0):
-        if lattice in pcs.structures.keys():
+        if lattice in structure_dict.keys():
             structure = lattice
             element = element
-            if 'conventional' not in pcs.structures[lattice].keys():
+            if 'conventional' not in structure_dict[lattice].keys():
                 raise ValueError("GBs can only be filled with conventional lattice, choose another structure") 
-            basis = pcs.structures[lattice]['conventional']['positions']
-            sdict = pcs.structures[lattice]['conventional']
+            basis = structure_dict[lattice]['conventional']['positions']
+            sdict = structure_dict[lattice]['conventional']
         
-        elif lattice in pcs.elements.keys():
-            structure = pcs.elements[lattice]['structure']
+        elif lattice in element_dict.keys():
+            structure = element_dict[lattice]['structure']
             element = lattice
-            if 'conventional' not in pcs.structures[lattice].keys():
+            if 'conventional' not in structure_dict[structure].keys():
                 raise ValueError("GBs can only be filled with conventional lattice, choose another structure") 
-            lattice_parameter = pcs.elements[lattice]['conventional']['lattice_constant']
-            basis = pcs.structures[structure]['conventional']['positions']
-            sdict = pcs.structures[structure]['conventional']
+            lattice_parameter = element_dict[element]['lattice_constant']
+            basis = structure_dict[structure]['conventional']['positions']
+            sdict = structure_dict[structure]['conventional']
         else:
             raise ValueError("Unknown lattice type")
 
@@ -126,11 +129,12 @@ class GrainBoundary:
         else:
             atoms.from_dict({"positions": total_atoms})
         
-        sys = System()
-        sys.box = box
-        sys.atoms = atoms
-        sys.atoms._lattice = structure
-        sys.atoms._lattice_constant = lattice_parameter
-        sys._structure_dict = sdict
-        sys.remap_atoms_into_box()
-        return sys
+        return atoms, box, sdict
+        #sys = System()
+        #sys.box = box
+        #sys.atoms = atoms
+        #sys.atoms._lattice = structure
+        #sys.atoms._lattice_constant = lattice_parameter
+        #sys._structure_dict = sdict
+        #sys.remap_atoms_into_box()
+        #return sys

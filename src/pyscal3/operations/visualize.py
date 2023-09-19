@@ -4,50 +4,136 @@ import warnings
 import matplotlib.pyplot as plt
 import matplotlib
 
-def plot_by_selection(sys, height=500, width=500, size=5, ):
+def create_box_plot(box, origin=[0,0,0]):
+    """
+    Create traces which correspond to the simulation cell
+
+    Parameters
+    ----------
+    box : list
+        dimensions of the simulation box
+
+    origin : list, optional
+        Origin of the simulation box. Default [0, 0, 0]
+
+    Returns
+    -------
+    traces : list of Scatter3d objects
+
+    """
 
     try:
-        import ipyvolume as ipv
+        from plotly import graph_objs as go
+        import ipywidgets as widgets
     except ImportError:
         print("Install ipyvolume for visualisation")
 
-    cFalse = '#b0bec5'
-    cTrue = '#ef5350'
-
-    scatter = ipv.scatter(sys.atoms.positions[:,0][sys.atoms.selection], 
-                          sys.atoms.positions[:,1][sys.atoms.selection], 
-                          sys.atoms.positions[:,2][sys.atoms.selection], 
-                          marker='sphere',
-                          size=size,
-                          lighting=True,
-                          color=cTrue)
-
-    scatter = ipv.scatter(sys.atoms.positions[:,0][np.logical_not(sys.atoms.selection)], 
-                          sys.atoms.positions[:,1][np.logical_not(sys.atoms.selection)], 
-                          sys.atoms.positions[:,2][np.logical_not(sys.atoms.selection)], 
-                          marker='sphere',
-                          size=size,
-                          lighting=True,
-                          color=cFalse)
-
-    #plotting box
-    box = sys.box.copy()
-    origin = np.array([0,0,0])
+    box = np.array(box)
+    origin = np.array(origin)
     combos = list(itertools.combinations(range(3), 2))
+    faces = []
     for combo in combos:
         f1 = [origin, box[combo[0]], box[combo[0]]+box[combo[1]], box[combo[1]], origin]
         s = combo[0] + combo[1]
         t = 3-s
-        f2 = [origin + box[t], box[combo[0]]+ box[t],  box[combo[0]]+box[combo[1]]+ box[t], box[combo[1]]+ box[t], origin + box[t]]        
-        unn = np.vstack((f1, f2))
-        ipv.plot(unn[:,0], unn[:,1], unn[:,2], color='#546e7a')
-    
-    ipv.style.box_off()
-    ipv.style.axes_off()
-    ipv.squarelim()
-    
-    #done
-    return ipv.gcf()
+        f2 = [origin + box[t], box[combo[0]]+ box[t],  box[combo[0]]+box[combo[1]]+ box[t], box[combo[1]]+ box[t], origin + box[t]]
+        faces.append(np.array(f1))
+        faces.append(np.array(f2))
+    traces = []
+    for face in faces:
+        trace = go.Scatter3d(
+            x=face[:,0],
+            y=face[:,1],
+            z=face[:,2],
+            mode='lines',
+            name='lines',
+            line=dict(width=2.0, color='#263238'),
+            showlegend=False
+        )
+        traces.append(trace)
+    return traces
+
+def plot_by_selection(sys, radius=10, 
+    opacity=1.0):
+
+    try:
+        from plotly import graph_objs as go
+    except ImportError:
+        print("Install plotly for visualisation")
+
+    cFalse = '#b0bec5'
+    cTrue = '#ef5350'
+
+    #plotting box
+    box = sys.box.copy()
+    origin = np.array([0,0,0])
+    traces = create_box_plot(box, origin)
+
+    data=go.Scatter3d(
+        x=sys.atoms.positions[:,0][sys.atoms.selection],
+        y=sys.atoms.positions[:,1][sys.atoms.selection],
+        z=sys.atoms.positions[:,2][sys.atoms.selection],
+        mode='markers',
+        opacity=1.0,
+        marker=dict(
+            sizemode='diameter',
+            sizeref=750,
+            size=radius,
+            color = cTrue,
+            opacity = opacity,
+            #colorscale = colorscale,
+            #colorbar=dict(thickness=20, title=cmap_title),
+            line=dict(width=0.5, color='#455A64'),            
+        )
+    )
+
+    traces.append(data)
+
+    data=go.Scatter3d(
+        x=sys.atoms.positions[:,0][np.logical_not(sys.atoms.selection)],
+        y=sys.atoms.positions[:,1][np.logical_not(sys.atoms.selection)],
+        z=sys.atoms.positions[:,2][np.logical_not(sys.atoms.selection)],
+        mode='markers',
+        opacity=1.0,
+        marker=dict(
+            sizemode='diameter',
+            sizeref=750,
+            size=radius,
+            color = cFalse,
+            opacity = opacity,
+            #colorscale = colorscale,
+            #colorbar=dict(thickness=20, title=cmap_title),
+            line=dict(width=0.5, color='#455A64')
+        )
+    )
+
+    traces.append(data)
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(scene = dict(
+                        xaxis_title="",
+                        yaxis_title="",
+                        zaxis_title="",
+                        xaxis = dict(
+                             showticklabels=False,
+                             showbackground=False,
+                             zerolinecolor="#455A64",),
+                        yaxis = dict(
+                            showticklabels=False,
+                            showbackground=False,
+                            zerolinecolor="#455A64"),
+                        zaxis = dict(
+                            showticklabels=False,
+                            showbackground=False,
+                            zerolinecolor="#455A64",),),
+                        width=700,
+                        margin=dict(
+                        r=10, l=10,
+                        b=10, t=10)
+                      )
+    fig.update_layout(showlegend=False)
+    fig.show()
+
 
 def plot_by_property(sys, colorby, ids=None, 
     indices=None, 
@@ -57,49 +143,72 @@ def plot_by_property(sys, colorby, ids=None,
 
 
     try:
-        import ipyvolume as ipv
+        from plotly import graph_objs as go
     except ImportError:
-        print("Install ipyvolume for visualisation")
+        print("Install plotly for visualisation")
     
     colorby = colorby.copy().astype(int)
 
     sys.apply_selection(ids=ids, indices=indices, condition=condition)
     colorby = [x for count, x in enumerate(colorby) if sys.atoms.selection[count]]
+    
+    colorby = colorby.copy()
+    a = min(colorby)
+    b = max(colorby)
+    prop = (colorby - a)/(b - a)
 
-    fig = ipv.figure(debug=False, width=width, height=height)
- 
-    prop = (colorby.copy() - min(colorby))/(max(colorby) - min(colorby))
-    cmap = matplotlib.cm.get_cmap(cmap)
-    colors = [cmap(x) for x in prop]
-
-    scatter = ipv.scatter(sys.atoms.positions[:,0][sys.atoms.selection], 
-                          sys.atoms.positions[:,1][sys.atoms.selection], 
-                          sys.atoms.positions[:,2][sys.atoms.selection], 
-                          marker='sphere',
-                          size=size,
-                          lighting=True,
-                          color=colors)
-
-    sys.remove_selection()
-
-    #plotting box
     box = sys.box.copy()
     origin = np.array([0,0,0])
-    combos = list(itertools.combinations(range(3), 2))
-    for combo in combos:
-        f1 = [origin, box[combo[0]], box[combo[0]]+box[combo[1]], box[combo[1]], origin]
-        s = combo[0] + combo[1]
-        t = 3-s
-        f2 = [origin + box[t], box[combo[0]]+ box[t],  box[combo[0]]+box[combo[1]]+ box[t], box[combo[1]]+ box[t], origin + box[t]]        
-        unn = np.vstack((f1, f2))
-        ipv.plot(unn[:,0], unn[:,1], unn[:,2], color='#546e7a')
-    
-    ipv.style.box_off()
-    ipv.style.axes_off()
-    ipv.squarelim()
-    
-    #done
-    return ipv.gcf()
+    traces = create_box_plot(box, origin)
+
+    data=go.Scatter3d(
+        x=sys.atoms.positions[:,0][sys.atoms.selection],
+        y=sys.atoms.positions[:,1][sys.atoms.selection],
+        z=sys.atoms.positions[:,2][sys.atoms.selection],
+        mode='markers',
+        opacity=1.0,
+        marker=dict(
+            sizemode='diameter',
+            sizeref=750,
+            size=radius,
+            color = prop,
+            opacity = opacity,
+            colorscale = cmap,
+            #colorbar=dict(thickness=20, title=cmap_title),
+            line=dict(width=0.5, color='#455A64'),            
+        )
+    )
+
+    traces.append(data)
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(scene = dict(
+                        xaxis_title="",
+                        yaxis_title="",
+                        zaxis_title="",
+                        xaxis = dict(
+                             showticklabels=False,
+                             showbackground=False,
+                             zerolinecolor="#455A64",),
+                        yaxis = dict(
+                            showticklabels=False,
+                            showbackground=False,
+                            zerolinecolor="#455A64"),
+                        zaxis = dict(
+                            showticklabels=False,
+                            showbackground=False,
+                            zerolinecolor="#455A64",),),
+                        width=700,
+                        margin=dict(
+                        r=10, l=10,
+                        b=10, t=10)
+                      )
+    fig.update_layout(showlegend=False)
+    fig.show()
+    #add plot
+    sys.remove_selection()
+
+
 
 
 def plot_simple(sys, colors=None, height=500, width=500, size=5, ):
