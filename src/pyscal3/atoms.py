@@ -224,8 +224,8 @@ class Atoms(dict, AttrSetter):
         non_nones = sum(x is not None for x in [ids, indices, condition])
         if non_nones > 1:
             raise ValueError("Only one of ids, indices or condition should be provided")
-        elif ((non_nones == 0) and (selection==False)):
-            warnings.warn("No conditions provided, all atoms will be included")
+        #elif ((non_nones == 0) and (selection==False)):
+        #    warnings.warn("No conditions provided, all atoms will be included")
         #generate a list of indices
         if selection:
             indices = [x for x in range(self.nreal) if self["condition"][x]]

@@ -1,8 +1,11 @@
 import numpy as np
 import os
 import pyscal3.csl as csl
-import pyscal3.crystal_structures as pcs
-from pyscal3.core import System, Atoms
+from pyscal3.core import Atoms
+from pyscal3.attributes import read_yaml
+
+structure_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/structure_data.yaml"))
+element_dict = read_yaml(os.path.join(os.path.dirname(__file__), "data/element_data.yaml"))
 
 class GrainBoundary:
     def __init__(self):
@@ -92,36 +95,46 @@ class GrainBoundary:
             raise TypeError("GB cannot be created with the given input!")
         return valid
     
-    def populate_grain_boundary(self, lattice, element=None, repetitions=(1,1,1), lattice_parameter=1, overlap=0.0):
-        if lattice in pcs.structures.keys():
+    def populate_grain_boundary(self, lattice, element=None, 
+        repetitions=(1,1,1), lattice_parameter=1, overlap=0.0):
+        if lattice in structure_dict.keys():
             structure = lattice
             element = element
-            basis = pcs.structures[lattice]['positions']
-            sdict = pcs.structures[lattice]
-        elif lattice in pcs.elements.keys():
-            structure = pcs.elements[lattice]['structure']
+            if 'conventional' not in structure_dict[lattice].keys():
+                raise ValueError("GBs can only be filled with conventional lattice, choose another structure") 
+            basis = structure_dict[lattice]['conventional']['positions']
+            sdict = structure_dict[lattice]['conventional']
+        
+        elif lattice in element_dict.keys():
+            structure = element_dict[lattice]['structure']
             element = lattice
-            lattice_parameter = pcs.elements[lattice]['lattice_constant']
-            basis = pcs.structures[structure]['positions']
-            sdict = pcs.structures[structure]
+            if 'conventional' not in structure_dict[structure].keys():
+                raise ValueError("GBs can only be filled with conventional lattice, choose another structure") 
+            lattice_parameter = element_dict[element]['lattice_constant']
+            basis = structure_dict[structure]['conventional']['positions']
+            sdict = structure_dict[structure]['conventional']
         else:
             raise ValueError("Unknown lattice type")
+
         box, atoms1, atoms2 = csl.populate_gb(self._ortho_1, self._ortho_2, 
                         np.array(basis),
                         lattice_parameter,
                         dim=repetitions, 
                         overlap=overlap)
+        
         atoms = Atoms()
         total_atoms = np.concatenate((atoms1, atoms2))
         if element is not None:
             atoms.from_dict({"positions": total_atoms, "species": [element for x in range(len(total_atoms))]})
         else:
             atoms.from_dict({"positions": total_atoms})
-        sys = System()
-        sys.box = box
-        sys.atoms = atoms
-        sys.atoms._lattice = structure
-        sys.atoms._lattice_constant = lattice_parameter
-        sys._structure_dict = sdict
-        sys.remap_atoms_into_box()
-        return sys
+        
+        return atoms, box, sdict
+        #sys = System()
+        #sys.box = box
+        #sys.atoms = atoms
+        #sys.atoms._lattice = structure
+        #sys.atoms._lattice_constant = lattice_parameter
+        #sys._structure_dict = sdict
+        #sys.remap_atoms_into_box()
+        #return sys
