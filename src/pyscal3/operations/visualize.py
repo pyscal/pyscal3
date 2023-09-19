@@ -132,7 +132,8 @@ def plot_by_selection(sys, radius=10,
                         b=10, t=10)
                       )
     fig.update_layout(showlegend=False)
-    fig.show()
+    fig['layout'].update(scene=dict(aspectmode="data"))
+    return fig.show()
 
 
 def plot_by_property(sys, colorby, ids=None, 
@@ -205,9 +206,10 @@ def plot_by_property(sys, colorby, ids=None,
                         b=10, t=10)
                       )
     fig.update_layout(showlegend=False)
-    fig.show()
+    fig['layout'].update(scene=dict(aspectmode="data"))
     #add plot
     sys.remove_selection()
+    return fig.show()
 
 
 
@@ -282,7 +284,6 @@ def plot_simple(sys, colors=None,
                       )
     fig.update_layout(showlegend=False)
     fig['layout'].update(scene=dict(aspectmode="data"))
-    
     return fig.show()
 
     
