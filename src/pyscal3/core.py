@@ -142,7 +142,8 @@ class System:
             lattice_constant=element_dict[key]['lattice_constant'],
             element = key), pcs.make_crystal)
 
-    mapdict["grain_boundary"] = _make_grain_boundary
+    mapdict["defect"] = {}
+    mapdict["defect"]["grain_boundary"] = _make_grain_boundary
 
     create._add_attribute(mapdict)
 
@@ -234,7 +235,8 @@ class System:
         self.show = AttrSetter()
         mapdict = {}
         mapdict['all'] = update_wrapper(partial(visualize.plot_simple, self), visualize.plot_simple)
-        mapdict['property'] = update_wrapper(partial(visualize.plot_by_property, self), visualize.plot_by_property)
+        mapdict['continuous_property'] = update_wrapper(partial(visualize.plot_by_property, self), visualize.plot_by_property)
+        mapdict['boolean_property'] = update_wrapper(partial(visualize.plot_by_boolean, self), visualize.plot_by_boolean)
         mapdict['selection'] = update_wrapper(partial(visualize.plot_by_selection, self), visualize.plot_by_selection)
         self.show._add_attribute(mapdict)
 

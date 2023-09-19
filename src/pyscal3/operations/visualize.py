@@ -136,12 +136,11 @@ def plot_by_selection(sys, radius=10,
     return fig.show()
 
 
-def plot_by_property(sys, colorby, ids=None, 
-    indices=None, 
-    condition=None, 
+def plot_by_property(sys, colorby, 
     cmap = 'viridis', 
     radius=10, 
-    opacity=1.0):
+    opacity=1.0,
+    hide_zero=False):
 
 
     try:
@@ -151,8 +150,102 @@ def plot_by_property(sys, colorby, ids=None,
     
     #colorby = colorby.copy().astype(int)
 
-    sys.apply_selection(ids=ids, indices=indices, condition=condition)
-    colorby = [x for count, x in enumerate(colorby) if sys.atoms.selection[count]]
+    #sys.apply_selection(ids=ids, indices=indices, condition=condition)
+    #colorby = [x for count, x in enumerate(colorby) if sys.atoms.selection[count]]
+    
+    #colorby = colorby.copy()
+    #a = min(colorby)
+    #b = max(colorby)
+    #prop = (colorby - a)/(b - a)
+
+    box = sys.box.copy()
+    origin = np.array([0,0,0])
+    traces = create_box_plot(box, origin)
+
+    if hide_zero:
+        data=go.Scatter3d(
+            x=sys.atoms.positions[:,0][np.where(colorby > 0)],
+            y=sys.atoms.positions[:,1][np.where(colorby > 0)],
+            z=sys.atoms.positions[:,2][np.where(colorby > 0)],
+            mode='markers',
+            opacity=1.0,
+            marker=dict(
+                sizemode='diameter',
+                sizeref=750,
+                size=radius,
+                color = colorby,
+                opacity = opacity,
+                colorscale = cmap,
+                colorbar=dict(thickness=20),
+                line=dict(width=0.5, color='#455A64'),            
+            )
+        )
+    else:
+        data=go.Scatter3d(
+            x=sys.atoms.positions[:,0],
+            y=sys.atoms.positions[:,1],
+            z=sys.atoms.positions[:,2],
+            mode='markers',
+            opacity=1.0,
+            marker=dict(
+                sizemode='diameter',
+                sizeref=750,
+                size=radius,
+                color = colorby,
+                opacity = opacity,
+                colorscale = cmap,
+                colorbar=dict(thickness=20),
+                line=dict(width=0.5, color='#455A64'),            
+            )
+        )
+
+    traces.append(data)
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(scene = dict(
+                        xaxis_title="",
+                        yaxis_title="",
+                        zaxis_title="",
+                        xaxis = dict(
+                             showticklabels=False,
+                             showbackground=False,
+                             zerolinecolor="#455A64",),
+                        yaxis = dict(
+                            showticklabels=False,
+                            showbackground=False,
+                            zerolinecolor="#455A64"),
+                        zaxis = dict(
+                            showticklabels=False,
+                            showbackground=False,
+                            zerolinecolor="#455A64",),),
+                        width=700,
+                        margin=dict(
+                        r=10, l=10,
+                        b=10, t=10)
+                      )
+    fig.update_layout(showlegend=False)
+    fig['layout'].update(scene=dict(aspectmode="data"))
+    #add plot
+    #sys.remove_selection()
+    return fig.show()
+
+
+def plot_by_boolean(sys, colorby, 
+    color = '#ff7f00', 
+    radius=10, 
+    opacity=1.0,
+    hide_zero=False):
+
+
+    try:
+        from plotly import graph_objs as go
+    except ImportError:
+        print("Install plotly for visualisation")
+    
+    #colorby = colorby.copy().astype(int)
+
+    #sys.apply_selection(ids=ids, indices=indices, condition=condition)
+    #colorby = [x for count, x in enumerate(colorby) if sys.atoms.selection[count]]
     
     #colorby = colorby.copy()
     #a = min(colorby)
@@ -164,19 +257,19 @@ def plot_by_property(sys, colorby, ids=None,
     traces = create_box_plot(box, origin)
 
     data=go.Scatter3d(
-        x=sys.atoms.positions[:,0][sys.atoms.selection],
-        y=sys.atoms.positions[:,1][sys.atoms.selection],
-        z=sys.atoms.positions[:,2][sys.atoms.selection],
+        x=sys.atoms.positions[:,0][np.where(colorby == True)],
+        y=sys.atoms.positions[:,1][np.where(colorby == True)],
+        z=sys.atoms.positions[:,2][np.where(colorby == True)],
         mode='markers',
         opacity=1.0,
         marker=dict(
             sizemode='diameter',
             sizeref=750,
             size=radius,
-            color = colorby,
+            color = color,
             opacity = opacity,
-            colorscale = cmap,
-            colorbar=dict(thickness=20),
+            #colorscale = cmap,
+            #colorbar=dict(thickness=20),
             line=dict(width=0.5, color='#455A64'),            
         )
     )
@@ -208,9 +301,8 @@ def plot_by_property(sys, colorby, ids=None,
     fig.update_layout(showlegend=False)
     fig['layout'].update(scene=dict(aspectmode="data"))
     #add plot
-    sys.remove_selection()
+    #sys.remove_selection()
     return fig.show()
-
 
 
 

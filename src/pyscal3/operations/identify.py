@@ -348,6 +348,7 @@ def find_solids(system, bonds=0.5, threshold=0.5, avgthreshold=0.6,
         compare_criteria, criteria)
 
     mapdict = {}
+    mapdict["solid"] = "solid"
     mapdict["steinhardt"] = {}
     mapdict["steinhardt"]["order"] = {}
     mapdict["steinhardt"]["order"]["bonds"] = "bonds"
