@@ -86,8 +86,12 @@ def make_crystal(structure,
     element_dict = dict([x for x in zip(unique_types, element)])
     
 
+    #fix ca ration
+    if structure in ['hcp', 'dhcp']:
+        sdict['box'][2][2] = ca_ratio 
+
     #from here, the creation starts
-    box = lattice_constant*np.array(sdict["box"])
+    box = lattice_constant*np.array(sdict["box"])        
 
     pos = np.array([_unfold_positions(p, box) for p in sdict["positions"]])
     pos = np.array([_generate_noise(x, noise) for x in pos])
