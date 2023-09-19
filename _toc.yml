@@ -1,0 +1,25 @@
+# Table of contents
+# Learn more at https://jupyterbook.org/customize/toc.html
+
+format: jb-book
+root: docs/intro
+chapters:
+  - file: docs/version3.md
+  - file: docs/examples.md
+    sections:
+    - file: examples/01_getting_started
+    - file: examples/02_creating_structures
+    - file: examples/03_atoms_in_more_detail
+    - file: examples/04_creating_grain_boundaries
+    - file: examples/05_finding_neighbors
+    - file: examples/06_steinhardt_parameters
+    - file: examples/07_disorder_parameters
+    - file: examples/08_angular_parameters
+    - file: examples/09_distinguishing_solid_liquid
+    - file: examples/10_voronoi_tessellation
+    - file: examples/11_chi_params
+    - file: examples/12_centrosymmetry_parameter
+    - file: examples/13_short_range_order
+    - file: examples/14_common_neighbor_analysis
+
+

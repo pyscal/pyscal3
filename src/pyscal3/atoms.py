@@ -42,7 +42,10 @@ class Atoms(dict, AttrSetter):
             return val
 
     def __setitem__(self, key, val):
-        dict.__setitem__(self, key, np.array(val))
+        try:
+            dict.__setitem__(self, key, np.array(val))
+        except:
+            dict.__setitem__(self, key, np.array(val, dtype=object))
 
     def __len__(self):
         return self.nreal
