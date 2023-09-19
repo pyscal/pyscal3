@@ -17,7 +17,7 @@ import sys
 import sphinx_rtd_theme
 import shutil
 
-sys.path.insert(0, os.path.abspath('../../src/pyscal/'))
+sys.path.insert(0, os.path.abspath('../../src/pyscal3/'))
 
 def skip(app, what, name, obj, would_skip, options):
     if name in ( '__init__',):

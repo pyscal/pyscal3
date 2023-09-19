@@ -2,6 +2,7 @@
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
+#include <iterator>
 #include <stdio.h>
 #include "string.h"
 #include <chrono>
@@ -446,6 +447,13 @@ vector<cell> set_up_cells(const vector<vector<double>>& positions,
            }
          }
       }
+
+      //clean up cell neighbors to remove duplicates
+      for(int i=0; i<total_cells; i++){
+        sort( cells[i].neighbor_cells.begin(), cells[i].neighbor_cells.end() );
+        cells[i].neighbor_cells.erase( unique( cells[i].neighbor_cells.begin(), cells[i].neighbor_cells.end() ), cells[i].neighbor_cells.end() );        
+      }
+      
       int cx, cy, cz;
       double dx, dy, dz;
       int ind;
@@ -482,6 +490,7 @@ vector<cell> set_up_cells(const vector<vector<double>>& positions,
           //now get cell index
           ind = cell_index(cx, cy, cz, nx, ny, nz);
           //now add the atom to the corresponding cells
+          //cout<<"atom "<<ti<<" assigned to "<<ind<<endl;
           cells[ind].members.emplace_back(ti);
 
       }
@@ -537,6 +546,8 @@ void get_all_neighbors_cells(py::dict& atoms,
                             triclinic, rot, rotinv, box, 
                             diffx, diffy, diffz);
                         if (d < neighbordistance){
+                            //cout<<"adding "<<ti<<" to "<<tj<<endl;
+                            //cout<<"adding "<<tj<<" to "<<ti<<endl;
                             neighbors[ti].emplace_back(tj);
                             neighbors[tj].emplace_back(ti);
 
@@ -666,6 +677,9 @@ void get_temp_neighbors_cells(const vector<vector<double>>& positions,
                             triclinic, rot, rotinv, box, 
                             diffx, diffy, diffz);
                         if (d <= neighbordistance){
+                            //cout<<"adding "<<ti<<" to "<<tj<<endl;
+                            //cout<<"adding "<<tj<<" to "<<ti<<endl;
+
                             datom x = {d, tj};
                             temp_neighbors[ti].emplace_back(x);
                             datom y = {d, ti};

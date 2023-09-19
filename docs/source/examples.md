@@ -1,8 +1,8 @@
 # Examples
 
-The gallery of examples below cover different ways in which calphy can be used to calculate free energies.
+The gallery of examples below cover different ways in which pyscal can be used.
 
-````{grid} 3
+````{grid} 4
 ```{grid-item-card} Getting started with pyscal
 :img-top: example01.jpg
 :link: examples/01_getting_started
@@ -21,3 +21,10 @@ The gallery of examples below cover different ways in which calphy can be used t
 :link-type: doc
 ```
 
+```{grid-item-card} Creating defects
+:img-top: example01.jpg
+:link: examples/04_creating_grain_boundaries
+:link-type: doc
+```
+
+````
