@@ -102,7 +102,7 @@ def plot_by_selection(sys, radius=10,
             color = cFalse,
             opacity = opacity,
             #colorscale = colorscale,
-            #colorbar=dict(thickness=20, title=cmap_title),
+            #colorbar=dict(thickness=20),
             line=dict(width=0.5, color='#455A64')
         )
     )
@@ -176,7 +176,7 @@ def plot_by_property(sys, colorby, ids=None,
             color = colorby,
             opacity = opacity,
             colorscale = cmap,
-            #colorbar=dict(thickness=20, title=cmap_title),
+            colorbar=dict(thickness=20),
             line=dict(width=0.5, color='#455A64'),            
         )
     )

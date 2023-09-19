@@ -351,14 +351,15 @@ def remap_to_box(system):
     -------
     system
     """
-    rot = np.array(system.box).T
-    rotinv = np.linalg.inv(rot)
+    #rot = np.array(system._box).T
+    #rotinv = np.linalg.inv(rot)
 
-    for x in range(system.natoms):
+    for x in range(system.atoms.ntotal):
         pos = pc.remap_atom_into_box(system.atoms["positions"][x], 
             system.triclinic,
-            rot, 
-            rotinv, 
-            system.box_dimensions)
+            system.rot, 
+            system.rotinv, 
+            system.boxdims)
+        #print(f'{system.atoms["positions"][x]} changed to {pos} ')
         system.atoms["positions"][x] = pos
     return system       

@@ -514,6 +514,9 @@ def generate_bicrystal_atoms(ortho1, ortho2, basis):
     atoms2 = dot(rot2, atoms2.T).T
     
     atoms2[:, 0] = atoms2[:, 0] - norm(Or_2[0, :])  # - tol
+    #mincord = min(atoms2[:,0])
+    #shift it back
+    #atoms2[:, 0] = atoms2[:, 0] - mincord
     return atoms1, atoms2
 
 
@@ -602,12 +605,18 @@ def populate_gb(ortho1, ortho2, basis,
     dimx, dimy, dimz = dim
 
     #get box bounds
-    xlo = -1 * np.round(norm(ortho1[:, 0]) * dimx * lattice_parameter, 8)
+    xlo = -1*np.round(norm(ortho1[:, 0]) * dimx * lattice_parameter, 8)
     xhi = np.round(norm(ortho1[:, 0]) * dimx * lattice_parameter, 8)
     LenX = xhi - xlo
+    
+    #shift atoms
+    atoms1[:,0] = atoms1[:,0] - xlo
+    atoms2[:,0] = atoms2[:,0] - xlo
+
     ylo = 0.0
     yhi = np.round(norm(ortho1[:, 1]) * dimy * lattice_parameter, 8)
     LenY = yhi - ylo
+    
     zlo = 0.0
     zhi = np.round(norm(ortho1[:, 2]) * dimz * lattice_parameter, 8)
     LenZ = zhi - zlo    
