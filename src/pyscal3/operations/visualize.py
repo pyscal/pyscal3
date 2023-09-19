@@ -139,7 +139,8 @@ def plot_by_property(sys, colorby, ids=None,
     indices=None, 
     condition=None, 
     cmap = 'viridis', 
-    height=500, width=500, size=5, ):
+    radius=10, 
+    opacity=1.0):
 
 
     try:
@@ -147,15 +148,15 @@ def plot_by_property(sys, colorby, ids=None,
     except ImportError:
         print("Install plotly for visualisation")
     
-    colorby = colorby.copy().astype(int)
+    #colorby = colorby.copy().astype(int)
 
     sys.apply_selection(ids=ids, indices=indices, condition=condition)
     colorby = [x for count, x in enumerate(colorby) if sys.atoms.selection[count]]
     
-    colorby = colorby.copy()
-    a = min(colorby)
-    b = max(colorby)
-    prop = (colorby - a)/(b - a)
+    #colorby = colorby.copy()
+    #a = min(colorby)
+    #b = max(colorby)
+    #prop = (colorby - a)/(b - a)
 
     box = sys.box.copy()
     origin = np.array([0,0,0])
@@ -171,7 +172,7 @@ def plot_by_property(sys, colorby, ids=None,
             sizemode='diameter',
             sizeref=750,
             size=radius,
-            color = prop,
+            color = colorby,
             opacity = opacity,
             colorscale = cmap,
             #colorbar=dict(thickness=20, title=cmap_title),
@@ -211,49 +212,75 @@ def plot_by_property(sys, colorby, ids=None,
 
 
 
-def plot_simple(sys, colors=None, height=500, width=500, size=5, ):
+def plot_simple(sys, colors=None,  
+    radius=10, 
+    opacity=1.0 ):
 
     try:
-        import ipyvolume as ipv
+        from plotly import graph_objs as go
     except ImportError:
-        print("Install ipyvolume for visualisation")
+        print("Install plotly for visualisation")
+    
     if colors is None:
         colors =[ '#33a02c', '#fb9a99', '#e31a1c',
                  '#a6cee3', '#1f78b4', '#b2df8a', 
                  '#fdbf6f', '#ff7f00', '#cab2d6', 
                  '#6a3d9a', '#ffff99', '#b15928']
+    
     comp_ints = sys.atoms.composition_ints
     if len(comp_ints) > len(colors):
         warnings.warn('less colors than number of species, expect repetitions, or provide more colors')
         diff = np.ceil((len(comp_ints)-len(colors))/len(colors))
         colors = colors*diff
-        
-    fig = ipv.figure(debug=False, width=width, height=height)
-    for key in comp_ints.keys():
-        scatter = ipv.scatter(sys.atoms.positions[:,0][sys.atoms.types == key], 
-                              sys.atoms.positions[:,1][sys.atoms.types == key], 
-                              sys.atoms.positions[:,2][sys.atoms.types == key], 
-                              marker='sphere',
-                              size=size,
-                              lighting=True,
-                              color=colors[key-1])
-
     
-    #plotting box
+
     box = sys.box.copy()
     origin = np.array([0,0,0])
-    combos = list(itertools.combinations(range(3), 2))
-    for combo in combos:
-        f1 = [origin, box[combo[0]], box[combo[0]]+box[combo[1]], box[combo[1]], origin]
-        s = combo[0] + combo[1]
-        t = 3-s
-        f2 = [origin + box[t], box[combo[0]]+ box[t],  box[combo[0]]+box[combo[1]]+ box[t], box[combo[1]]+ box[t], origin + box[t]]        
-        unn = np.vstack((f1, f2))
-        ipv.plot(unn[:,0], unn[:,1], unn[:,2], color='#546e7a')
+    traces = create_box_plot(box, origin)
+
+    for key in comp_ints.keys():
+        data=go.Scatter3d(
+            x=sys.atoms.positions[:,0][sys.atoms.types == key],
+            y=sys.atoms.positions[:,1][sys.atoms.types == key],
+            z=sys.atoms.positions[:,2][sys.atoms.types == key],
+            mode='markers',
+            opacity=1.0,
+            marker=dict(
+                sizemode='diameter',
+                sizeref=750,
+                size=radius,
+                color = colors[key-1],
+                opacity = opacity,
+                #colorbar=dict(thickness=20, title=cmap_title),
+                line=dict(width=0.5, color='#455A64'),            
+            )
+        )
+
+        traces.append(data)
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(scene = dict(
+                        xaxis_title="",
+                        yaxis_title="",
+                        zaxis_title="",
+                        xaxis = dict(
+                             showticklabels=False,
+                             showbackground=False,
+                             zerolinecolor="#455A64",),
+                        yaxis = dict(
+                            showticklabels=False,
+                            showbackground=False,
+                            zerolinecolor="#455A64"),
+                        zaxis = dict(
+                            showticklabels=False,
+                            showbackground=False,
+                            zerolinecolor="#455A64",),),
+                        width=700,
+                        margin=dict(
+                        r=10, l=10,
+                        b=10, t=10)
+                      )
+    fig.update_layout(showlegend=False)
+    return fig.show()
+
     
-    ipv.style.box_off()
-    ipv.style.axes_off()
-    ipv.squarelim()
-    
-    #done
-    return ipv.gcf()
