@@ -1,0 +1,35 @@
+name: Jupyterbook
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    env:
+      CONDA_PREFIX: /usr/share/miniconda/
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        python-version: "3.8"
+        mamba-version: "*"
+        channels: conda-forge,nodefaults
+        channel-priority: true
+        environment-file: .github/ci_support/environment.yml
+    - name: Install Jupyterbook
+      shell: bash -l {0}
+      run: |
+        jupyter-book build . --path-output public
+    - run: mv public/_build/html public_html
+    - run: touch public_html/.nojekyll
+    - name: Deploy 🚀
+      uses: JamesIves/github-pages-deploy-action@3.7.1
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BRANCH: gh-pages # The branch the action should deploy to.
+        FOLDER: public_html # The folder the action should deploy.
+        CLEAN: true
