@@ -157,9 +157,7 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     const vector<double> box,
     const double face_area_exponent);
 
-void clean_voronoi_vertices(py::dict& atoms,
-    py::dict& all_atoms,
-    const double neighbordistance,
+vector<vector<double>> clean_voronoi_vertices(py::dict& atoms,
     const int triclinic,
     const vector<vector<double>> rot, 
     const vector<vector<double>> rotinv,

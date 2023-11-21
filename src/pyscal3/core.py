@@ -177,6 +177,7 @@ class System:
         mapdict["repeat"] = update_wrapper(partial(operations.repeat, self), operations.repeat)
         mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
         mapdict["remap_to_box"] = update_wrapper(partial(operations.remap_to_box, self), operations.remap_to_box)
+        mapdict["remap_position_to_box"] = update_wrapper(partial(operations.remap_position_to_box, self), operations.remap_position_to_box)
         mapdict["embed_in_cubic_box"] = update_wrapper(partial(operations.embed_in_cubic_box, self), operations.embed_in_cubic_box)
         self.modify._add_attribute(mapdict)
 
