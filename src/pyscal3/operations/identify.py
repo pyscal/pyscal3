@@ -152,9 +152,8 @@ def find_neighbors(system, method='cutoff', cutoff=0, threshold=2,
     
     elif method == 'voronoi':
         clean_vertices = (cutoff>0)
-        #CLEANING is TURNED OFF
-        #if not clean_vertices:
-            #copy the simulation cell
+        
+        #No cleaning needed
         backupbox = system._box.copy()
         if system.triclinic:
             if not system.ghosts_created:
@@ -163,60 +162,21 @@ def find_neighbors(system, method='cutoff', cutoff=0, threshold=2,
                 system.internal_box = box
                 system._atoms = atoms
                 system = system.embed_in_cubic_box()
+        
         pc.get_all_neighbors_voronoi(system.atoms, 0.0,
             system.triclinic, system.rot, system.rotinv,
             system.boxdims, voroexp)
+        system.unique_vertices = None
 
         if system.triclinic:
             system._box = backupbox
 
-        #now clean up
-        #else:
-        #    real_atomdict = {"positions":copy.copy(system.atoms.positions_for_all), 
-        #     "ghost":copy.copy(system.atoms.positions_for_ghost)}
-            #we need to call the method
-            #this means alles good
-        #    if system.actual_box is None:
-        #        if system.triclinic:
-        #            new_box = system.embed_in_cubic_box(inputbox=system._box, return_box=True)
-        #            rot = np.array(new_box).T
-        #            rotinv = np.linalg.inv(rot)
-        #        else:
-        #            new_box = system._box
-        #            rot = [[0,0,0], [0,0,0], [0,0,0]]
-        #            rotinv = [[0,0,0], [0,0,0], [0,0,0]]
-        #    #ghosts are present
-        #    else:
-        #        if system.triclinic:
-        #            new_box = system.embed_in_cubic_box(inputbox=system.actual_box, return_box=True)
-        #            rot = np.array(new_box).T
-        #            rotinv = np.linalg.inv(rot)
-        #        else:
-        #            new_box = system.actual_box
-        #            rot = [[0,0,0], [0,0,0], [0,0,0]]
-        #            rotinv = [[0,0,0], [0,0,0], [0,0,0]]
-
-        #    boxdims = [0,0,0]
-        #    boxdims[0] = np.sum(np.array(new_box[0])**2)**0.5
-        #    boxdims[1] = np.sum(np.array(new_box[1])**2)**0.5
-        #    boxdims[2] = np.sum(np.array(new_box[2])**2)**0.5
-            
-        #    pc.get_all_neighbors_voronoi(real_atomdict, 0.0,
-        #        system.triclinic, rot, rotinv,
-        #        boxdims, 1)                
-            
-        #    pc.clean_voronoi_vertices(real_atomdict, 
-        #        system.atoms, 0.0,
-        #        system.triclinic, rot, rotinv,
-        #        boxdims, cutoff)
-
-            #unique_vertices = []
-            #for i in range(len(system.vertex_is_unique)):
-            #    for j in range(len(system.vertex_is_unique[i])):
-            #        if system.vertex_is_unique[i][j]:
-            #            unique_vertices.append(system.vertex_positions[i][j])
-
-            #system.atoms["vertex_positions_unique_skipcheck"] = unique_vertices
+        if clean_vertices:
+            unique_vertices = pc.clean_voronoi_vertices(system.atoms,
+            system.triclinic, system.rot, system.rotinv,
+            system.boxdims, cutoff)
+            system.unique_vertices = unique_vertices
+        
 
         #assign extra options
         mapdict = {}

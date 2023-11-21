@@ -172,9 +172,7 @@ bool check_if_in_box(const vector<double>& pos,
     else return true;
 }
 
-void clean_voronoi_vertices(py::dict& atoms,
-    py::dict& all_atoms,
-    const double neighbordistance,
+vector<vector<double>> clean_voronoi_vertices(py::dict& atoms,
     const int triclinic,
     const vector<vector<double>> rot, 
     const vector<vector<double>> rotinv,
@@ -238,5 +236,5 @@ void clean_voronoi_vertices(py::dict& atoms,
         }
     }
     
-    all_atoms[py::str("vertex_positions_unique_skipcheck")] = unique_positions;    
+    return unique_positions;    
 }	
