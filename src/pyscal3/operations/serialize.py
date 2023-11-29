@@ -2,7 +2,34 @@
 Create an annotated representation of the the system using pyscal_rdf
 """
 
-def serialize(system, return_type='dict', outputfile=None):
+def serialize(system, return_type='dict', outputfile=None, atom_keys=True):
+	try:
+		from pyscal_rdf.schema import Sample
+		import pyscal_rdf.properties as prp
+		from pydantic import BaseModel, create_model
+		from typing import Any
+	except ImportError:
+		print("serialization needs pyscal_rdf module")
+
+	#if atom keys are provided, then we need to add more keys
+	if atom_keys:
+		#create an empty dict with the necessary fields
+		datadict = {key: [] for key, val in systems.atoms.items()}
+		
+		#update base model with keys
+		UpdatedSample = create_model(
+    		'Sample',
+    		atoms=(dict, datadict),
+    		__base__=Sample,
+		)
+		Sample = UpdatedSample
+
+	#now call serialise
+	_serialize(system, Sample, return_type=return_type,
+		outputfile=outputfile, atom_keys=atom_keys)
+
+
+def _serialize(system, SerClass, return_type='dict', outputfile=None, atom_keys=True):
 	"""
 	Serialize a system into a validated and annotated json representation.
 	Needs pyscal-rdf module installed.
@@ -28,14 +55,8 @@ def serialize(system, return_type='dict', outputfile=None):
 	Atom positions, types, and other properties are not serialised
 	currently.
 	"""
-	try:
-		from pyscal_rdf.schema import Sample
-		import pyscal_rdf.properties as prp
-	except ImportError:
-		print("serialization needs pyscal_rdf module")
-
 	#create sample
-	sample = Sample()
+	sample = SerClass()
 	sample.material.element_ratio = system.composition
 
 	if system._structure_dict is not None:
@@ -56,6 +77,11 @@ def serialize(system, return_type='dict', outputfile=None):
 	sample.simulation_cell.angle = list([prp.get_angle(system.box[0], system.box[1]),
 															prp.get_angle(system.box[1], system.box[2]),
 															prp.get_angle(system.box[2], system.box[0])])
+
+	if atom_keys:
+		#update the model with atom info
+		for key, val in system.atoms.items():
+			sample.atoms[key] = val[:system.natoms]
 
 	if return_type=='dict':
 		return sample.dict()
