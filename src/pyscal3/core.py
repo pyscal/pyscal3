@@ -34,6 +34,7 @@ import pyscal3.operations.identify as identify
 import pyscal3.operations.voronoi as voronoi
 import pyscal3.operations.chemical as chemical
 import pyscal3.operations.visualize as visualize
+import pyscal3.operations.serialize as serialize
 
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
@@ -231,6 +232,10 @@ class System:
         mapdict = {}
         mapdict['ase'] = update_wrapper(partial(convert_snap, self), convert_snap)
         mapdict['file'] = update_wrapper(partial(inputmethods.to_file, self), inputmethods.to_file)
+        mapdict['dict'] = update_wrapper(partial(serialize.serialize, self, return_type='dict'), serialize.serialize)
+        mapdict['json'] = update_wrapper(partial(serialize.serialize, self, return_type='json'), serialize.serialize)
+        mapdict['pydantic'] = update_wrapper(partial(serialize.serialize, self, return_type='model'), serialize.serialize)
+        mapdict['json_file'] = update_wrapper(partial(serialize.serialize, self, return_type='file'), serialize.serialize)
         self.write._add_attribute(mapdict)
 
         self.show = AttrSetter()
