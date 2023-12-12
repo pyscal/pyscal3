@@ -13,3 +13,5 @@ dependencies:
   - scipy
   - spglib
   - pyyaml
+  - jupyter-book
+  - sphinx
