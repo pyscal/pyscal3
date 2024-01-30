@@ -340,12 +340,17 @@ def find_largest_cluster(system):
 
     clusterlist = [x for x in system.atoms["cluster"] if x != -1]
     xx, xxcounts = np.unique(clusterlist, return_counts=True)
-    arg = np.argsort(xxcounts)[-1]
-    largest_cluster_size = xxcounts[arg]
-    largest_cluster_id = xx[arg]
 
-    system.atoms["largest_cluster"] = [True if system.atoms["cluster"][x]==largest_cluster_id else False for x in range(len(system.atoms["cluster"]))]
-    
+    if len(xx)>0:
+        arg = np.argsort(xxcounts)[-1]
+        largest_cluster_size = xxcounts[arg]
+        largest_cluster_id = xx[arg]
+
+        system.atoms["largest_cluster"] = [True if system.atoms["cluster"][x]==largest_cluster_id else False for x in range(len(system.atoms["cluster"]))]
+    else:
+        system.atoms["largest_cluster"] = [False for x in range(len(system.atoms["cluster"]))]
+        largest_cluster_size = 0
+
     mapdict = {}
     mapdict["cluster"] = {}
     mapdict["cluster"]["largest"] = "largest_cluster"
