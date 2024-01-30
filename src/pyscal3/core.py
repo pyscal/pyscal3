@@ -335,6 +335,34 @@ class System:
         return vol
 
     @property
+    def lattice_properties(self):
+        """
+        Return lattice properties
+        """
+        if self._structure_dict is not None:
+            ldict = copy.copy(self._structure_dict)
+        else:
+            ldict = {}
+        if self.atoms._lattice is not None:
+            ldict['lattice'] = self.atoms._lattice 
+        if self.atoms._lattice_constant is not None:
+            ldict['lattice_constant'] = self.atoms._lattice_constant 
+        return ldict
+
+    @lattice_properties.setter
+    def lattice_properties(self, ldict):
+        if self._structure_dict is None:
+            self._structure_dict = {}
+
+        for key, val in ldict.items():
+            if key in ['species', 'box', 'positions']:
+                self._structure_dict[key] = val
+            elif key == 'lattice':
+                self.atoms._lattice = val
+            elif key == 'lattice_constant':
+                self.atoms._lattice_constant = val
+
+    @property
     def atoms(self):
         return self._atoms
     
