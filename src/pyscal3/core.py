@@ -340,7 +340,7 @@ class System:
         Return lattice properties
         """
         if self._structure_dict is not None:
-            ldict = copy.copy(s)
+            ldict = copy.copy(self._structure_dict)
         else:
             ldict = {}
         if self.atoms._lattice is not None:
