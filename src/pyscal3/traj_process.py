@@ -19,7 +19,9 @@ import pyscal3.formats.vasp as ptvasp
 import pyscal3.atoms as patoms
 
 def read_file(filename, format="lammps-dump",
-    compressed = False, customkeys=None):
+    compressed = False, 
+    customkeys = None,
+    species = None):
     """
     Read input file
 
@@ -38,6 +40,9 @@ def read_file(filename, format="lammps-dump",
         A list containing names of headers of extra data that needs to be read in from the
         input file.
 
+    species: list, optional
+        if provided species will be assigned
+
     Returns
     -------
     None
@@ -48,7 +53,7 @@ def read_file(filename, format="lammps-dump",
     customread = (len(customkeys) > 0)
 
     if format=='lammps-dump':
-        atoms, box = ptlammps.read_snap(filename, compressed=compressed, customkeys=customkeys)
+        atoms, box = ptlammps.read_snap(filename, compressed=compressed, customkeys=customkeys, species=species)
     elif format == 'ase':
         atoms, box = ptase.read_snap(filename)
     elif format == 'mdtraj':

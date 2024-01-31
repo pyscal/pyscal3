@@ -6,7 +6,7 @@ import io
 import os
 
 #functions that are not wrapped from C++
-def read_snap(infile, compressed = False, customkeys=None):
+def read_snap(infile, compressed = False, customkeys=None, species=None):
     """
     Function to read a lammps dump file format - single time slice.
 
@@ -21,6 +21,9 @@ def read_snap(infile, compressed = False, customkeys=None):
 
     customkeys : list of strings, optional
         A list of extra keywords to read from trajectory file.
+
+    species: list, optional
+        If provided species will be assigned along with types. 
 
     Returns
     -------
@@ -152,6 +155,19 @@ def read_snap(infile, compressed = False, customkeys=None):
     atoms['types'] = types
     atoms['ghost'] = [False for x in range(len(types))]
 
+    #now fix species
+    if species is not None:
+        species = np.atleast_1d(species)
+        #now map species to the types, in order
+        if not (max(types) == len(species)):
+            raise ValueError(f'Mismatch between types and species! types: {max(types)} species: {len(species)}')
+    
+        #now assign the species to custom
+        atomspecies = []        
+        for cc, typ in enumerate(types):
+            atomspecies.append(species[int(typ-1)])
+    atoms['species'] = atomspecies
+    
     for cc, kk in enumerate(customkeys):
         atoms[kk] = customdict[cc]
 

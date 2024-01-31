@@ -149,7 +149,9 @@ class System:
     create._add_attribute(mapdict)
 
     def __init__(self, filename=None, format="lammps-dump", 
-                                            compressed = False, customkeys=None):
+                                            compressed = False, 
+                                            customkeys = None,
+                                            species = None):
         self.initialized = True
         self.neighbors_found = False
         self.neighbor_method = None
@@ -166,9 +168,10 @@ class System:
         
         if filename is not None:
             inputmethods.read_inputfile(self, filename, 
-                format=format, 
+                format = format, 
                 compressed = compressed, 
-                customkeys=customkeys)
+                customkeys = customkeys,
+                species = species)
 
         #customised methods for the class
         self.modify = AttrSetter()

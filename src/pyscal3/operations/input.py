@@ -1,7 +1,9 @@
 import pyscal3.traj_process as ptp
 
 def read_inputfile(system, filename, format="lammps-dump", 
-                                        compressed = False, customkeys=None):
+                                        compressed = False, 
+                                        customkeys=None,
+                                        species=None):
     """
 
     Read input file that contains the information of system configuration.
@@ -20,6 +22,9 @@ def read_inputfile(system, filename, format="lammps-dump",
     customkeys : list
         A list containing names of headers of extra data that needs to be read in from the
         input file.
+
+    species: list, optional
+        If provided, species will be assigned to the system.
 
     Returns
     -------
@@ -58,7 +63,9 @@ def read_inputfile(system, filename, format="lammps-dump",
     system.triclinic = 0
 
     atoms, box = ptp.read_file(filename, format=format, 
-                                compressed=compressed, customkeys=customkeys,)
+                                compressed=compressed, 
+                                customkeys=customkeys,
+                                species=species)
     system.box = box
     system.atoms = atoms
 
