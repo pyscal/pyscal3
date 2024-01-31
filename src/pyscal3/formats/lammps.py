@@ -166,7 +166,7 @@ def read_snap(infile, compressed = False, customkeys=None, species=None):
         atomspecies = []        
         for cc, typ in enumerate(types):
             atomspecies.append(species[int(typ-1)])
-    atoms['species'] = species
+    atoms['species'] = atomspecies
     
     for cc, kk in enumerate(customkeys):
         atoms[kk] = customdict[cc]
