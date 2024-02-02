@@ -151,7 +151,8 @@ class System:
     def __init__(self, filename=None, format="lammps-dump", 
                                             compressed = False, 
                                             customkeys = None,
-                                            species = None):
+                                            species = None,
+                                            style = 'atomic'):
         self.initialized = True
         self.neighbors_found = False
         self.neighbor_method = None
@@ -171,7 +172,8 @@ class System:
                 format = format, 
                 compressed = compressed, 
                 customkeys = customkeys,
-                species = species)
+                species = species,
+                style = style)
 
         #customised methods for the class
         self.modify = AttrSetter()

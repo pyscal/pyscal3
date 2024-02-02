@@ -3,7 +3,9 @@ import pyscal3.traj_process as ptp
 def read_inputfile(system, filename, format="lammps-dump", 
                                         compressed = False, 
                                         customkeys=None,
-                                        species=None):
+                                        species=None,
+                                        style='atomic',
+                                        ):
     """
 
     Read input file that contains the information of system configuration.
@@ -25,6 +27,9 @@ def read_inputfile(system, filename, format="lammps-dump",
 
     species: list, optional
         If provided, species will be assigned to the system.
+
+    style: string, optional
+        Used for reading in lammps-data files with ASE. Default atomic
 
     Returns
     -------
@@ -65,7 +70,8 @@ def read_inputfile(system, filename, format="lammps-dump",
     atoms, box = ptp.read_file(filename, format=format, 
                                 compressed=compressed, 
                                 customkeys=customkeys,
-                                species=species)
+                                species=species,
+                                style=style)
     system.box = box
     system.atoms = atoms
 

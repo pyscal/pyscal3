@@ -21,7 +21,8 @@ import pyscal3.atoms as patoms
 def read_file(filename, format="lammps-dump",
     compressed = False, 
     customkeys = None,
-    species = None):
+    species = None,
+    style = 'atomic'):
     """
     Read input file
 
@@ -43,6 +44,9 @@ def read_file(filename, format="lammps-dump",
     species: list, optional
         if provided species will be assigned
 
+    style: string, optional
+        used for reading in LAMMPS data files. default atomic
+
     Returns
     -------
     None
@@ -60,6 +64,9 @@ def read_file(filename, format="lammps-dump",
         atoms, box = ptmdtraj.read_snap(filename)
     elif format == 'poscar':
         atoms, box = ptvasp.read_snap(filename, compressed=compressed)
+    elif format == 'lammps-data':
+        aseobject = read(filename, format=format, style=style)
+        atoms, box = ptase.read_snap(aseobject)        
     else:
         try:
             #try to use ASE backend
