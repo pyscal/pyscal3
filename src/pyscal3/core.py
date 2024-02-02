@@ -151,7 +151,8 @@ class System:
     def __init__(self, filename=None, format="lammps-dump", 
                                             compressed = False, 
                                             customkeys = None,
-                                            species = None):
+                                            species = None,
+                                            style = 'atomic'):
         self.initialized = True
         self.neighbors_found = False
         self.neighbor_method = None
@@ -171,7 +172,8 @@ class System:
                 format = format, 
                 compressed = compressed, 
                 customkeys = customkeys,
-                species = species)
+                species = species,
+                style = style)
 
         #customised methods for the class
         self.modify = AttrSetter()
@@ -374,7 +376,7 @@ class System:
         """
         Set atoms
         """
-
+        #mod = False
         if(len(atoms['positions']) < 200):
             #we need to estimate a rough idea
             needed_atoms = 200 - len(atoms['positions'])
@@ -389,6 +391,25 @@ class System:
             atoms, box = operations.repeat(self, (nx, nx, nx), atoms=atoms, ghost=True, return_atoms=True)
             self.actual_box = self.box.copy()
             self.internal_box = box
+            #mod = True
+
+        #we also check if each dimension is small
+        box = self.internal_box.copy()
+        repeats = [1,1,1]
+        for count, side in enumerate(box):
+            val = np.linalg.norm(side)
+            if val < 10:
+                repeats[count] = int(np.ceil(10/val))
+        
+        #if any side is greater run
+        prod = np.prod(np.array(repeats))
+        if prod > 1:
+            #we need to scale sides
+            atoms, box = operations.repeat(self, repeats, atoms=atoms, 
+                ghost=True, return_atoms=True)
+            self.actual_box = self.box.copy()
+            self.internal_box = box
+
 
         self._atoms = atoms
         
