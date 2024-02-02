@@ -375,7 +375,6 @@ class System:
         Set atoms
         """
         #mod = False
-
         if(len(atoms['positions']) < 200):
             #we need to estimate a rough idea
             needed_atoms = 200 - len(atoms['positions'])
@@ -396,10 +395,12 @@ class System:
         box = self.internal_box.copy()
         repeats = [1,1,1]
         for count, side in enumerate(box):
-            if np.linalg.norm(side) < 10:
-                repeats[count] = np.ceil(10/side)
+            val = np.linalg.norm(side)
+            if val < 10:
+                repeats[count] = int(np.ceil(10/val))
+        
         #if any side is greater run
-        prod = np.prod(repeats)
+        prod = np.prod(np.array(repeats))
         if prod > 1:
             #we need to scale sides
             atoms, box = operations.repeat(self, repeats, atoms=atoms, 
