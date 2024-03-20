@@ -8,7 +8,7 @@ logo: docs/_static/pyscal_logo1.png
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
 execute:
-  execute_notebooks: 'force'
+  execute_notebooks: 'auto'
 
 only_build_toc_files: true
 

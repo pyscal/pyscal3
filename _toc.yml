@@ -5,6 +5,9 @@ format: jb-book
 root: docs/intro
 chapters:
   - file: docs/gettingstarted.md
+  - file: docs/methods.md
+    section:
+    - file: methods/01_neighbors
   - file: docs/examples.md
     sections:
     - file: examples/01_getting_started
