@@ -1,4 +1,4 @@
-# Examples
+# Methods
 
 The gallery of examples below cover different ways in which pyscal can be used.
 
