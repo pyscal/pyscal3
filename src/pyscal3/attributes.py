@@ -1,5 +1,6 @@
 import yaml
 import os
+import numpy as np
 
 doc_fields = ["doc", "url"]
 
@@ -76,7 +77,14 @@ class AttrSetter:
             if val_raw[-1] == "nofilter":
                 return self.head[val_raw[0]]
             else:
-                return self.head[self._map_dict[key]][:self.head.nreal]
+                vals = self.head[self._map_dict[key]][:self.head.nreal]
+                if self._map_dict[key] == "neighbors":
+                    #this head is atoms then
+                    cleaned_vals = []
+                    for count, val in enumerate(vals):
+                        cleaned_vals.append([self.head['head'][x] for x in val])
+                    vals = cleaned_vals
+                return vals
         else:
             return self._map_dict[key]
 
