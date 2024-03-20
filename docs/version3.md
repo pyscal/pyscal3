@@ -6,7 +6,7 @@ pyscal v3 is a new version with mostly updated codebase and breaking changes. An
 
 In the plot below, the time needed to calculate neighbors with the 'cutoff' method for systems with varying number of atoms with versions 2.10.15 and 3.0 is shown.
 
-<img src="img_time_neighbor.png"  width="60%">
+<img src="_static/img_time_neighbor.png"  width="60%">
 
 v3 is faster for all system sizes. At a system size of about 50,000 atoms, v3 is about 4x faster.
 
