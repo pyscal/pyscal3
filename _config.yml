@@ -41,6 +41,7 @@ parse:
     - linkify
     - substitution
     - colon_fence
+    - html_admonition
 
 sphinx:
   config:
