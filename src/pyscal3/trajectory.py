@@ -514,7 +514,7 @@ class Trajectory:
         data = self.get_block(blockno)
 
         sys = pc.System()
-        sys.read_inputfile(data, customkeys=customkeys)
+        sys.read.file(data, customkeys=customkeys)
         return sys
 
     def _get_block_as_ase(self, blockno, species=None):
@@ -535,7 +535,7 @@ class Trajectory:
         data = self.get_block(blockno)
 
         sys = pc.System()
-        sys.read_inputfile(data, customkeys=None)
+        sys.read.file(data, customkeys=None)
         asesys = convert_snap(sys, species=species)
         return asesys
 

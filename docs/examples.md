@@ -132,6 +132,14 @@ Common neighbor analysis
 CNA, adaptive CNA to identify bcc, fcc, and hcp. Extension of CNA to identify various flavors of diamond lattice.
 :::
 
+:::{grid-item-card}
+:link: ../examples/15_trajectory_module
+:link-type: doc
+:class-header: bg-light
+pyscal Trajectory
+^^^
+Trajectory module enables fast and efficient analysis of LAMMPS dump trajectories.
+:::
 ::::
 
 
