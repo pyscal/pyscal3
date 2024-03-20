@@ -6,7 +6,7 @@ root: docs/intro
 chapters:
   - file: docs/gettingstarted.md
   - file: docs/methods.md
-    section:
+    sections:
     - file: methods/01_neighbors
   - file: docs/examples.md
     sections:
