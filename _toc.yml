@@ -21,5 +21,6 @@ chapters:
     - file: examples/12_centrosymmetry_parameter
     - file: examples/13_short_range_order
     - file: examples/14_common_neighbor_analysis
+    - file: examples/15_trajectory_module
 
 
