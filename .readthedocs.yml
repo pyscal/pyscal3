@@ -5,17 +5,6 @@ build:
   tools:
     #python: "mambaforge-4.10"
     python: "3.11"
-    numpy
-    matplotlib
-    ase
-    plotly
-    ipywidgets
-    pybind11
-    scipy
-    spglib
-    pyyaml
-    jupyter-book
-    sphinx
 
   jobs:
     pre_build:
@@ -27,6 +16,7 @@ build:
 
 python:
   install:
+    - requirements: requirements.txt
     - method: pip
       path: .
 

@@ -1,1 +1,10 @@
+numpy
 matplotlib
+ase
+plotly
+ipywidgets
+pybind11
+scipy
+spglib
+pyyaml
+jupyter-book
