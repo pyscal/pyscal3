@@ -7,7 +7,7 @@ chapters:
   - file: docs/gettingstarted.md
   - file: docs/methods.md
     sections:
-    - file: methods/01_neighbors
+    - file: docs/methods/01_neighbors.md
   - file: docs/examples.md
     sections:
     - file: examples/01_getting_started
