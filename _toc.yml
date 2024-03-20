@@ -5,7 +5,6 @@ format: jb-book
 root: docs/intro
 chapters:
   - file: docs/gettingstarted.md
-  - file: docs/version3.md
   - file: docs/examples.md
     sections:
     - file: examples/01_getting_started
@@ -23,8 +22,6 @@ chapters:
     - file: examples/13_short_range_order
     - file: examples/14_common_neighbor_analysis
     - file: examples/15_trajectory_module
-  - file: docs/extending.md
-  - file: docs/acknowledgements.md
-  - file: docs/license.md
+  - file: docs/epilogue.md
 
 
