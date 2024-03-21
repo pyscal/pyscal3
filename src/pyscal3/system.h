@@ -319,3 +319,34 @@ void identify_diamond_cna(py::dict& atoms,
 -----------------------------------------------------*/
 void calculate_centrosymmetry(py::dict& atoms,
     const int nmax);
+
+/*-----------------------------------------------------
+    Entropy Methods
+-----------------------------------------------------*/
+double gmr(double r, 
+    double sigma,
+    int n_neighbors,
+    double &neighbordist);
+
+double entropy_integrand(double r,
+    double sigma,
+    int n_neighbors,
+    double &neighbordist);
+
+double trapezoid_integration(const double rstart,
+    const double rstop,
+    const double h,
+    double sigma,
+    int n_neighbors,
+    double &neighbordist,
+    double kb);
+
+void entropy(py::dict& atoms, 
+    double sigma, 
+    double rho, 
+    double rstart, 
+    double rstop, 
+    double h, 
+    double kb);
+
+void average_entropy(py::dict& atoms);

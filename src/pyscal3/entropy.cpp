@@ -79,20 +79,6 @@ double trapezoid_integration(const double rstart,
     return integral;
 }
 
-
-void average_entropy(py::dict& atoms){
-    double entsum;
-
-    for(int i=0; i<nop; i++){
-        entsum = atoms[i].entropy;
-        for(int j=0; j<atoms[i].n_neighbors; j++){
-            entsum += atoms[atoms[i].neighbors[j]].entropy;
-        }
-        atoms[i].avg_entropy = entsum/(double(atoms[i].n_neighbors + 1));
-    }
-}
-
-
 void entropy(py::dict& atoms, 
 	double sigma, 
 	double rho, 
@@ -115,4 +101,25 @@ void entropy(py::dict& atoms,
 
         entropy[ti] = trapezoid_integration(rstart, rstop, h, sigma, neighbors[ti].size(), neighbordist[ti], kb);
     }
+
+    atoms[py::str("entropy")] = entropy;
+}
+
+void average_entropy(py::dict& atoms){
+    double entsum;
+    vector<double> entropy = atoms[py::str("entropy")].cast<vector<double>>();
+    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
+	int nop = neighbors.size();
+
+	vector<double> avg_entropy(nop);
+    
+    for(int ti=0; ti<nop; ti++){
+        entsum = entropy[ti];
+        for(int tj=0; tj<neighbors[tj].size(); tj++){
+            entsum += entropy[neighbors[ti][tj]];
+        }
+        avg_entropy[ti] = entsum/(double(neighbors[ti].size() + 1));
+    }
+
+    atoms[py::str("average_entropy")] = avg_entropy;
 }
