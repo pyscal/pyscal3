@@ -1093,7 +1093,7 @@ int get_all_neighbors_adaptive(py::dict& atoms,
             summ += temp_neighbors[ti][i].dist;
         }
         dcut = padding*(1.0/float(nlimit))*summ;
-
+        cutoff[ti] = dcut;
         for(size_t j=0; j<temp_neighbors[ti].size(); j++){
             int tj = temp_neighbors[ti][j].index;
             if (temp_neighbors[ti][j].dist < dcut){

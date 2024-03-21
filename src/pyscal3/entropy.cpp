@@ -35,7 +35,6 @@ double gmr(double r,
             r2 = (r-rij)*(r-rij);
             g+=exp((-1.00*r2)/(2.00*sigma2));
     }
-
     return factor*g;
 }
 
@@ -73,6 +72,7 @@ double trapezoid_integration(const double rstart,
     {
         rloop = rstart + j*h;
         summ += entropy_integrand(rloop, sigma, rho, n_neighbors, neighbordist);
+        //cout<<'integrand'<<entropy_integrand(rloop, sigma, rho, n_neighbors, neighbordist)<<endl;
     }
 
     xend = entropy_integrand(rstart + nsteps*h, sigma, rho, n_neighbors, neighbordist);
@@ -101,7 +101,6 @@ void calculate_entropy(py::dict& atoms,
         if (rho == 0){
             rho = neighbors[ti].size()/(4.1887902047863905*pow(cutoff[ti], 3));
         }
-
         entropy[ti] = trapezoid_integration(rstart, rstop, h, sigma, rho, neighbors[ti].size(), neighbordist[ti], kb);
     }
 

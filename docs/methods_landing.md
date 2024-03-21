@@ -8,5 +8,6 @@ Detailed description of methods in pyscal3:
 - [Disorder parameters](methods/04_disorder)
 - [Angular parameters](methods/05_angular)
 - [Voronoi tessellation](methods/06_voronoi)
-- [Centrosymmetry](methods/07_centrosymmetry)  
+- [Centrosymmetry](methods/07_centrosymmetry)
+- [Entropy parameters](methods/08_entropy)  
 
