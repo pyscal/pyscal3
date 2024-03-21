@@ -133,21 +133,21 @@ CNA, adaptive CNA to identify bcc, fcc, and hcp. Extension of CNA to identify va
 :::
 
 :::{grid-item-card}
-:link: ../examples/16_entropy_parameter
-:link-type: doc
-:class-header: bg-light
-Entropy parameters
-^^^
-Entropy parameter can be used for distinguishing crystal structures.
-:::
-
-:::{grid-item-card}
 :link: ../examples/15_trajectory_module
 :link-type: doc
 :class-header: bg-light
 pyscal Trajectory
 ^^^
 Trajectory module enables fast and efficient analysis of LAMMPS dump trajectories.
+:::
+
+:::{grid-item-card}
+:link: ../examples/16_entropy_parameter
+:link-type: doc
+:class-header: bg-light
+Entropy parameters
+^^^
+Entropy parameter can be used for distinguishing crystal structures.
 :::
 ::::
 
