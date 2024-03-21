@@ -35,6 +35,7 @@ import pyscal3.operations.voronoi as voronoi
 import pyscal3.operations.chemical as chemical
 import pyscal3.operations.visualize as visualize
 import pyscal3.operations.serialize as serialize
+import pyscal3.operations.entropy as entropy
 
 #import pyscal.routines as routines
 #import pyscal.visualization as pv
@@ -208,6 +209,7 @@ class System:
         mapdict['diamond_structure'] = update_wrapper(partial(cna.identify_diamond, self), cna.identify_diamond)
         mapdict['centrosymmetry'] = update_wrapper(partial(centrosymmetry.calculate_centrosymmetry, self), centrosymmetry.calculate_centrosymmetry)
         mapdict['voronoi_vector'] = update_wrapper(partial(voronoi.calculate_vorovector, self), voronoi.calculate_vorovector)
+        mapdict['entropy'] = update_wrapper(partial(entropy.calculate_entropy, self), entropy.calculate_entropy)
         self.calculate._add_attribute(mapdict)
 
         self.analyze = AttrSetter()
