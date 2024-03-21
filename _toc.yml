@@ -14,6 +14,7 @@ chapters:
     - file: docs/methods/05_angular.md
     - file: docs/methods/06_voronoi.md
     - file: docs/methods/07_centrosymmetry.md
+    - file: docs/methods/08_entropy.md
   - file: docs/examples.md
     sections:
     - file: examples/01_getting_started
@@ -31,6 +32,7 @@ chapters:
     - file: examples/13_short_range_order
     - file: examples/14_common_neighbor_analysis
     - file: examples/15_trajectory_module
+    - file: examples/16_entropy_parameter
   - file: docs/epilogue.md
 
 
