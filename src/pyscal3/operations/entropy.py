@@ -3,7 +3,7 @@ import pyscal3.csystem as pc
 
 
 def calculate_entropy(system, rm, sigma=0.2,
-	rstart=0.001, h=0.001, local=False, average=False):
+    rstart=0.001, h=0.001, local=False, average=False):
     """
     Calculate the entropy parameter for each atom
     
@@ -34,9 +34,9 @@ def calculate_entropy(system, rm, sigma=0.2,
     """
     kb = 1
     if local:
-    	rho = 0
+        rho = 0
     else:
-    	rho = system.natoms/system.volume
+        rho = system.natoms/system.volume
 
     pc.calculate_entropy(system.atoms, sigma, rho, rstart, rm, h, kb)
 
@@ -45,12 +45,12 @@ def calculate_entropy(system, rm, sigma=0.2,
     mapdict["entropy"]["norm"] = "entropy"
 
     if average:
-    	pc.calculate_average_entropy(system.atoms)
-		mapdict["entropy"]["average"] = "average_entropy"
-		system.atoms._add_attribute(mapdict)
-		return system.atoms.entropy.average
-	else:
-		system.atoms._add_attribute(mapdict)
-		return system.atoms.entropy.norm
+        pc.calculate_average_entropy(system.atoms)
+        mapdict["entropy"]["average"] = "average_entropy"
+        system.atoms._add_attribute(mapdict)
+        return system.atoms.entropy.average
+    else:
+        system.atoms._add_attribute(mapdict)
+        return system.atoms.entropy.norm
 
 
