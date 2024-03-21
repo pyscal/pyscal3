@@ -79,7 +79,7 @@ double trapezoid_integration(const double rstart,
     return integral;
 }
 
-void entropy(py::dict& atoms, 
+void calculate_entropy(py::dict& atoms, 
 	double sigma, 
 	double rho, 
 	double rstart, 
@@ -105,7 +105,7 @@ void entropy(py::dict& atoms,
     atoms[py::str("entropy")] = entropy;
 }
 
-void average_entropy(py::dict& atoms){
+void calculate_average_entropy(py::dict& atoms){
     double entsum;
     vector<double> entropy = atoms[py::str("entropy")].cast<vector<double>>();
     vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
