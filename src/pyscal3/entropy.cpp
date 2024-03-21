@@ -18,8 +18,9 @@
 
 double gmr(double r, 
 	double sigma,
+    double rho,
 	int n_neighbors,
-	double &neighbordist){
+	vector<double> &neighbordist){
 
     double g = 0.00;
     double rij,r2;
@@ -41,10 +42,11 @@ double gmr(double r,
 //function which is to be integrated
 double entropy_integrand(double r,
 	double sigma,
+    double rho,
 	int n_neighbors,
-	double &neighbordist){
+	vector<double> &neighbordist){
         
-    double g = gmr(r, sigma, n_neighbors, neighbordist);
+    double g = gmr(r, sigma, rho, n_neighbors, neighbordist);
     return ((g*log(g)-g +1.00)*r*r);
 }
 
@@ -53,8 +55,9 @@ double trapezoid_integration(const double rstart,
 	const double rstop,
 	const double h,
 	double sigma,
+    double rho,
 	int n_neighbors,
-	double &neighbordist,
+	vector<double> &neighbordist,
 	double kb){
 
     int nsteps = (rstop - rstart)/h;
@@ -64,15 +67,15 @@ double trapezoid_integration(const double rstart,
     double rloop;
     double integral;
 
-    xstart = entropy_integrand(rstart, sigma, n_neighbors, neighbordist);
+    xstart = entropy_integrand(rstart, sigma, rho, n_neighbors, neighbordist);
 
     for(int j=1; j<nsteps-1; j++)
     {
         rloop = rstart + j*h;
-        summ += entropy_integrand(rloop, sigma, n_neighbors, neighbordist);
+        summ += entropy_integrand(rloop, sigma, rho, n_neighbors, neighbordist);
     }
 
-    xend = entropy_integrand(rstart + nsteps*h, sigma, n_neighbors, neighbordist);
+    xend = entropy_integrand(rstart + nsteps*h, sigma, rho, n_neighbors, neighbordist);
     integral = (h/2.00)*(xstart + 2.00*summ + xend);
 
     integral = -1.*rho*kb*integral;
@@ -99,7 +102,7 @@ void calculate_entropy(py::dict& atoms,
             rho = neighbors[ti].size()/(4.1887902047863905*pow(cutoff[ti], 3));
         }
 
-        entropy[ti] = trapezoid_integration(rstart, rstop, h, sigma, neighbors[ti].size(), neighbordist[ti], kb);
+        entropy[ti] = trapezoid_integration(rstart, rstop, h, sigma, rho, neighbors[ti].size(), neighbordist[ti], kb);
     }
 
     atoms[py::str("entropy")] = entropy;
@@ -115,7 +118,7 @@ void calculate_average_entropy(py::dict& atoms){
     
     for(int ti=0; ti<nop; ti++){
         entsum = entropy[ti];
-        for(int tj=0; tj<neighbors[tj].size(); tj++){
+        for(int tj=0; tj<neighbors[ti].size(); tj++){
             entsum += entropy[neighbors[ti][tj]];
         }
         avg_entropy[ti] = entsum/(double(neighbors[ti].size() + 1));

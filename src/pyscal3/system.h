@@ -325,23 +325,26 @@ void calculate_centrosymmetry(py::dict& atoms,
 -----------------------------------------------------*/
 double gmr(double r, 
     double sigma,
+    double rho, 
     int n_neighbors,
-    double &neighbordist);
+    vector<double> &neighbordist);
 
 double entropy_integrand(double r,
     double sigma,
+    double rho,
     int n_neighbors,
-    double &neighbordist);
+    vector<double> &neighbordist);
 
 double trapezoid_integration(const double rstart,
     const double rstop,
     const double h,
     double sigma,
+    double rho,
     int n_neighbors,
-    double &neighbordist,
+    vector<double> &neighbordist,
     double kb);
 
-void entropy(py::dict& atoms, 
+void calculate_entropy(py::dict& atoms, 
     double sigma, 
     double rho, 
     double rstart, 
@@ -349,4 +352,4 @@ void entropy(py::dict& atoms,
     double h, 
     double kb);
 
-void average_entropy(py::dict& atoms);
+void calculate_average_entropy(py::dict& atoms);
