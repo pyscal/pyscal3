@@ -302,13 +302,9 @@ class Atoms(dict, AttrSetter):
         self._apply_selection(masks)
 
     def delete(self, ids=None, indices=None, condition=None, selection=False):
-        #delete atoms
-        #reassign ids
-        #reassign indices
-        #reassign heads
         masks = self._generate_bool_list(ids=ids, indices=indices, condition=condition, selection=selection)
         delete_list = [masks[self["head"][x]] for x in range(self.ntotal)]
-        delete_ids = [x for x in range(self.ntotal) if masks[x]]
+        delete_ids = [x for x in range(self.ntotal) if delete_list[x]]
         self._delete_atoms(delete_ids)
     
     @property
