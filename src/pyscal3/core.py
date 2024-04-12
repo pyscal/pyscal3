@@ -434,8 +434,6 @@ class System:
         -------
         System
         """ 
-        #get box
-        box = sys.box
         #get no of real atoms
         if not 'positions' in atoms.keys():
             raise ValueError('positions is a necessary key in atoms')
@@ -444,13 +442,19 @@ class System:
         if not val_length_check:
             raise ValueError("All times in the atoms dict should have same length as positions")
 
-        #only real atoms would be worked with
-        positions = np.concatenate((self.atoms.positions, atoms["positions"]))
+        #Create new dict
+        new_atoms = {}
+
+        #POSITIONS
+        new_atoms["positions"] = np.concatenate((self.atoms.positions, atoms["positions"]))
         
+        #IDS
         maxid = max(self.atoms.ids)
         if not 'ids' in atoms.keys():
             atoms['ids'] = [maxid+x+1 for x in range(len(atoms['positions']))]
+        new_atoms["ids"] = np.concatenate((self.atoms.ids, atoms["ids"]))
 
+        #TYPES AND SPECIES
         typedict = self.atoms._type_dict
         rdict = {val:key for key, val in typedict.items()}
 
@@ -460,20 +464,20 @@ class System:
             if 'species' not in atoms.keys():
                 raise KeyError("Species should be provided!")
             else:
-                atoms['species'] = np.concatenate((self.atoms.species, atoms["species"]))
+                new_atoms['species'] = np.concatenate((self.atoms.species, atoms["species"]))
                 ntypes = []
-                for sp in atoms["species"]:
+                for sp in new_atoms["species"]:
                     if sp not in rdict.keys():
                         rdict[sp] = maxtype
                         maxtype = maxtype + 1
-                    ntypes.append(rtype[sp])
-                atoms['types'] = ntypes
+                    ntypes.append(rdict[sp])
+                new_atoms['types'] = ntypes
         else:
             atoms['types'] = [max(self.atoms.types)+1 for x in range(len(atoms["positions"]))]
-        
-        types = np.concatenate((self.atoms.types, atoms["types"]))
+        new_atoms['types'] = np.concatenate((self.atoms.types, atoms["types"]))
+
         new_atoms = Atoms()
-        new_atoms.from_dict(atoms)
+        new_atoms.from_dict(new_atoms)
         box = self.box
         return System(box=box, atoms=new_atoms)
 
