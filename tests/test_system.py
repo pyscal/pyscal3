@@ -66,6 +66,12 @@ def test_volume():
 	sys = pc.System.create.lattice.fcc(repetitions = [10, 10, 10])
 	assert sys.volume == 1000
 
+	sys_a = pc.System.create.element.Al()
+	vol_a = sys_a.volume/sys_a.natoms
+	sys_b = pc.System.create.element.Al(primitive=True)
+	vol_b = sys_b.volume/sys_b.natoms
+	assert np.abs(vol_a-vol_b) < 1E-5
+
 def test_system_init():
 	sys = pc.System.create.lattice.custom([[0, 0, 0], [0.5, 0.5, 0.5]], [1, 2], 
 		[[1,0,0], [0,1,0], [0,0,1]])
