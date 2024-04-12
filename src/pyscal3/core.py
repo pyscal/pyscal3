@@ -343,7 +343,7 @@ class System:
         """
         Volume of box
         """
-        vol = np.dot(np.cross(self._box[0], self._box[1]), self._box[2])
+        vol = np.dot(np.cross(self.box[0], self.box[1]), self.box[2])
         return vol
 
     @property
