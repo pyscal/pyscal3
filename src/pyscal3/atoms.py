@@ -58,62 +58,6 @@ class Atoms(dict, AttrSetter):
         #convert to atom base dict
         disp_atoms = {f"atom {x}": self._get_atoms(x) for x in range(self.natoms)}
         return disp_atoms
-        
-    def __add__(self, atoms):
-        if not 'positions' in atoms.keys():
-            raise ValueError('positions is a necessary key in atoms')
-        nop = len(atoms["positions"])
-        val_length_check = np.prod([len(val)==nop for key, val in atoms.items()])
-        if not val_length_check:
-            raise ValueError("All times in the atoms dict should have same length as positions")
-        
-        #now add necessary keys-ids, types, ghost
-        maxid = max(self["ids"])
-        if not 'ids' in atoms.keys():
-            atoms['ids'] = [maxid+x+1 for x in range(nop)]
-            #print(self["ids"], atoms["ids"])
-        else:
-            if len(set(atoms['ids']).intersection(set(self['ids']))):
-                raise ValueError("Atom id already exists, unique ID is required")
-        
-        atoms['ghost'] = [False for x in range(nop)]
-        if not 'types' in atoms.keys():
-            atoms['types'] = [1 for x in range(nop)]
-        if not 'species' in atoms.keys():
-            atoms['species'] = [None for x in range(nop)]
-        if not 'mask_1' in atoms.keys():
-            atoms['mask_1'] = [False for x in range(nop)]
-        if not 'mask_2' in atoms.keys():
-            atoms['mask_2'] = [False for x in range(nop)]
-        if not 'condition' in atoms.keys():
-            atoms['condition'] = [True for x in range(nop)]
-        if not 'head' in atoms.keys():
-            atoms['head'] = [self.natoms+x for x in range(nop)]
-        
-        common_keys = list(set(self.keys()).intersection(set(atoms.keys())))
-        for key in common_keys:
-            self[key] = np.concatenate((self[key], atoms[key]))
-        extra_keys_add = len(atoms.keys()) - len(common_keys)
-        extra_keys_exist = len(self.keys()) - len(common_keys)
-        
-        if extra_keys_add > 0:
-            warnings.warn("Some keys present in the atoms are add are not present in existing atoms, they were ignored")
-        if extra_keys_exist > 0:
-            warnings.warn("Some keys present in the existing Atoms were not present in the atoms to add, please recalculate")
-        self._nreal += nop
-        return self
-
-
-    def __radd__(self, atoms):
-        """
-        Reverse add method
-        """
-        if ntraj == 0:
-            return self
-        else:
-            return self.__add__(atoms)
-
-    #def _add_attribute()
       
     @property
     def natoms(self):
@@ -181,7 +125,6 @@ class Atoms(dict, AttrSetter):
         for key, val in atoms.items():
             if key not in ["positions", "ids", "types", "species", "mask_1", "mask_2", "condition", "head"]:
                 mapdict[key] = key
-
         self._add_attribute(mapdict)
 
     def _convert_to_list(self, data):

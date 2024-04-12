@@ -153,7 +153,9 @@ class System:
                                             compressed = False, 
                                             customkeys = None,
                                             species = None,
-                                            style = 'atomic'):
+                                            style = 'atomic',
+                                            atoms=None,
+                                            box=None):
         self.initialized = True
         self.neighbors_found = False
         self.neighbor_method = None
@@ -175,6 +177,9 @@ class System:
                 customkeys = customkeys,
                 species = species,
                 style = style)
+        elif (atoms is not None) and (box is not None):
+            self.box = box
+            self._atoms.from_dict(atoms)
 
         #customised methods for the class
         self.modify = AttrSetter()
@@ -427,10 +432,53 @@ class System:
 
         Returns
         -------
-        None
+        System
         """ 
-        ## MOVE TO ATOMS
-        self._atoms.add_atoms(atoms)
+        #get no of real atoms
+        if not 'positions' in atoms.keys():
+            raise ValueError('positions is a necessary key in atoms')
+        nop = len(atoms["positions"])
+        val_length_check = np.prod([len(val)==nop for key, val in atoms.items()])
+        if not val_length_check:
+            raise ValueError("All times in the atoms dict should have same length as positions")
+
+        #Create new dict
+        new_atoms = {}
+
+        #POSITIONS
+        new_atoms["positions"] = np.concatenate((self.atoms.positions, atoms["positions"]))
+        
+        #IDS
+        maxid = max(self.atoms.ids)
+        if not 'ids' in atoms.keys():
+            atoms['ids'] = [maxid+x+1 for x in range(len(atoms['positions']))]
+        new_atoms["ids"] = np.concatenate((self.atoms.ids, atoms["ids"]))
+
+        #TYPES AND SPECIES
+        typedict = self.atoms._type_dict
+        rdict = {val:key for key, val in typedict.items()}
+
+        maxtype = max(self.atoms.types)+1
+        if None not in self.atoms.species:
+            #species provided
+            if 'species' not in atoms.keys():
+                raise KeyError("Species should be provided!")
+            else:
+                new_atoms['species'] = np.concatenate((self.atoms.species, atoms["species"]))
+                ntypes = []
+                for sp in atoms["species"]:
+                    if sp not in rdict.keys():
+                        rdict[sp] = maxtype
+                        maxtype = maxtype + 1
+                    ntypes.append(rdict[sp])
+                atoms['types'] = ntypes
+        else:
+            atoms['types'] = [max(self.atoms.types)+1 for x in range(len(atoms["positions"]))]
+        new_atoms['types'] = np.concatenate((self.atoms.types, atoms["types"]))
+
+        box = self.box
+        return System(box=box, atoms=new_atoms)
+
      
     def apply_selection(self, ids=None, indices=None, condition=None):
         self._atoms.apply_selection(ids=ids, indices=indices, condition=condition)    
