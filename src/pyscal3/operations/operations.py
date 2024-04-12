@@ -339,7 +339,7 @@ def extract_cubic_representation(system, repetitions = (3,3,3), return_atoms = F
         return system
 
 
-def remap_to_box(system, ghosts=True):
+def remap_to_box(system, ghosts=False):
     """
     Remap the atom to back inside the box.
     
@@ -383,11 +383,20 @@ def remap_to_box(system, ghosts=True):
     return system
 
 def remap_position_to_box(system, pos):
+
+    box = system.box
+    rot = np.array(box).T
+    rotinv = np.linalg.inv(rot)
+    boxdims = [0,0,0]
+    boxdims[0] = np.sum(np.array(box[0])**2)**0.5
+    boxdims[1] = np.sum(np.array(box[1])**2)**0.5
+    boxdims[2] = np.sum(np.array(box[2])**2)**0.5
+
     pos = pc.remap_atom_into_box(pos, 
         system.triclinic,
-        system.rot, 
-        system.rotinv, 
-        system.boxdims)
+        rot, 
+        rotinv, 
+        boxdims)
     #print(f'{system.atoms["positions"][x]} changed to {pos} ')
     return pos
 
