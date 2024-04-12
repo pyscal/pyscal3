@@ -125,7 +125,6 @@ class Atoms(dict, AttrSetter):
         for key, val in atoms.items():
             if key not in ["positions", "ids", "types", "species", "mask_1", "mask_2", "condition", "head"]:
                 mapdict[key] = key
-
         self._add_attribute(mapdict)
 
     def _convert_to_list(self, data):

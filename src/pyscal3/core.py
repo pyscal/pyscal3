@@ -179,7 +179,7 @@ class System:
                 style = style)
         elif (atoms is not None) and (box is not None):
             self.box = box
-            self.atoms = atoms
+            self._atoms.from_dict(atoms)
 
         #customised methods for the class
         self.modify = AttrSetter()
@@ -466,7 +466,7 @@ class System:
             else:
                 new_atoms['species'] = np.concatenate((self.atoms.species, atoms["species"]))
                 ntypes = []
-                for sp in new_atoms["species"]:
+                for sp in atoms["species"]:
                     if sp not in rdict.keys():
                         rdict[sp] = maxtype
                         maxtype = maxtype + 1
@@ -476,8 +476,6 @@ class System:
             atoms['types'] = [max(self.atoms.types)+1 for x in range(len(atoms["positions"]))]
         new_atoms['types'] = np.concatenate((self.atoms.types, atoms["types"]))
 
-        new_atoms = Atoms()
-        new_atoms.from_dict(new_atoms)
         box = self.box
         return System(box=box, atoms=new_atoms)
 
