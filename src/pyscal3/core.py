@@ -471,7 +471,7 @@ class System:
                         rdict[sp] = maxtype
                         maxtype = maxtype + 1
                     ntypes.append(rdict[sp])
-                new_atoms['types'] = ntypes
+                atoms['types'] = ntypes
         else:
             atoms['types'] = [max(self.atoms.types)+1 for x in range(len(atoms["positions"]))]
         new_atoms['types'] = np.concatenate((self.atoms.types, atoms["types"]))
