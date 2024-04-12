@@ -36,7 +36,7 @@ def test_nop():
 		break
 
 	natoms = {'positions':[[0,0,0]]}
-	sys.atoms += natoms
+	sys = sys.add_atoms(natoms) 
 	assert sys.natoms == 17
 
 def test_embed():
