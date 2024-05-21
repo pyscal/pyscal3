@@ -603,6 +603,112 @@ void get_all_neighbors_cells(py::dict& atoms,
 }
 
 
+void get_all_neighbors_shell(py::dict& atoms,
+    const double dmin,
+    const double dmax,
+    const int triclinic,
+    const vector<vector<double>> rot, 
+    const vector<vector<double>> rotinv,
+    const vector<double> box){
+    double d;
+    double diffx,diffy,diffz;
+    double tempr,temptheta,tempphi;
+    vector<double> diffi, diffj;
+    int ti, tj;
+
+    //access positions and put it in an array
+    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
+    vector<bool> mask_1 = atoms[py::str("mask_1")].cast<vector<bool>>();
+    vector<bool> mask_2 = atoms[py::str("mask_2")].cast<vector<bool>>();
+    int nop = positions.size();
+    vector<vector<int>> neighbors(nop);
+    vector<vector<double>> neighbordist(nop);
+    vector<vector<double>> neighborweight(nop);
+    vector<vector<vector<double>>> diff(nop);
+    vector<vector<double>> r(nop);
+    vector<vector<double>> phi(nop);
+    vector<vector<double>> theta(nop);
+    vector<double> cutoff(nop); 
+    vector<cell> cells = set_up_cells(positions, box, neighbordistance);
+    int total_cells = cells.size();
+    int subcell;
+    //now loop to find distance
+    for(int i=0; i<total_cells; i++){
+        //for each member in cell i
+        for(size_t mi=0; mi<cells[i].members.size(); mi++){
+            //now go through the neighbors
+            ti = cells[i].members[mi];
+            if (mask_1[ti]) continue;
+            for(size_t j=0 ; j<cells[i].neighbor_cells.size(); j++){
+               //loop through members of j
+               subcell = cells[i].neighbor_cells[j];
+               for(size_t mj=0; mj<cells[subcell].members.size(); mj++){
+                    //now we have mj -> members/compare with
+                    tj = cells[subcell].members[mj];
+                    if (mask_2[tj]) continue;
+                    //compare ti and tj and add
+                    if (ti < tj){
+                        d = get_abs_distance(positions[ti], positions[tj],
+                            triclinic, rot, rotinv, box, 
+                            diffx, diffy, diffz);
+                        if ((d >= dmin) && (d <= dmax)){
+                            //cout<<"adding "<<ti<<" to "<<tj<<endl;
+                            //cout<<"adding "<<tj<<" to "<<ti<<endl;
+                            neighbors[ti].emplace_back(tj);
+                            neighbors[tj].emplace_back(ti);
+
+                            neighbordist[ti].emplace_back(d);
+                            neighbordist[tj].emplace_back(d);
+
+                            neighborweight[ti].emplace_back(1.00);
+                            neighborweight[tj].emplace_back(1.00);
+
+                            diffi.clear();
+                            diffi.emplace_back(diffx);
+                            diffi.emplace_back(diffy);
+                            diffi.emplace_back(diffz);
+
+                            diffj.clear();
+                            diffj.emplace_back(-diffx);
+                            diffj.emplace_back(-diffy);
+                            diffj.emplace_back(-diffz);
+
+                            diff[ti].emplace_back(diffi);
+                            diff[tj].emplace_back(diffj);
+                            
+                            convert_to_spherical_coordinates(diffx, diffy, diffz, tempr, tempphi, temptheta);
+                            
+                            r[ti].emplace_back(tempr);
+                            phi[ti].emplace_back(tempphi);
+                            theta[ti].emplace_back(temptheta);
+                            //n_neighbors += 1;
+                            cutoff[ti] = dmax;
+
+                            convert_to_spherical_coordinates(-diffx, -diffy, -diffz, tempr, tempphi, temptheta);
+
+                            r[tj].emplace_back(tempr);
+                            phi[tj].emplace_back(tempphi);
+                            theta[tj].emplace_back(temptheta);
+                            //atoms[tj].n_neighbors += 1;
+                            cutoff[tj] = neighbordistance;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    //calculation over lets assign
+    atoms[py::str("neighbors")] = neighbors;
+    atoms[py::str("neighbordist")] = neighbordist;
+    atoms[py::str("neighborweight")] = neighborweight;
+    atoms[py::str("diff")] = diff;
+    atoms[py::str("r")] = r;
+    atoms[py::str("theta")] = theta;
+    atoms[py::str("phi")] = phi;
+    atoms[py::str("cutoff")] = cutoff;
+}
+
+
 void get_temp_neighbors_brute(const vector<vector<double>>& positions,
     const vector<bool>& mask_1,
     const vector<bool>& mask_2,

@@ -98,6 +98,14 @@ void get_all_neighbors_cells(py::dict& atoms,
     const vector<vector<double>> rotinv,
     const vector<double> box);
 
+void get_all_neighbors_shell(py::dict& atoms,
+    const double dmin,
+    const double dmax,
+    const int triclinic,
+    const vector<vector<double>> rot,
+    const vector<vector<double>> rotinv,
+    const vector<double> box);
+
 void get_temp_neighbors_brute(const vector<vector<double>>& positions,
     const vector<bool>& mask_1,
     const vector<bool>& mask_2,
