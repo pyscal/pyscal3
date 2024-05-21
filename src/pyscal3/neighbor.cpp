@@ -453,7 +453,7 @@ void get_all_neighbors_shell_normal(py::dict& atoms,
                 phi[ti].emplace_back(tempphi);
                 theta[ti].emplace_back(temptheta);
                 //n_neighbors += 1;
-                cutoff[ti] = neighbordistance;
+                cutoff[ti] = dmax;
 
                 convert_to_spherical_coordinates(-diffx, -diffy, -diffz, tempr, tempphi, temptheta);
 
