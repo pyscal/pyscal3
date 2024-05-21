@@ -723,7 +723,7 @@ void get_all_neighbors_shell_cells(py::dict& atoms,
     vector<vector<double>> phi(nop);
     vector<vector<double>> theta(nop);
     vector<double> cutoff(nop); 
-    vector<cell> cells = set_up_cells(positions, box, neighbordistance);
+    vector<cell> cells = set_up_cells(positions, box, dmax);
     int total_cells = cells.size();
     int subcell;
     //now loop to find distance
@@ -784,7 +784,7 @@ void get_all_neighbors_shell_cells(py::dict& atoms,
                             phi[tj].emplace_back(tempphi);
                             theta[tj].emplace_back(temptheta);
                             //atoms[tj].n_neighbors += 1;
-                            cutoff[tj] = neighbordistance;
+                            cutoff[tj] = dmax;
                         }
                     }
                 }
