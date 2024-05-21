@@ -1,7 +1,7 @@
 import numpy as np
 import pyscal3.csystem as pc
 
-def find_neighbors(system, method='cutoff', cutoff=0, threshold=2, 
+def find_neighbors(system, method='cutoff', cutoff=0, shell_thickness=0, threshold=2, 
         voroexp=1, padding=1.2, nlimit=6, 
         cells=None, nmax=12, assign_neighbor=True):
     """
@@ -20,6 +20,10 @@ def find_neighbors(system, method='cutoff', cutoff=0, threshold=2,
         the cutoff distance to be used for the `cutoff` based neighbor calculation method described above.
         If the value is specified as 0 or `adaptive`, adaptive method is used.
         If the value is specified as `sann`, sann algorithm is used.
+    
+    shell_thickness : float, optional
+        only used with cutoff method. If provided, neighbors are found between cutoff, and cutoff + shell_thickness.
+        Default 0.
 
     threshold : float, optional
         only used if ``cutoff=adaptive``. A threshold which is used as safe limit for calculation of cutoff.
@@ -128,20 +132,31 @@ def find_neighbors(system, method='cutoff', cutoff=0, threshold=2,
                 raise RuntimeError("sann cutoff could not be converged. This is most likely, \
                     due to a low threshold value. Try increasing it.")
         
-        elif cutoff=='adaptive' or cutoff==0:
+        elif cutoff=='adaptive' or (cutoff==0 and shell_thickness==0):
             finished = pc.get_all_neighbors_adaptive(system.atoms, 0.0,
                 system.triclinic, system.rot, system.rotinv,
                 system.boxdims, threshold, nlimit, padding, cells)
             if not bool(finished):
                 raise RuntimeError("Could not find adaptive cutoff")
         else:
-            if cells:
-                pc.get_all_neighbors_cells(system.atoms, cutoff,
-                    system.triclinic, system.rot, system.rotinv, system.boxdims)
+            if (cutoff==0 and shell_thickness>0):
+                cutoff = shell_thickness
+                shell_thickness = 0
+            if shell_thickness == 0:
+                if cells:
+                    pc.get_all_neighbors_cells(system.atoms, cutoff,
+                        system.triclinic, system.rot, system.rotinv, system.boxdims)
+                else:
+                    pc.get_all_neighbors_normal(system.atoms, cutoff,
+                        system.triclinic, system.rot, system.rotinv, system.boxdims)
             else:
-                pc.get_all_neighbors_normal(system.atoms, cutoff,
-                    system.triclinic, system.rot, system.rotinv, system.boxdims)
-
+                if cells:
+                    pc.get_all_neighbors_shell_cells(system.atoms, cutoff, cutoff+shell_thickness,
+                        system.triclinic, system.rot, system.rotinv, system.boxdims)
+                else:
+                    pc.get_all_neighbors_shell_normal(system.atoms, cutoff, cutoff+shell_thickness,
+                        system.triclinic, system.rot, system.rotinv, system.boxdims)
+                    
     elif method == 'number':
         finished = pc.get_all_neighbors_bynumber(system.atoms, 0.0, 
             system.triclinic, system.rot, system.rotinv,
