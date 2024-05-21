@@ -22,8 +22,9 @@ PYBIND11_MODULE(csystem, m) {
     m.def("remap_and_displace_atom", &remap_and_displace_atom);
     m.def("reset_all_neighbors", &reset_all_neighbors);
     m.def("get_all_neighbors_normal", &get_all_neighbors_normal);
+    m.def("get_all_neighbors_shell_normal", &get_all_neighbors_shell_normal);
     m.def("get_all_neighbors_cells", &get_all_neighbors_cells);
-    m.def("get_all_neighbors_shell", &get_all_neighbors_shell);
+    m.def("get_all_neighbors_shell_cells", &get_all_neighbors_shell_cells);
     m.def("get_all_neighbors_bynumber", &get_all_neighbors_bynumber);
     m.def("get_all_neighbors_sann", &get_all_neighbors_sann);
     m.def("get_all_neighbors_adaptive", &get_all_neighbors_adaptive);

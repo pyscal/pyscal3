@@ -84,6 +84,14 @@ void get_all_neighbors_normal(py::dict& atoms,
     const vector<vector<double>> rotinv,
     const vector<double> box);
 
+void get_all_neighbors_shell_normal(py::dict& atoms,
+    const double dmin,
+    const double dmax,
+    const int triclinic,
+    const vector<vector<double>> rot,
+    const vector<vector<double>> rotinv,
+    const vector<double> box);
+
 int cell_index(int, int, int, int, int, int);
 vector<int> cell_periodic(int, int, int, int, int, int);
 
@@ -98,7 +106,7 @@ void get_all_neighbors_cells(py::dict& atoms,
     const vector<vector<double>> rotinv,
     const vector<double> box);
 
-void get_all_neighbors_shell(py::dict& atoms,
+void get_all_neighbors_shell_cells(py::dict& atoms,
     const double dmin,
     const double dmax,
     const int triclinic,

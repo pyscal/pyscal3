@@ -150,9 +150,13 @@ def find_neighbors(system, method='cutoff', cutoff=0, shell_thickness=0, thresho
                     pc.get_all_neighbors_normal(system.atoms, cutoff,
                         system.triclinic, system.rot, system.rotinv, system.boxdims)
             else:
-                pc.get_all_neighbors_shell(system.atoms, cutoff, cutoff+shell_thickness,
-                    system.triclinic, system.rot, system.rotinv, system.boxdims)
-
+                if cells:
+                    pc.get_all_neighbors_shell_cells(system.atoms, cutoff, cutoff+shell_thickness,
+                        system.triclinic, system.rot, system.rotinv, system.boxdims)
+                else:
+                    pc.get_all_neighbors_shell_normal(system.atoms, cutoff, cutoff+shell_thickness,
+                        system.triclinic, system.rot, system.rotinv, system.boxdims)
+                    
     elif method == 'number':
         finished = pc.get_all_neighbors_bynumber(system.atoms, 0.0, 
             system.triclinic, system.rot, system.rotinv,
