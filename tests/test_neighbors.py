@@ -71,3 +71,15 @@ def test_system_init():
  2.7080614376339383,
  2.708061437633939])
     assert np.sum(a1-a2) < 1E-5
+
+
+def test_neighbor_shell():
+   sys = pc.System.create.element.Cu(repetitions=(5,5,5))
+   sys.find.neighbors(method='cutoff', cutoff=3, shell_thickness=1, cells=False)
+   assert len(sys.atoms.neighbors.distance[0]) == 6
+   assert np.abs(sys.atoms.neighbors.distance[0][0]-3.61) <= 1E-3
+
+   sys = pc.System.create.element.Cu(repetitions=(5,5,5))
+   sys.find.neighbors(method='cutoff', cutoff=3, shell_thickness=1, cells=True)
+   assert len(sys.atoms.neighbors.distance[0]) == 6
+   assert np.abs(sys.atoms.neighbors.distance[0][0]-3.61) <= 1E-3
