@@ -181,10 +181,15 @@ class System:
             self.box = box
             self._atoms.from_dict(atoms)
 
+        self._refresh_internal_methods()
+
+
+    def _refresh_internal_methods(self):
         #customised methods for the class
         self.modify = AttrSetter()
         self.modify.head = operations
         mapdict = {}
+        
         #repeat methid
         mapdict["repeat"] = update_wrapper(partial(operations.repeat, self), operations.repeat)
         mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
@@ -258,6 +263,10 @@ class System:
         mapdict['selection'] = update_wrapper(partial(visualize.plot_by_selection, self), visualize.plot_by_selection)
         self.show._add_attribute(mapdict)
 
+
+    #def _repeat(self, *args, **kwargs):
+    #    return operations.repeat(self, *args, **kwargs)
+    #_repeat.__doc__ = operations.repeat.__doc__
 
     def iter_atoms(self):
         return self.atoms.iter_atoms()
