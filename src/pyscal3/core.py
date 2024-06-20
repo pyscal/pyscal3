@@ -191,7 +191,7 @@ class System:
         mapdict = {}
         
         #repeat methid
-        mapdict["repeat"] = self._repeat
+        mapdict["repeat"] = update_wrapper(partial(operations.repeat, self), operations.repeat)
         mapdict["transform_to_cubic_cell"] = update_wrapper(partial(operations.extract_cubic_representation, self), operations.extract_cubic_representation)
         mapdict["remap_to_box"] = update_wrapper(partial(operations.remap_to_box, self), operations.remap_to_box)
         mapdict["remap_position_to_box"] = update_wrapper(partial(operations.remap_position_to_box, self), operations.remap_position_to_box)
@@ -264,9 +264,9 @@ class System:
         self.show._add_attribute(mapdict)
 
 
-    def _repeat(self, *args, **kwargs):
-        return operations.repeat(self, *args, **kwargs)
-    _repeat.__doc__ = operations.repeat.__doc__
+    #def _repeat(self, *args, **kwargs):
+    #    return operations.repeat(self, *args, **kwargs)
+    #_repeat.__doc__ = operations.repeat.__doc__
 
     def iter_atoms(self):
         return self.atoms.iter_atoms()
