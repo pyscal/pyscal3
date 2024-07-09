@@ -392,40 +392,29 @@ class System:
         """
         Set atoms
         """
-        #mod = False
-        if(len(atoms['positions']) < 200):
-            #we need to estimate a rough idea
-            needed_atoms = 200 - len(atoms['positions'])
-            #get a rough cell
-            #print(needed_atoms)
-            needed_cells = np.ceil(needed_atoms/len(atoms['positions']))
-            nx = int(needed_cells**(1/3))
-            if nx < 2:
-                nx = 2
-            if np.sum(self.box) == 0:
-                raise ValueError("Simulation box should be initialized before atoms")
-            atoms, box = operations.repeat(self, (nx, nx, nx), atoms=atoms, ghost=True, return_atoms=True)
-            self.actual_box = self.box.copy()
-            self.internal_box = box
-            #mod = True
-
-        #we also check if each dimension is small
-        box = self.internal_box.copy()
-        repeats = [1,1,1]
-        for count, side in enumerate(box):
-            val = np.linalg.norm(side)
-            if val < 10:
-                repeats[count] = int(np.ceil(10/val))
+        #first task here is to find the size of the box needed
+        if np.sum(self.box) == 0:
+            raise ValueError("Simulation box should be initialized before filling with atoms")
         
-        #if any side is greater run
-        prod = np.prod(np.array(repeats))
-        if prod > 1:
-            #we need to scale sides
-            atoms, box = operations.repeat(self, repeats, atoms=atoms, 
-                ghost=True, return_atoms=True)
+        box = copy.deepcopy(self.box)
+
+        if(len(atoms['positions']) < 200):
+            needed_atoms = 200 - len(atoms['positions'])
+            needed_cells = np.ceil(needed_atoms/len(atoms['positions']))
+            nx = max(int(needed_cells**(1/3)), 2)
+            scaled_box = operations.get_scaled_box(box, (nx, nx, nx))
+            #now check if this box is enough
+            repeats = [1,1,1]
+            for count, side in enumerate(scaled_box):
+                val = np.linalg.norm(side)
+                if val < 10:
+                    repeats[count] = int(np.ceil(10/val))
+            #now finalize repeats
+            repeats = np.array(repeats)*nx
+            #and finally scale
+            atoms, box = operations.repeat(self, repeats, atoms=atoms, ghost=True, return_atoms=True)            
             self.actual_box = self.box.copy()
             self.internal_box = box
-
 
         self._atoms = atoms
         

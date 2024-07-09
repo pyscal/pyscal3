@@ -7,7 +7,7 @@ with open('README.md') as readme_file:
 
 setup(
     name='pyscal3',
-    version='3.2.2',
+    version='3.2.3',
     author='Sarath Menon',
     author_email='sarath.menon@pyscal.org',
     description='Python library written in C++ for calculation of local atomic structural environment',

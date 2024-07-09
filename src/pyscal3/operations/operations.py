@@ -181,6 +181,12 @@ def repeat(system, repetitions,
         system.atoms = atoms
         return system
 
+def get_scaled_box(box, repetitions):
+    box = copy.deepcopy(box)
+    box[0] = repetitions[0]*np.array(box[0])
+    box[1] = repetitions[1]*np.array(box[1])
+    box[2] = repetitions[2]*np.array(box[2])
+    return box
 
 def embed_in_cubic_box(system, input_box=None, 
     return_box=False):
