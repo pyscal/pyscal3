@@ -28,6 +28,7 @@ void calculate_centrosymmetry(py::dict& atoms,
     vector<double> centrosymmetry(nop);
     
     for (int ti=0; ti<nop; ti++){
+		temp.clear();
     	int count = 0;
     	for (int i=0; i<neighbors[ti].size(); i++){
     		for (int j=i+1; j<neighbors[ti].size(); j++){
