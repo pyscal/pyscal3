@@ -551,47 +551,48 @@ void identify_diamond_cna(py::dict& atoms,
     vector<int> structure = atoms[py::str("structure")].cast<vector<int>>();
     
     for (int ti=0; ti<nop; ti++){
-        if (structure[ti] == 1){
-            structure[ti] = 5;
-        }
-        else if (structure[ti] == 2){
-            structure[ti] = 8;
+        if (structure[ti] == 2){
+            structure[ti] = 4;
         }
     }
 
-    //second pass
-    for (int ti=0; ti<nop; ti++){
-        if (structure[ti] < 5){
+    for(int ti=0; ti<nop; ti++){
+        if (structure[ti] == 1) continue;
+        else if (structure[ti] == 4) continue;
+        else {
             for(int i=0; i<4; i++){
-                if(structure[first_shell[ti][i]] == 5){
+                if(structure[first_shell[ti][i]] == 1){
+                    structure[ti] = 2;
+                    break;
+                }
+                else if(structure[first_shell[ti][i]] == 4){
+                    structure[ti] = 5;
+                    break;
+                }
+            }
+        }
+
+    }
+
+    for(int ti=0; ti<nop; ti++){
+        if (structure[ti] == 1) continue;
+        else if (structure[ti] == 2) continue;
+        else if (structure[ti] == 4) continue;
+        else if (structure[ti] == 5) continue;
+        else {
+            for (int j=0; j<neighbors[ti].size(); j++){
+                int tj = neighbors[ti][j];
+                if (structure[tj] == 1){
+                    structure[ti] = 3;
+                    break;
+                }
+                else if (structure[tj] == 4){
                     structure[ti] = 6;
                     break;
                 }
-                else if(structure[first_shell[ti][i]] == 8){
-                    structure[ti] = 9;
-                    break;
-                } 
-            }
-        }     
-    }
-
-    for (int ti=0; ti<nop; ti++){
-        if (structure[ti] < 5){
-            //still unassigned
-            for (int j=0; j<neighbors[ti].size(); j++){
-                int tj = neighbors[ti][j];
-                if (structure[tj] == 5){
-                    structure[ti] = 7;
-                    break;
-                }
-                else if (structure[tj] == 8){
-                    structure[ti] = 10;
-                    break;
-                } 
             }
         }
     }
-
     atoms[py::str("structure")] = structure;     
 
 }

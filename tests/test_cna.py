@@ -54,4 +54,4 @@ def test_ase_bulks():
 def test_cna_diamond():
     sys = pc.System.create.lattice.diamond(repetitions=(7,7,7), lattice_constant=4.00)
     sys.calculate.diamond_structure()
-    assert sys.atoms.structure[0] == 5
+    assert sys.atoms.structure[0] == 1
