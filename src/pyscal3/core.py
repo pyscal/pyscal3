@@ -396,6 +396,8 @@ class System:
         if np.sum(self.box) == 0:
             raise ValueError("Simulation box should be initialized before filling with atoms")
         
+        box = copy.deepcopy(self.box)
+
         if(len(atoms['positions']) < 200):
             needed_atoms = 200 - len(atoms['positions'])
             needed_cells = np.ceil(needed_atoms/len(atoms['positions']))
