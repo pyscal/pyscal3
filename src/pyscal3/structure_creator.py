@@ -126,6 +126,9 @@ def make_crystal(structure,
     box[1] = repetitions[1]*np.array(box[1])
     box[2] = repetitions[2]*np.array(box[2])
 
+    #finally, add repetitions to sdict
+    sdict['repetitions'] = repetitions
+    
     if return_structure_dict:
         return patoms, box, sdict
 
@@ -177,13 +180,13 @@ def general_lattice(positions,
                     }
                 }
             }
-
-    atoms, box = make_crystal("custom", lattice_constant=lattice_constant,
+    
+    atoms, box, sdict_mod = make_crystal("custom", lattice_constant=lattice_constant,
         repetitions=repetitions, noise=noise, element=element,
-        structures=sdict)
+        structures=sdict, return_structure_dict=True)
 
     if return_structure_dict:
-        return atoms, box, sdict
+        return atoms, box, sdict_mod
 
     return atoms, box
 
