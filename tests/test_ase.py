@@ -74,3 +74,10 @@ def test_calculate_radial_distribution_function():
     rdf, r = psa.calculate_radial_distribution_function(al_fcc, rmax=2)
     args = np.argsort(rdf)[::-1]
     assert(r[args[0]] - 0.70 < 1E-5)
+
+
+def test_get_symmetry():
+    w_bcc = bulk("W", cubic=True)
+    al_fcc = bulk("Al", cubic=True)
+    assert psa.get_symmetry(w_bcc)["international_symbol"] == "Im-3m"
+    assert psa.get_symmetry(al_fcc)["international_symbol"] == "Fm-3m"

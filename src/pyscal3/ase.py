@@ -13,6 +13,7 @@ from pyscal3.operations.cna import (
     identify_diamond as _identify_diamond,
 )
 from pyscal3.operations.identify import find_neighbors
+from pyscal3.operations.symmetry import get_symmetry as _get_symmetry
 
 
 def _get_structure(ase_atoms: Atoms) -> pc.System:
@@ -68,3 +69,4 @@ calculate_cna = _wrap_function(funct=_calculate_cna, add_find_neighbors=False)
 calculate_diamond_structure = _wrap_function(funct=_identify_diamond, add_find_neighbors=False)
 calculate_radial_distribution_function = _wrap_function(funct=_calculate_rdf, add_find_neighbors=False)
 calculate_steinhardt_parameter = _wrap_function(funct=_calculate_q, add_find_neighbors=True)
+get_symmetry = _wrap_function(funct=_get_symmetry, add_find_neighbors=False)
