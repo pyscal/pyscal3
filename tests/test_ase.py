@@ -6,6 +6,7 @@ from pyscal3.ase import (
     calculate_centrosymmetry,
     calculate_cna,
     calculate_diamond_structure,
+    calculate_radial_distribution_function,
     calculate_steinhardt_parameter,
 )
 from ase.build import bulk
@@ -66,3 +67,16 @@ def test_calculate_diamond_structure():
     ).convert_to.ase()
     diamond_dict = calculate_diamond_structure(c_diamond)
     assert diamond_dict['cubic diamond'] == len(c_diamond)
+
+
+def test_calculate_radial_distribution_function():
+    w_bcc = bulk("W", a=1.00).repeat([10, 10, 10])
+    al_fcc = bulk("Al", a=1.00).repeat([10, 10, 10])
+
+    rdf, r = calculate_radial_distribution_function(w_bcc, rmax=2)
+    args = np.argsort(rdf)[::-1]
+    assert(r[args[0]] - 0.86 < 1E-5)
+
+    rdf, r = calculate_radial_distribution_function(al_fcc, rmax=2)
+    args = np.argsort(rdf)[::-1]
+    assert(r[args[0]] - 0.70 < 1E-5)

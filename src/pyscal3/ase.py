@@ -4,7 +4,10 @@ from ase.atoms import Atoms
 
 import pyscal3.core as pc
 from pyscal3.operations.centrosymmetry import calculate_centrosymmetry as _calculate_centrosymmetry
-from pyscal3.operations.calculations import calculate_q as _calculate_q
+from pyscal3.operations.calculations import (
+    calculate_q as _calculate_q,
+    calculate_rdf as _calculate_rdf,
+)
 from pyscal3.operations.cna import (
     calculate_cna as _calculate_cna,
     identify_diamond as _identify_diamond,
@@ -62,5 +65,6 @@ def _wrap_function(funct: callable, add_find_neighbors: bool = False) -> callabl
 
 calculate_centrosymmetry = _wrap_function(funct=_calculate_centrosymmetry, add_find_neighbors=False)
 calculate_cna = _wrap_function(funct=_calculate_cna, add_find_neighbors=False)
-calculate_steinhardt_parameter = _wrap_function(funct=_calculate_q, add_find_neighbors=True)
 calculate_diamond_structure = _wrap_function(funct=_identify_diamond, add_find_neighbors=False)
+calculate_radial_distribution_function = _wrap_function(funct=_calculate_rdf, add_find_neighbors=False)
+calculate_steinhardt_parameter = _wrap_function(funct=_calculate_q, add_find_neighbors=True)
