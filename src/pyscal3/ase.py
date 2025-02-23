@@ -5,6 +5,7 @@ from ase.atoms import Atoms
 import pyscal3.core as pc
 from pyscal3.operations.centrosymmetry import calculate_centrosymmetry as _calculate_centrosymmetry
 from pyscal3.operations.calculations import (
+    calculate_chiparams as _calculate_chiparams,
     calculate_q as _calculate_q,
     calculate_rdf as _calculate_rdf,
 )
@@ -36,7 +37,7 @@ def _get_updated_signature(signature: inspect.Signature, add_find_neighbors: boo
     return signature.replace(parameters=parameters.values())
 
 
-def _wrap_function(funct: callable, add_find_neighbors: bool = False) -> callable:
+def _wrap_function(funct: callable, add_find_neighbors: bool = False, return_system: bool = False, system_attribute: str = "") -> callable:
     sig_updated = _get_updated_signature(
         signature=inspect.signature(funct),
         add_find_neighbors=add_find_neighbors,
@@ -54,7 +55,16 @@ def _wrap_function(funct: callable, add_find_neighbors: bool = False) -> callabl
             }
             pc_system.find.neighbors(**find_neighbors_kwargs)
         input_dict["system"] = pc_system
-        return funct(**input_dict)
+        if not return_system:
+            return funct(**input_dict)
+        elif system_attribute != "":
+            funct(**input_dict)
+            obj = pc_system
+            for attr in system_attribute.split("."):
+                obj = getattr(obj, attr)
+            return obj
+        else:
+            return pc_system
 
     ase_compatibility_wrapper.__name__ = funct.__name__
     ase_compatibility_wrapper.__signature__ = sig_updated
@@ -64,9 +74,45 @@ def _wrap_function(funct: callable, add_find_neighbors: bool = False) -> callabl
     return ase_compatibility_wrapper
 
 
-calculate_centrosymmetry = _wrap_function(funct=_calculate_centrosymmetry, add_find_neighbors=False)
-calculate_cna = _wrap_function(funct=_calculate_cna, add_find_neighbors=False)
-calculate_diamond_structure = _wrap_function(funct=_identify_diamond, add_find_neighbors=False)
-calculate_radial_distribution_function = _wrap_function(funct=_calculate_rdf, add_find_neighbors=False)
-calculate_steinhardt_parameter = _wrap_function(funct=_calculate_q, add_find_neighbors=True)
-get_symmetry = _wrap_function(funct=_get_symmetry, add_find_neighbors=False)
+calculate_centrosymmetry = _wrap_function(
+    funct=_calculate_centrosymmetry,
+    add_find_neighbors=False,
+    return_system=False,
+    system_attribute="",
+)
+calculate_chiparams = _wrap_function(
+    funct=_calculate_chiparams,
+    add_find_neighbors=True,
+    return_system=True,
+    system_attribute="atoms.angular_parameters.chi_params",
+)
+calculate_cna = _wrap_function(
+    funct=_calculate_cna,
+    add_find_neighbors=False,
+    return_system=False,
+    system_attribute="",
+)
+calculate_diamond_structure = _wrap_function(
+    funct=_identify_diamond,
+    add_find_neighbors=False,
+    return_system=False,
+    system_attribute="",
+)
+calculate_radial_distribution_function = _wrap_function(
+    funct=_calculate_rdf,
+    add_find_neighbors=False,
+    return_system=False,
+    system_attribute="",
+)
+calculate_steinhardt_parameter = _wrap_function(
+    funct=_calculate_q,
+    add_find_neighbors=True,
+    return_system=False,
+    system_attribute="",
+)
+get_symmetry = _wrap_function(
+    funct=_get_symmetry,
+    add_find_neighbors=False,
+    return_system=False,
+    system_attribute="",
+)

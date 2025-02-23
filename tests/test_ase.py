@@ -81,3 +81,10 @@ def test_get_symmetry():
     al_fcc = bulk("Al", cubic=True)
     assert psa.get_symmetry(w_bcc)["international_symbol"] == "Im-3m"
     assert psa.get_symmetry(al_fcc)["international_symbol"] == "Fm-3m"
+
+
+def test_calculate_chiparams():
+    w_bcc = bulk("W", a=4, cubic=True).repeat([3, 3, 3])
+    chi_params = psa.calculate_chiparams(w_bcc, method='cutoff', cutoff=0)
+    chip2 = [3, 0, 0, 0, 36, 12, 0, 36, 0]
+    assert np.sum(np.array(chi_params)-np.array(chip2)) == 0
