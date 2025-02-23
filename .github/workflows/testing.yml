@@ -37,9 +37,7 @@ jobs:
     - name: run tests
       shell: bash -l {0}
       run: |
-        pip install -e .
-        pip install pytest
-        pip install pytest-cov
+        pip install --no-deps --no-build-isolation -e .
         pytest --cov-report=xml --cov=pyscal tests/
 
     - name: Upload coverage to Codecov
