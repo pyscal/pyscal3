@@ -1,7 +1,13 @@
 import pytest
 import os,sys,inspect
 import numpy as np
-from pyscal3.ase import calculate_centrosymmetry, calculate_cna, calculate_steinhardt_parameter
+import pyscal3.core as pc
+from pyscal3.ase import (
+    calculate_centrosymmetry,
+    calculate_cna,
+    calculate_diamond_structure,
+    calculate_steinhardt_parameter,
+)
 from ase.build import bulk
 
 
@@ -49,3 +55,14 @@ def test_calculate_steinhardt_parameter():
     )
     assert np.round(np.mean(np.array(q[0])), decimals=2) == 0.51, "Calculated q4 value is wrong!"
     assert np.round(np.mean(np.array(q[1])), decimals=2) == 0.63, "Calculated q4 value is wrong!"
+
+
+def test_calculate_diamond_structure():
+    # the ASE diamond structure is wrong so we use pyscal to generate the structure
+    c_diamond = pc.System.create.lattice.diamond(
+        element="C",
+        repetitions=(2,2,2),
+        lattice_constant=4.00,
+    ).convert_to.ase()
+    diamond_dict = calculate_diamond_structure(c_diamond)
+    assert diamond_dict['cubic diamond'] == len(c_diamond)
