@@ -17,6 +17,22 @@ from pyscal3.operations.identify import find_neighbors
 from pyscal3.operations.symmetry import get_symmetry as _get_symmetry
 
 
+def _get_voronoi_volume(system: pc.System) -> pc.System:
+    """
+    Calculate the Voronoi volume of atoms
+
+    Parameters
+    ----------
+    system: System object
+
+    Returns
+    -------
+        np.ndarray: Array of Voronoi volumes for each atom.
+    """
+    system.find.neighbors(method="voronoi")
+    return system
+
+
 def _get_structure(ase_atoms: Atoms) -> pc.System:
     return pc.System(ase_atoms, format='ase')
 
@@ -109,6 +125,12 @@ calculate_steinhardt_parameter = _wrap_function(
     add_find_neighbors=True,
     return_system=False,
     system_attribute="",
+)
+calculate_voronoi_volume = _wrap_function(
+    funct=_get_voronoi_volume,
+    add_find_neighbors=False,
+    return_system=True,
+    system_attribute="atoms.voronoi.volume",
 )
 get_symmetry = _wrap_function(
     funct=_get_symmetry,

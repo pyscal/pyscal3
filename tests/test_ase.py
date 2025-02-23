@@ -88,3 +88,9 @@ def test_calculate_chiparams():
     chi_params = psa.calculate_chiparams(w_bcc, method='cutoff', cutoff=0)
     chip2 = [3, 0, 0, 0, 36, 12, 0, 36, 0]
     assert np.sum(np.array(chi_params)-np.array(chip2)) == 0
+
+
+def test_calculate_voronoi_volume():
+    w_bcc = bulk("W", a=4, cubic=True).repeat([3, 3, 3])
+    voronoi_volume_lst = psa.calculate_voronoi_volume(w_bcc)
+    assert all(np.isclose(voronoi_volume_lst, 32))
