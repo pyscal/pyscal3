@@ -1,5 +1,6 @@
 import numpy as np
 import pyscal3.csystem as pc
+import warnings
 
 def find_neighbors(system, method='cutoff', cutoff=0, shell_thickness=0, threshold=2, 
         voroexp=1, padding=1.2, nlimit=6, 
@@ -417,3 +418,4 @@ def cluster_atoms(system, condition, largest = True, cutoff=0):
     system.remove_selection()
     if largest:
         return lc
+
