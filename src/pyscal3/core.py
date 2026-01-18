@@ -12,7 +12,6 @@ from ase.io import write
 import uuid
 import gzip
 import io
-from scipy.special import sph_harm
 import copy
 from functools import partial, update_wrapper
 
