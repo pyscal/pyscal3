@@ -1,28 +1,36 @@
-import pyscal3.core as pc
-import os
+"""Tests for Voronoi tessellation."""
 import numpy as np
-from ase.build import bulk
+import pyscal3
+from pyscal3.structures import make_crystal
 
-def test_voronoi_props():
-    nx = 5
-    sys = pc.System.create.lattice.bcc(repetitions = [nx, nx, nx], lattice_constant=3.127)
-    sys.find.neighbors(method="voronoi")
 
-    assert sys.atoms.voronoi.vertex.numbers[0][0] == 6
-    assert (sys.atoms.voronoi.vertex.positions[0][0][0]+1.5635 < 1E-4)
-    assert (sys.atoms.voronoi.volume[0]-15.288104691499992 < 1E-5)
-    assert (sys.atoms.voronoi.face.perimeters[0][0]-6.6333687143110005 < 1E-5)
-    assert sys.atoms.voronoi.face.vertices[0][0] == 6
+def test_voronoi_props_bcc():
+    atoms = make_crystal("bcc", lattice_constant=3.127, repetitions=(5, 5, 5))
+    pyscal3.find_neighbors(atoms, method="voronoi")
 
-def test_voronoi_vector():
-    sys = pc.System.create.lattice.fcc(repetitions=(4,4,4))
-    sys.find.neighbors(method='voronoi')
-    sys.calculate.voronoi_vector()
-    assert sys.atoms.voronoi.vector[0][1] == 12
+    # Check vertex numbers (stored in arrays since uniform shape)
+    vn = atoms.arrays["pyscal_vertex_numbers"]
+    assert vn[0][0] == 6
 
-#def test_voronoi_vertices():
-#    nx = np.random.randint(1, 10)
-#    nverts = (nx**3*12)
-#    sys = Structure().lattice.bcc(repetitions = [nx, nx, nx])
-#    sys.find_neighbors(method='voronoi', cutoff=0.1)
-#    assert len(sys.atoms.voronoi.vertex.unique_positions) == nverts
+    # Check vertex positions
+    vp = atoms.arrays["pyscal_vertex_vectors"]
+    assert abs(vp[0][0] + 1.5635) < 1e-4
+
+    # Check voronoi volume
+    vol = atoms.arrays["pyscal_voronoi_volume"]
+    assert abs(vol[0] - 15.288104691499992) < 1e-5
+
+    # Check face perimeters  
+    fp = atoms.arrays["pyscal_face_perimeters"]
+    assert abs(fp[0][0] - 6.6333687143110005) < 1e-5
+
+    # Check face vertices
+    fv = atoms.arrays["pyscal_face_vertices"]
+    assert fv[0][0] == 6
+
+
+def test_voronoi_vector_fcc():
+    atoms = make_crystal("fcc", lattice_constant=1.0, repetitions=(4, 4, 4))
+    pyscal3.find_neighbors(atoms, method="voronoi")
+    vv = pyscal3.voronoi_vector(atoms)
+    assert vv[0][1] == 12  # 12 square faces for FCC

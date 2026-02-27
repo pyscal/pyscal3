@@ -1,65 +1,136 @@
+"""
+Trajectory module for lazy reading of LAMMPS dump files.
+
+Provides efficient block-level access to large trajectory files
+with support for slicing, lazy loading, and conversion to ASE Atoms.
+"""
 import os
 import numpy as np
-from pyscal3.formats.ase import convert_snap
-import pyscal3.core as pc
-#import h5py
+from ase import Atoms as ASEAtoms
 import warnings
 
 
-#def hdf_to_dump(infile, outfile, keys=None):
-"""
-    A support function that can convert hdf formatted
-    trajectory to dump format
+def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
+    """Parse LAMMPS dump lines (list of str) into an ASE Atoms object.
 
     Parameters
     ----------
-    infile : string
-        name of the input hdf file
+    lines : list of str
+        Raw lines from one dump block (header + atom data).
+    species : list of str, optional
+        Element symbols mapped to LAMMPS type indices, e.g. ``['Cu', 'Zr']``.
+    customkeys : list of str, optional
+        Extra per-atom columns to store in ``atoms.arrays``.
 
-    outfile : string
-        name of the output dump file
+    Returns
+    -------
+    ase.Atoms
+    """
+    if customkeys is None:
+        customkeys = []
 
-    keys : list, optional
-        output keys to be written.
-        default keys are box, [id, type, x, y, z]
-"""
-"""
-    if keys is None:
-        outkeys = ['x', 'y', 'z']
-        mainkey = ['id', 'type', 'x', 'y', 'z']
+    # --- parse header ---
+    natoms = int(lines[3].strip())
+
+    # box bounds (lines 5, 6, 7)
+    box_raw = [line.strip().split() for line in lines[5:8]]
+    triclinic = len(box_raw[0]) == 3
+
+    boxx = [float(box_raw[0][0]), float(box_raw[0][1])]
+    boxy = [float(box_raw[1][0]), float(box_raw[1][1])]
+    boxz = [float(box_raw[2][0]), float(box_raw[2][1])]
+
+    if triclinic:
+        xy = float(box_raw[0][2])
+        xz = float(box_raw[1][2])
+        yz = float(box_raw[2][2])
+
+    # column header (line 8)
+    header = lines[8].strip().split()
+    headerdict = {header[i]: i - 2 for i in range(len(header))}
+
+    # detect scaled vs unscaled coordinates
+    if "x" in headerdict:
+        scaled = False
+    elif "xs" in headerdict:
+        scaled = True
+        headerdict["x"] = headerdict.pop("xs")
+        headerdict["y"] = headerdict.pop("ys")
+        headerdict["z"] = headerdict.pop("zs")
     else:
-        outkeys = np.concatenate((['x', 'y', 'z'], keys))
-        mainkey = np.concatenate((['id', 'type', 'x', 'y', 'z'], keys))
+        raise ValueError("Only x/xs, y/ys, z/zs keys are supported in LAMMPS dump")
 
-    keyheader = " ".join(mainkey)
-    keyheader = " ".join(["ITEM: ATOMS", keyheader, "\n"])
+    # --- parse atom data ---
+    ids = np.empty(natoms, dtype=int)
+    types = np.empty(natoms, dtype=int)
+    positions = np.empty((natoms, 3), dtype=float)
+    custom_data = {k: [] for k in customkeys}
 
-    with open(outfile, "w") as dump:
-        with h5py.File(infile, "r") as hf:
-            for key in hf.keys():
-                
-                natoms = len(np.array(hf[key]["atoms"]["x"]))
-                box = np.array(hf[key]["box"])
+    for i, line in enumerate(lines[9:9 + natoms]):
+        raw = line.strip().split()
+        ids[i] = int(raw[headerdict["id"]])
+        types[i] = int(raw[headerdict["type"]])
+        positions[i] = [
+            float(raw[headerdict["x"]]),
+            float(raw[headerdict["y"]]),
+            float(raw[headerdict["z"]]),
+        ]
+        for k in customkeys:
+            if k in headerdict:
+                custom_data[k].append(raw[headerdict[k]])
 
-                dump.write("ITEM: TIMESTEP\n")
-                dump.write("%s\n" % key)
-                dump.write("ITEM: NUMBER OF ATOMS\n")
-                dump.write("%d\n" % natoms)
-                dump.write("ITEM: BOX BOUNDS\n")
-                dump.write("%f %f\n" % (box[0][0], box[0][1]))
-                dump.write("%f %f\n" % (box[1][0], box[1][1]))
-                dump.write("%f %f\n" % (box[2][0], box[2][1]))
+    # --- build cell ---
+    if triclinic:
+        amin = min(0.0, xy, xz, xy + xz)
+        amax = max(0.0, xy, xz, xy + xz)
+        bmin = min(0.0, yz)
+        bmax = max(0.0, yz)
+        xlo = boxx[0] - amin
+        xhi = boxx[1] - amax
+        ylo = boxy[0] - bmin
+        yhi = boxy[1] - bmax
+        zlo = boxz[0]
+        zhi = boxz[1]
 
-                dump.write(keyheader)
+        a = np.array([xhi - xlo, 0.0, 0.0])
+        b = np.array([xy, yhi - ylo, 0.0])
+        c = np.array([xz, yz, zhi - zlo])
+        cell = np.array([a, b, c])
 
-                for i in range(natoms):
-                    outval1 = ["%d %d"%(int(hf[key]["atoms"]["id"][i]), int(hf[key]["atoms"]["type"][i])) ]
-                    outval2 = [str(hf[key]["atoms"][x][i]) for x in outkeys]
-                    outvals = [*outval1, *outval2]
-                    outvals.append("\n")
-                    outline = " ".join(outvals)
-                    dump.write(outline)
-"""
+        # shift positions so origin is at box corner
+        ortho_origin = np.array([boxx[0], boxy[0], boxz[0]])
+        positions -= ortho_origin
+    else:
+        cell = np.diag([boxx[1] - boxx[0], boxy[1] - boxy[0], boxz[1] - boxz[0]])
+
+    # handle scaled coordinates
+    if scaled:
+        frac = positions.copy()
+        positions = frac[:, 0:1] * cell[0] + frac[:, 1:2] * cell[1] + frac[:, 2:3] * cell[2]
+
+    # --- determine species ---
+    if species is not None:
+        species = np.atleast_1d(species)
+        symbols = [species[t - 1] for t in types]
+    else:
+        # default to element symbol from type index
+        symbols = ["X"] * natoms
+
+    # --- create ASE Atoms ---
+    atoms = ASEAtoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
+
+    # store LAMMPS metadata
+    atoms.arrays["lammps_ids"] = ids
+    atoms.arrays["lammps_types"] = types
+
+    for k in customkeys:
+        if k in custom_data and len(custom_data[k]) == natoms:
+            try:
+                atoms.arrays[k] = np.array(custom_data[k], dtype=float)
+            except ValueError:
+                atoms.info[k] = custom_data[k]
+
+    return atoms
 
 
 class Timeslice:
@@ -109,47 +180,39 @@ class Timeslice:
             return self.__add__(ntraj)
 
 
-    def to_system(self, customkeys=None):
+    def to_atoms(self, species=None, customkeys=None):
         """
-        Get block as pyscal system
+        Get blocks as ASE Atoms objects.
 
         Parameters
         ----------
-        blockno : int
-            number of the block to be read, starts from 0
+        species : list of str, optional
+            Species names mapped to LAMMPS types, e.g. ['Cu', 'Zr'].
+            Required if the dump file does not contain element information.
+        customkeys : list of str, optional
+            Extra per-atom columns to read from the dump file.
 
         Returns
         -------
-        sys : System
-            pyscal System
+        list of ase.Atoms
         """
-        sys = []
+        atoms_list = []
         for count, traj in enumerate(self.trajectories):
             for x in self.blocklists[count]:
-                s = self.trajectories[count]._get_block_as_system(x, customkeys=customkeys)
-                sys.append(s)
-        return sys
+                a = self.trajectories[count]._get_block_as_atoms(
+                    x, species=species, customkeys=customkeys
+                )
+                atoms_list.append(a)
+        return atoms_list
 
-    def to_ase(self, species=None):
-        """
-        Get block as Ase objects
+    # Backward-compatible aliases
+    def to_ase(self, species=None, customkeys=None):
+        """Alias for :meth:`to_atoms`."""
+        return self.to_atoms(species=species, customkeys=customkeys)
 
-        Parameters
-        ----------
-        blockno : int
-            number of the block to be read, starts from 0
-
-        Returns
-        -------
-        sys : ASE object
-            
-        """
-        sys = []
-        for count, traj in enumerate(self.trajectories):
-            for x in self.blocklists[count]:
-                s = self.trajectories[count]._get_block_as_ase(x, species=species)
-                sys.append(s)
-        return sys
+    def to_system(self, customkeys=None, species=None):
+        """Alias for :meth:`to_atoms` (legacy name)."""
+        return self.to_atoms(species=species, customkeys=customkeys)
 
     def to_dict(self,):
         """
@@ -188,52 +251,6 @@ class Timeslice:
         fout.close()
 
 
-    #def to_hdf(self, outfile, keys=None, mode='w', compression="gzip"):
-    """
-        Get the block as hdf file
-
-        Parameters
-        ----------
-        outfile : string
-            name of the output file
-
-        headers : list, optional
-            The keys to be stored in hdf format.
-            Default values stored are [id, type, x, y, z]
-        
-        mode : string, optional
-            h5 write mode.
-            see here - https://docs.h5py.org/en/stable/high/file.html
-        
-        compression : string, optional
-            the compression algorithm to choose. Default gzip
-
-        Returns
-        -------
-        None
-    """
-    """
-        if keys is None:
-            outkeys = ['id', 'type', 'x', 'y', 'z']
-        else:
-            outkeys = np.concatenate((['id', 'type', 'x', 'y', 'z'], keys))
-
-        c = 0
-        with h5py.File(outfile, 'w') as hf:
-            for count, traj in enumerate(self.trajectories):
-                for x in self.blocklists[count]:
-                    self.trajectories[count].load(x)
-                    data = self.trajectories[count].data[x]
-                    self.trajectories[count].unload(x)
-                    tk = str(c)
-                    #warnings.warn(tk)
-                    hf.create_group(tk)
-                    hf[tk].create_dataset('box', data=data['box'], compression=compression)
-                    hf[tk].create_group("atoms")
-                    for key in outkeys:
-                       hf[tk]["atoms"].create_dataset(key, data=data['atoms'][key], compression=compression)
-                    c += 1
-    """
 
 class Trajectory:
     """
@@ -496,48 +513,26 @@ class Trajectory:
 
         return data        
 
-    def _get_block_as_system(self, blockno, customkeys=None):
+    def _get_block_as_atoms(self, blockno, species=None, customkeys=None):
         """
-        Get block as pyscal system
-        
+        Parse a block from the dump file directly into an ASE Atoms object.
+
         Parameters
         ----------
         blockno : int
-            number of the block to be read, starts from 0
-        
+            Block index (0-based).
+        species : list of str, optional
+            Element names mapped to LAMMPS types.
+        customkeys : list of str, optional
+            Extra per-atom columns to read.
+
         Returns
         -------
-        sys : System
-            pyscal System
+        ase.Atoms
         """
-        #convert to system and return
         data = self.get_block(blockno)
-
-        sys = pc.System()
-        sys.read.file(data, customkeys=customkeys)
-        return sys
-
-    def _get_block_as_ase(self, blockno, species=None):
-        """
-        Get block as pyscal system
-        
-        Parameters
-        ----------
-        blockno : int
-            number of the block to be read, starts from 0
-        
-        Returns
-        -------
-        sys : System
-            pyscal System
-        """
-        #convert to system and return
-        data = self.get_block(blockno)
-
-        sys = pc.System()
-        sys.read.file(data, customkeys=None)
-        asesys = convert_snap(sys, species=species)
-        return asesys
+        return _parse_lammps_lines_to_atoms(data, species=species,
+                                            customkeys=customkeys)
 
     def _get_blocks_to_file(self, fout, blocklist):
         """
