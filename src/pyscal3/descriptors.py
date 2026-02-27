@@ -133,7 +133,21 @@ def disorder(atoms: Atoms, q=6, averaged=False):
 
     # Ensure q values exist
     keys_needed = ["q%d_real" % q, "q%d_imag" % q]
-    if not all(k in d and len(d[k]) > 0 and isinstance(d[k][0], list) for k in keys_needed):
+    need_calc = False
+    for k in keys_needed:
+        if k not in d:
+            need_calc = True
+            break
+        v = d[k]
+        if not hasattr(v, '__len__') or len(v) == 0:
+            need_calc = True
+            break
+        # Check if it looks like a 2-D container (list-of-lists or 2-D array)
+        first = v[0]
+        if not (hasattr(first, '__len__') and not isinstance(first, str)):
+            need_calc = True
+            break
+    if need_calc:
         pc.calculate_q_single(d, q)
 
     pc.calculate_disorder(d, q)

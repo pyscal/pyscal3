@@ -70,30 +70,28 @@ def atoms_to_dict(atoms: Atoms) -> dict:
     """
     Convert ASE Atoms to the dict format expected by pyscal C++ functions.
     
-    The C++ code reads: positions, mask_1, mask_2, ghost
+    The C++ code reads: positions, mask_1, mask_2, ghost.
+    Numpy arrays are passed directly — pybind11 converts them
+    to the C++ types automatically, avoiding expensive .tolist() calls.
     """
     n = len(atoms)
     d = {
-        "positions": atoms.positions.tolist(),
+        "positions": atoms.positions,     # numpy (n,3) — pybind11 casts directly
         "mask_1": [False] * n,
         "mask_2": [False] * n,
         "ghost": [False] * n,
-        "types": atoms.get_atomic_numbers().tolist(),
+        "types": atoms.get_atomic_numbers(),  # numpy 1-D
     }
     
-    # Copy any existing pyscal data from atoms.arrays
+    # Copy any existing pyscal data from atoms.arrays (keep as numpy)
     for key in atoms.arrays:
         if key.startswith(_PREFIX):
-            short_key = key[len(_PREFIX):]
-            val = atoms.arrays[key]
-            # Convert numpy arrays to lists for C++ STL conversion
-            d[short_key] = val.tolist() if hasattr(val, 'tolist') else val
+            d[key[len(_PREFIX):]] = atoms.arrays[key]
     
-    # Copy pyscal info keys  
+    # Copy pyscal info keys (may be ragged lists — keep as-is)
     for key in atoms.info:
         if key.startswith(_PREFIX):
-            short_key = key[len(_PREFIX):]
-            d[short_key] = atoms.info[key]
+            d[key[len(_PREFIX):]] = atoms.info[key]
     
     return d
 
