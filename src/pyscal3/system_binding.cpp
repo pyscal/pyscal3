@@ -48,6 +48,10 @@ PYBIND11_MODULE(csystem, m) {
     m.def("calculate_centrosymmetry", &calculate_centrosymmetry);
     m.def("calculate_entropy", &calculate_entropy);
     m.def("calculate_average_entropy", &calculate_average_entropy);
+    m.def("calculate_chi_params", &calculate_chi_params);
+    m.def("calculate_angular_criteria", &calculate_angular_criteria);
+    m.def("calculate_voronoi_vector", &calculate_voronoi_vector);
+    m.def("calculate_short_range_order", &calculate_short_range_order);
 
 #ifdef VERSION_INFO
     m.attr("__version__") = VERSION_INFO;

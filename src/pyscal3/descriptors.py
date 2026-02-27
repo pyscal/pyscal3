@@ -327,36 +327,9 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
             "Voronoi analysis required. Call find_neighbors(atoms, method='voronoi') first."
         )
 
-    n = len(atoms)
-    vorovectors = []
+    pc.calculate_voronoi_vector(d, edge_cutoff, area_cutoff)
 
-    for x in range(n):
-        st = 1
-        refined_edges = []
-
-        for vno in d['face_vertices'][x]:
-            vphase = d['vertex_numbers'][x][st:st + vno]
-            dummy_edge_lengths = []
-            for i in range(-1, len(vphase) - 1):
-                ipos = d['vertex_vectors'][x][vphase[i] * 3:vphase[i] * 3 + 3]
-                jpos = d['vertex_vectors'][x][vphase[i + 1] * 3:vphase[i + 1] * 3 + 3]
-                edgeln = np.sqrt(sum((a - b) ** 2 for a, b in zip(ipos, jpos)))
-                dummy_edge_lengths.append(edgeln)
-
-            st += (vno + 1)
-
-            norm = np.array(dummy_edge_lengths) / np.sum(dummy_edge_lengths)
-            if d['neighborweight'][x][len(refined_edges)] > area_cutoff if len(refined_edges) < len(d['neighborweight'][x]) else False:
-                edgecount = int(np.sum(norm > edge_cutoff))
-                refined_edges.append(edgecount)
-
-        vorovector = [0, 0, 0, 0]
-        for ed in refined_edges:
-            if 3 <= ed <= 6:
-                vorovector[ed - 3] += 1
-        vorovectors.append(vorovector)
-
-    vv = np.array(vorovectors)
+    vv = np.array(d["vorovector"])
     atoms.arrays["pyscal_vorovector"] = vv
     return vv
 
@@ -444,33 +417,9 @@ def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=Tr
     """
     d = _get_dict_with_neighbors(atoms)
 
-    types = np.array(d["types"])
-    neighbors = d["neighbors"]
+    pc.calculate_short_range_order(d, reference_type, compare_type)
 
-    # Compute composition
-    unique, counts = np.unique(types, return_counts=True)
-    cdict = dict(zip(unique.tolist(), (counts / counts.sum()).tolist()))
-
-    def _get_local_comp(neighbor_types, cdict):
-        cx, cxc = np.unique(neighbor_types, return_counts=True)
-        d_local = dict(zip(cx.tolist(), (cxc / cxc.sum()).tolist()))
-        for key in cdict:
-            if key not in d_local:
-                d_local[key] = 0.0
-        return d_local
-
-    sro = np.zeros(len(atoms))
-    global_comp = cdict.get(reference_type, 0)
-
-    for i in range(len(atoms)):
-        neighbor_types = types[neighbors[i]]
-        local_comp = _get_local_comp(neighbor_types, cdict)
-        lc = local_comp.get(reference_type, 0)
-        if reference_type == compare_type:
-            sro[i] = (lc - global_comp) / (1 - global_comp) if global_comp < 1 else 0
-        else:
-            sro[i] = 1 - (lc / global_comp) if global_comp > 0 else 0
-
+    sro = np.array(d["sro"])
     atoms.arrays["pyscal_sro"] = sro
 
     if average:
@@ -536,26 +485,10 @@ def angular_criteria(atoms: Atoms):
         Per-atom angular parameter A values.
     """
     d = _get_dict_with_neighbors(atoms)
-    n = len(atoms)
-    angulars = []
 
-    for count in range(n):
-        dists = d["neighbordist"][count]
-        args = np.argsort(dists)
-        topfour = args[:4]
-        combos = list(itertools.combinations(topfour, 2))
-        costhetasum = 0
+    pc.calculate_angular_criteria(d)
 
-        for combo in combos:
-            vec1 = np.array(d["diff"][count][combo[0]])
-            vec2 = np.array(d["diff"][count][combo[1]])
-            mod1 = np.linalg.norm(vec1)
-            mod2 = np.linalg.norm(vec2)
-            costheta = np.dot(vec1, vec2) / (mod1 * mod2) if mod1 > 0 and mod2 > 0 else 0
-            costhetasum += (costheta + 1.0 / 3.0) ** 2
-        angulars.append(costhetasum)
-
-    ang = np.array(angulars)
+    ang = np.array(d["angular"])
     atoms.arrays["pyscal_angular"] = ang
     return ang
 
@@ -581,35 +514,14 @@ def chi_params(atoms: Atoms, angles=False):
         Chi parameter vectors.
     """
     d = _get_dict_with_neighbors(atoms)
-    n = len(atoms)
 
-    bins = [-1.0, -0.945, -0.915, -0.755, -0.705, -0.195, 0.195, 0.245, 0.795, 1.0]
-    chiparams_list = []
-    cosines_list = []
+    pc.calculate_chi_params(d)
 
-    for count in range(n):
-        dists = d["neighbordist"][count]
-        args = range(len(dists))
-        combos = list(itertools.combinations(args, 2))
-        costhetas = []
-
-        for combo in combos:
-            vec1 = np.array(d["diff"][count][combo[0]])
-            vec2 = np.array(d["diff"][count][combo[1]])
-            mod1 = np.linalg.norm(vec1)
-            mod2 = np.linalg.norm(vec2)
-            costheta = np.dot(vec1, vec2) / (mod1 * mod2) if mod1 > 0 and mod2 > 0 else 0
-            costhetas.append(costheta)
-
-        chivector = np.histogram(costhetas, bins=bins)[0]
-        chiparams_list.append(chivector)
-        if angles:
-            cosines_list.append(costhetas)
-
-    cp = np.array(chiparams_list)
+    cp = np.array(d["chiparams"])
     atoms.arrays["pyscal_chiparams"] = cp
 
     if angles:
+        cosines_list = d["cosines"]
         atoms.info["pyscal_cosines"] = cosines_list
         return cp, cosines_list
     return cp

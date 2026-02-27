@@ -8,7 +8,8 @@ def test_chiparams_bcc():
     atoms = make_crystal("bcc", lattice_constant=4.0, repetitions=(3, 3, 3))
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
     cp = pyscal3.chi_params(atoms)
-    assert np.sum(cp[2] - [3, 0, 0, 0, 36, 12, 0, 36, 0]) == 0
+    # BCC 14 neighbors: C(14,2)=91 pairs, 7 antiparallel (cos=-1) pairs
+    assert np.sum(cp[2] - [7, 0, 0, 0, 36, 12, 0, 36, 0]) == 0
 
 
 def test_chiparams_fcc():
@@ -30,4 +31,5 @@ def test_chiparams_ase():
     atoms = bulk("W", a=4, cubic=True).repeat([3, 3, 3])
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
     cp = pyscal3.chi_params(atoms)
-    assert np.sum(cp[0] - [3, 0, 0, 0, 36, 12, 0, 36, 0]) == 0
+    # BCC 14 neighbors: C(14,2)=91 pairs, 7 antiparallel (cos=-1) pairs
+    assert np.sum(cp[0] - [7, 0, 0, 0, 36, 12, 0, 36, 0]) == 0

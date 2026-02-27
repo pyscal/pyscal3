@@ -337,6 +337,21 @@ void calculate_centrosymmetry(py::dict& atoms,
     const int nmax);
 
 /*-----------------------------------------------------
+    Pure-math descriptors (chi, angular, voronoi-vec, SRO)
+-----------------------------------------------------*/
+void calculate_chi_params(py::dict& atoms);
+
+void calculate_angular_criteria(py::dict& atoms);
+
+void calculate_voronoi_vector(py::dict& atoms,
+    double edge_cutoff,
+    double area_cutoff);
+
+void calculate_short_range_order(py::dict& atoms,
+    int reference_type,
+    int compare_type);
+
+/*-----------------------------------------------------
     Entropy Methods
 -----------------------------------------------------*/
 double gmr(double r, 
