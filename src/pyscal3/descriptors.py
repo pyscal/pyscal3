@@ -155,14 +155,8 @@ def disorder(atoms: Atoms, q=6, averaged=False):
     sync_keys = ["disorder", "q%d" % q, "q%d_real" % q, "q%d_imag" % q]
 
     if averaged:
-        # Average disorder over neighbors
-        avg_arr = []
-        for i in range(len(d["positions"])):
-            vals = [d["disorder"][i]]
-            for j in d["neighbors"][i]:
-                vals.append(d["disorder"][j])
-            avg_arr.append(np.mean(vals))
-        d["avg_disorder"] = avg_arr
+        # Average disorder over neighbors in C++
+        pc.calculate_average_disorder(d)
         sync_keys.append("avg_disorder")
 
     _sync_back(d, atoms, sync_keys)
@@ -451,7 +445,7 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     find_neighbors(atoms, method="cutoff", cutoff=rmax)
     d = atoms_to_dict(atoms)
 
-    distances = list(itertools.chain(*d["neighbordist"]))
+    distances = np.concatenate(d["neighbordist"])
     hist, bin_edges = np.histogram(distances, bins=bins, range=(rmin, rmax), density=True)
 
     edgewidth = abs(bin_edges[1] - bin_edges[0])
@@ -662,6 +656,14 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     else:
         raise KeyError(f"Property '{key}' not found")
 
+    # 1-D values: use fast C++ averaging
+    values = np.asarray(values)
+    if values.ndim == 1:
+        result = pc.calculate_average_over_neighbors(
+            d, values.tolist(), include_self)
+        return np.array(result)
+
+    # Multi-dimensional: fall back to Python loop
     result = []
     for i in range(len(atoms)):
         vals = [values[i]] if include_self else []

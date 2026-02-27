@@ -354,27 +354,6 @@ void calculate_short_range_order(py::dict& atoms,
 /*-----------------------------------------------------
     Entropy Methods
 -----------------------------------------------------*/
-double gmr(double r, 
-    double sigma,
-    double rho, 
-    int n_neighbors,
-    vector<double> &neighbordist);
-
-double entropy_integrand(double r,
-    double sigma,
-    double rho,
-    int n_neighbors,
-    vector<double> &neighbordist);
-
-double trapezoid_integration(const double rstart,
-    const double rstop,
-    const double h,
-    double sigma,
-    double rho,
-    int n_neighbors,
-    vector<double> &neighbordist,
-    double kb);
-
 void calculate_entropy(py::dict& atoms, 
     double sigma, 
     double rho, 
@@ -384,3 +363,12 @@ void calculate_entropy(py::dict& atoms,
     double kb);
 
 void calculate_average_entropy(py::dict& atoms);
+
+/*-----------------------------------------------------
+    Neighbor-averaging helpers (puremath.cpp)
+-----------------------------------------------------*/
+void calculate_average_disorder(py::dict& atoms);
+
+py::list calculate_average_over_neighbors(py::dict& atoms,
+    const vector<double>& values,
+    bool include_self);

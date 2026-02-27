@@ -321,3 +321,57 @@ void calculate_short_range_order(py::dict& atoms,
 
     atoms[py::str("sro")] = sro;
 }
+
+
+/* =======================================================================
+ *  5. Average Disorder over Neighbors
+ *
+ *  Same pattern as calculate_average_entropy:
+ *  avg_disorder[i] = mean( disorder[i], disorder[j] for j in neighbors[i] )
+ * ======================================================================= */
+void calculate_average_disorder(py::dict& atoms) {
+    vector<double> disorder =
+        atoms[py::str("disorder")].cast<vector<double>>();
+    vector<vector<int>> neighbors =
+        atoms[py::str("neighbors")].cast<vector<vector<int>>>();
+    int nop = (int)neighbors.size();
+
+    vector<double> avg_disorder(nop);
+    for (int ti = 0; ti < nop; ti++) {
+        double sum = disorder[ti];
+        int nn = (int)neighbors[ti].size();
+        for (int j = 0; j < nn; j++) {
+            sum += disorder[neighbors[ti][j]];
+        }
+        avg_disorder[ti] = sum / (double)(nn + 1);
+    }
+    atoms[py::str("avg_disorder")] = avg_disorder;
+}
+
+
+/* =======================================================================
+ *  6. Generic Average-Over-Neighbors for 1-D per-atom values
+ *
+ *  Returns a py::list of averaged values rather than writing to a fixed key,
+ *  so the Python caller can store under whatever key it wants.
+ * ======================================================================= */
+py::list calculate_average_over_neighbors(py::dict& atoms,
+                                          const vector<double>& values,
+                                          bool include_self) {
+    vector<vector<int>> neighbors =
+        atoms[py::str("neighbors")].cast<vector<vector<int>>>();
+    int nop = (int)neighbors.size();
+
+    py::list result(nop);
+    for (int ti = 0; ti < nop; ti++) {
+        double sum = include_self ? values[ti] : 0.0;
+        int count  = include_self ? 1 : 0;
+        int nn = (int)neighbors[ti].size();
+        for (int j = 0; j < nn; j++) {
+            sum += values[neighbors[ti][j]];
+            count++;
+        }
+        result[ti] = count > 0 ? sum / (double)count : 0.0;
+    }
+    return result;
+}

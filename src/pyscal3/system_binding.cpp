@@ -52,6 +52,8 @@ PYBIND11_MODULE(csystem, m) {
     m.def("calculate_angular_criteria", &calculate_angular_criteria);
     m.def("calculate_voronoi_vector", &calculate_voronoi_vector);
     m.def("calculate_short_range_order", &calculate_short_range_order);
+    m.def("calculate_average_disorder", &calculate_average_disorder);
+    m.def("calculate_average_over_neighbors", &calculate_average_over_neighbors);
 
 #ifdef VERSION_INFO
     m.attr("__version__") = VERSION_INFO;

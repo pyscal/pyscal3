@@ -122,6 +122,22 @@ def dict_to_atoms(d: dict, atoms: Atoms, nreal=None):
         
         store_key = _PREFIX + key
         
+        # Fast path: detect ragged (list-of-lists with varying sub-lengths)
+        # early to skip the expensive np.asarray() probe that creates slow
+        # object arrays.  Uniform list-of-lists (same sub-length) go through
+        # the numpy path so they can be stored as 2-D arrays.
+        if isinstance(val, list) and len(val) > 1 and isinstance(val[0], (list, tuple)):
+            if len(val[0]) != len(val[1]):
+                # Definitely ragged — store directly in info
+                trimmed = val[:nreal]
+                if key in _NEIGHBOR_INDEX_KEYS and head is not None:
+                    trimmed = [
+                        [head[j] if j < len(head) else j for j in row]
+                        for row in trimmed
+                    ]
+                atoms.info[store_key] = trimmed
+                continue
+        
         # Try to store as atoms.arrays (requires same-shape numpy array)
         try:
             arr = np.asarray(val)

@@ -12,3 +12,5 @@ docs/doctrees/*
 docs/source/examples
 .ipynb_check*
 *.dump
+src/pyscal3/csystem.cpython-311-darwin.so
+test.out
