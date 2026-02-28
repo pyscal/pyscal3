@@ -1,10 +1,14 @@
 """Tests for trajectory module."""
+from pathlib import Path
 import numpy as np
 from pyscal3.trajectory import Trajectory
 
+ROOT = Path(__file__).resolve().parent.parent
+TRAJ = str(ROOT / "examples" / "traj.light")
+
 
 def test_traj_basics():
-    traj = Trajectory("examples/traj.light")
+    traj = Trajectory(TRAJ)
     assert traj.nblocks == 10
 
     block = traj.get_block(0)
@@ -12,7 +16,7 @@ def test_traj_basics():
 
 
 def test_traj_load_unload():
-    traj = Trajectory("examples/traj.light")
+    traj = Trajectory(TRAJ)
     traj.load(0)
     data = traj.data[0]
     assert data["box"][0][0] == -7.34762
@@ -22,7 +26,7 @@ def test_traj_load_unload():
 
 
 def test_timeslice_to_atoms():
-    traj = Trajectory("examples/traj.light")
+    traj = Trajectory(TRAJ)
     atoms_list = traj[0].to_atoms(species=["Au"])
     assert len(atoms_list) == 1
     # Check box length
@@ -32,21 +36,21 @@ def test_timeslice_to_atoms():
 
 
 def test_timeslice_to_dict():
-    traj = Trajectory("examples/traj.light")
+    traj = Trajectory(TRAJ)
     od = traj[0].to_dict()
     assert od[0]["box"][0][0] == -7.34762
 
 
 def test_timeslice_to_file():
     import os
-    traj = Trajectory("examples/traj.light")
+    traj = Trajectory(TRAJ)
     traj[0].to_file("test_traj_output.dump")
     assert os.path.exists("test_traj_output.dump")
     os.remove("test_traj_output.dump")
 
 
 def test_timeslice_slice():
-    traj = Trajectory("examples/traj.light")
+    traj = Trajectory(TRAJ)
     sl = traj[0:3]
     atoms_list = sl.to_atoms(species=["Au"])
     assert len(atoms_list) == 3

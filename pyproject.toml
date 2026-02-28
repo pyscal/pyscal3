@@ -83,14 +83,16 @@ test-requires = ["pytest", "ase", "pyyaml", "scipy", "spglib"]
 test-command = "pytest {project}/tests --ignore={project}/tests/_old_tests -x -q"
 
 [tool.cibuildwheel.linux]
-# Build x86_64 and aarch64
+# Build x86_64 and aarch64; skip testing aarch64 (QEMU too slow)
 archs = ["x86_64", "aarch64"]
 manylinux-x86_64-image = "manylinux2014"
 manylinux-aarch64-image = "manylinux2014"
+test-skip = "*-manylinux_aarch64"
 
 [tool.cibuildwheel.macos]
-# Build both Intel and Apple Silicon natively
+# Build both Intel and Apple Silicon; skip testing x86_64 on arm64 runner
 archs = ["x86_64", "arm64"]
+test-skip = "*-macosx_x86_64"
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]

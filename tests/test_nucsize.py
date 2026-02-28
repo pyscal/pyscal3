@@ -1,12 +1,15 @@
 """Tests for solid finding and clustering."""
+from pathlib import Path
 import numpy as np
 import pyscal3
 from pyscal3.structures import make_crystal
 
+DATA = Path(__file__).resolve().parent / "files"
+
 
 def test_find_solids_cluster():
     from ase.io import read
-    atoms = read("tests/files/cluster.dump", format="lammps-dump-text")
+    atoms = read(str(DATA / "cluster.dump"), format="lammps-dump-text")
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.63)
     val = pyscal3.find_solids(atoms, bonds=6, threshold=0.5, avgthreshold=0.6, cluster=True)
     assert val == 176
@@ -14,7 +17,7 @@ def test_find_solids_cluster():
 
 def test_find_clusters_separate():
     from ase.io import read
-    atoms = read("tests/files/cluster.dump", format="lammps-dump-text")
+    atoms = read(str(DATA / "cluster.dump"), format="lammps-dump-text")
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.63)
     pyscal3.find_solids(atoms, bonds=6, threshold=0.5, avgthreshold=0.6, cluster=False)
 
@@ -26,7 +29,7 @@ def test_find_clusters_separate():
 
 def test_find_clusters_with_cutoff():
     from ase.io import read
-    atoms = read("tests/files/cluster.dump", format="lammps-dump-text")
+    atoms = read(str(DATA / "cluster.dump"), format="lammps-dump-text")
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.63)
     pyscal3.find_solids(atoms, bonds=6, threshold=0.5, avgthreshold=0.6, cluster=False)
 
