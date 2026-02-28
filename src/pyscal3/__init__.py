@@ -37,6 +37,10 @@ from pyscal3.descriptors import (
     find_solids,
     find_clusters,
     average_over_neighbors,
+    effective_coordination_number,
+    coordination_number,
+    generalized_coordination_number,
+    local_density,
 )
 
 # Trajectory
@@ -63,6 +67,10 @@ __all__ = [
     "find_solids",
     "find_clusters",
     "average_over_neighbors",
+    "effective_coordination_number",
+    "coordination_number",
+    "generalized_coordination_number",
+    "local_density",
     # Trajectory
     "Trajectory",
 ]

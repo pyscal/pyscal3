@@ -675,6 +675,194 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
 
 
 # ---------------------------------------------------------------------------
+# Coordination Variants
+# ---------------------------------------------------------------------------
+
+def effective_coordination_number(atoms: Atoms):
+    """
+    Calculate the effective coordination number (ECoN).
+
+    ECoN weights each neighbor by a continuous function of distance
+    relative to the average neighbor distance, converging iteratively:
+
+    .. math::
+
+        \\mathrm{ECoN}_i = \\sum_j \\exp\\!\\left[
+            1 - \\left(\\frac{d_{ij}}{d_{\\mathrm{av},i}}\\right)^6
+        \\right]
+
+    where :math:`d_{\\mathrm{av},i}` is the weighted average distance
+    that is itself computed from the weights (self-consistent iteration).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+
+    Returns
+    -------
+    numpy.ndarray, shape (natoms,)
+        Per-atom ECoN values.  Also stored in
+        ``atoms.arrays["pyscal_econ"]``.
+
+    References
+    ----------
+    R. Hoppe, "Effective coordination numbers (ECoN) and mean fictive
+    ionic radii (MEFIR)", *Z. Kristallogr.* **150**, 23 (1979).
+    """
+    ensure_neighbors(atoms)
+    dists = atoms.arrays["pyscal_neighbordist"]   # (N, max_nn)
+    mask = dists > 0  # valid neighbors
+
+    n = len(atoms)
+    econ = np.zeros(n, dtype=float)
+
+    for _ in range(10):  # iterate to self-consistency
+        # weighted average distance
+        weights = np.where(mask, np.exp(1.0 - (dists / np.where(
+            econ[:, None] > 0,
+            _weighted_avg_dist(dists, mask, econ),
+            np.where(mask, dists, np.inf).min(axis=1, keepdims=True)
+        ))**6), 0.0)
+        econ_new = weights.sum(axis=1)
+        if np.allclose(econ, econ_new, atol=1e-8):
+            break
+        econ = econ_new
+
+    atoms.arrays["pyscal_econ"] = econ
+    return econ
+
+
+def _weighted_avg_dist(dists, mask, econ):
+    """Weighted average distance for ECoN iteration."""
+    weights = np.where(mask, np.exp(1.0 - (dists / np.where(
+        mask, dists, np.inf).min(axis=1, keepdims=True))**6), 0.0)
+    wsum = weights.sum(axis=1, keepdims=True)
+    wsum = np.where(wsum > 0, wsum, 1.0)
+    return (weights * dists).sum(axis=1, keepdims=True) / wsum
+
+
+def coordination_number(atoms: Atoms):
+    """
+    Return the simple coordination number (integer neighbor count).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+
+    Returns
+    -------
+    numpy.ndarray of int, shape (natoms,)
+        Per-atom coordination number.  Also stored in
+        ``atoms.arrays["pyscal_cn"]``.
+    """
+    ensure_neighbors(atoms)
+    dists = atoms.arrays["pyscal_neighbordist"]
+    cn = (dists > 0).sum(axis=1)
+    atoms.arrays["pyscal_cn"] = cn
+    return cn
+
+
+def generalized_coordination_number(atoms: Atoms, cn_max=None):
+    """
+    Calculate the generalized coordination number (GCN).
+
+    GCN accounts for the coordination of each neighbor, penalizing
+    under-coordinated surface atoms:
+
+    .. math::
+
+        \\mathrm{GCN}_i = \\frac{1}{N_{\\max}}
+        \\sum_{j \\in \\mathrm{neigh}(i)} \\mathrm{CN}_j
+
+    where :math:`N_{\\max}` is the maximum (bulk) coordination number.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    cn_max : int or None
+        Bulk coordination number.  If None, uses the maximum CN observed
+        in the system.
+
+    Returns
+    -------
+    numpy.ndarray, shape (natoms,)
+        Per-atom GCN values.  Also stored in
+        ``atoms.arrays["pyscal_gcn"]``.
+
+    References
+    ----------
+    F. Calle-Vallejo *et al.*, "Finding optimal surface sites on
+    heterogeneous catalysts by counting nearest neighbors",
+    *Science* **350**, 185 (2015).
+    `doi:10.1126/science.aab3501
+    <https://doi.org/10.1126/science.aab3501>`__
+    """
+    cn = coordination_number(atoms)
+    if cn_max is None:
+        cn_max = cn.max()
+    if cn_max == 0:
+        cn_max = 1  # avoid division by zero
+
+    neighbors = atoms.arrays["pyscal_neighbors"]
+    n = len(atoms)
+    gcn = np.zeros(n, dtype=float)
+    for i in range(n):
+        nn_sum = 0.0
+        count = 0
+        for j in neighbors[i]:
+            if j >= 0 and j < n:
+                nn_sum += cn[j]
+                count += 1
+        if count > 0:
+            gcn[i] = nn_sum / cn_max
+
+    atoms.arrays["pyscal_gcn"] = gcn
+    return gcn
+
+
+def local_density(atoms: Atoms):
+    """
+    Estimate the local atomic number density.
+
+    For each atom, the local density is estimated from the mean neighbor
+    distance:
+
+    .. math::
+
+        \\rho_i = \\frac{N_i}{\\frac{4}{3}\\pi \\bar{d}_i^3}
+
+    where :math:`N_i` is the coordination number and :math:`\\bar{d}_i`
+    is the mean neighbor distance.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+
+    Returns
+    -------
+    numpy.ndarray, shape (natoms,)
+        Per-atom local density (atoms per unit volume).  Also stored in
+        ``atoms.arrays["pyscal_local_density"]``.
+    """
+    ensure_neighbors(atoms)
+    dists = atoms.arrays["pyscal_neighbordist"]
+    mask = dists > 0
+
+    cn = mask.sum(axis=1).astype(float)
+    mean_d = np.where(cn > 0,
+                      np.where(mask, dists, 0).sum(axis=1) / np.maximum(cn, 1),
+                      1.0)  # avoid div by zero
+
+    density = cn / (4.0 / 3.0 * np.pi * mean_d**3)
+    atoms.arrays["pyscal_local_density"] = density
+    return density
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
