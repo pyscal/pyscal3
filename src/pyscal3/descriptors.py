@@ -522,6 +522,122 @@ def chi_params(atoms: Atoms, angles=False):
 
 
 # ---------------------------------------------------------------------------
+# Ackland-Jones Structure Classification
+# ---------------------------------------------------------------------------
+
+# Labels used by identify_ackland_jones
+ACKLAND_OTHER = 0
+ACKLAND_FCC = 1
+ACKLAND_HCP = 2
+ACKLAND_BCC = 3
+ACKLAND_ICO = 4
+
+_ACKLAND_NAMES = {0: "other", 1: "fcc", 2: "hcp", 3: "bcc", 4: "ico"}
+
+
+def identify_ackland_jones(atoms: Atoms):
+    """
+    Classify atomic environments with the Ackland–Jones method.
+
+    Uses the chi-parameter histogram (angular signature) to assign each
+    atom a structure type via a decision tree.  The chi histogram bins
+    cosines of all pairwise neighbor angles into 9 ranges; the counts in
+    specific bins discriminate FCC, HCP, BCC, and icosahedral (ICO)
+    environments.
+
+    The algorithm follows Ackland & Jones, *Phys. Rev. B* **73**, 054104
+    (2006), adapted for the 9-bin chi scheme used by pyscal3.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed (via
+        :func:`pyscal3.find_neighbors`).
+
+    Returns
+    -------
+    labels : numpy.ndarray of int, shape (natoms,)
+        Per-atom structure label:
+
+        =====  ==========
+        Value  Structure
+        =====  ==========
+        0      other / unknown
+        1      FCC
+        2      HCP
+        3      BCC
+        4      ICO (icosahedral)
+        =====  ==========
+
+    names : list of str
+        Human-readable name for each atom (``"fcc"``, ``"hcp"``, etc.).
+        Also stored in ``atoms.arrays["pyscal_structure"]``.
+
+    Notes
+    -----
+    Chi-parameter bin edges (9 bins, cosine of the angle):
+
+    =====  =========================
+    Bin    Cosine range
+    =====  =========================
+    χ₀     [−1.000, −0.945)  ~180°
+    χ₁     [−0.945, −0.915)  ~160°
+    χ₂     [−0.915, −0.755)  ~139°
+    χ₃     [−0.755, −0.705)  ~135°
+    χ₄     [−0.705, −0.195)
+    χ₅     [−0.195, +0.195)  ~90°
+    χ₆     [+0.195, +0.245)
+    χ₇     [+0.245, +0.795)  ~60°
+    χ₈     [+0.795, +1.000]  ~0°
+    =====  =========================
+
+    Decision tree (ideal counts for perfect structures):
+
+    * **BCC** (14 neighbours): χ₀ = 7, χ₅ = 12, χ₇ = 36
+    * **FCC** (12 neighbours): χ₀ = 6, χ₅ = 12, χ₇ = 24, χ₁₊₂₊₃ = 0
+    * **HCP** (12 neighbours): χ₀ = 3, χ₂ = 6, χ₇ = 24
+    * **ICO** (12 neighbours): χ₀ = 6, χ₅ = 0, χ₇ = 30
+
+    References
+    ----------
+    G. J. Ackland and A. P. Jones, "Applications of local crystal
+    structure measures in experiment and simulation",
+    *Phys. Rev. B* **73**, 054104 (2006).
+    `doi:10.1103/PhysRevB.73.054104
+    <https://doi.org/10.1103/PhysRevB.73.054104>`__
+    """
+    chi = chi_params(atoms)  # (N, 9) int array
+
+    n = len(atoms)
+    labels = np.zeros(n, dtype=int)
+
+    # --- BCC: 7 or more antiparallel (180°) pairs ---
+    bcc_mask = chi[:, 0] >= 7
+    labels[bcc_mask] = ACKLAND_BCC
+
+    # --- FCC or ICO: 6 antiparallel pairs, no intermediate angles ---
+    remaining = labels == 0
+    fcc_or_ico = remaining & (chi[:, 0] >= 5) & (
+        chi[:, 1] + chi[:, 2] + chi[:, 3] == 0
+    )
+    # ICO has no ~90° pairs (χ₅ = 0); FCC has χ₅ > 0
+    labels[fcc_or_ico & (chi[:, 5] == 0)] = ACKLAND_ICO
+    labels[fcc_or_ico & (chi[:, 5] > 0)] = ACKLAND_FCC
+
+    # --- HCP: has angles in the ~139° range (χ₂ > 0) ---
+    remaining = labels == 0
+    hcp_mask = remaining & (chi[:, 2] > 0)
+    labels[hcp_mask] = ACKLAND_HCP
+
+    # Store results
+    names = [_ACKLAND_NAMES[l] for l in labels]
+    atoms.arrays["pyscal_ackland_label"] = labels
+    atoms.arrays["pyscal_structure"] = np.array(names)
+
+    return labels, names
+
+
+# ---------------------------------------------------------------------------
 # Solid/Liquid Identification
 # ---------------------------------------------------------------------------
 
