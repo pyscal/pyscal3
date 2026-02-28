@@ -111,41 +111,83 @@ class TestACEParameters:
 class TestACEInvariance:
     """Test invariance properties of ACE descriptors."""
     
-    @pytest.mark.skip(reason="Rotation invariance requires more precise spherical harmonics implementation")
-    def test_rotation_invariance(self):
-        """Test that ACE descriptor sums are approximately rotation invariant.
+    def test_rotation_invariance_cubic_symmetry(self):
+        """Test rotation invariance using a cubic symmetry operation (90° z).
         
-        Note: This test is skipped because perfect rotation invariance
-        requires careful numerical handling of spherical harmonics,
-        which varies with rotation angle and cell orientation.
-        The implementation provides approximate invariance suitable for
-        ML applications.
+        This keeps the cell orthogonal so pyscal3's neighbor finder works.
         """
         atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
         pyscal3.find_neighbors(atoms, method="cutoff", cutoff=4.0)
-        result_orig = pyscal3.ace(atoms, nmax=3, lmax=4, nu_max=2, normalize=False)
+        result_orig = pyscal3.ace(atoms, nmax=3, lmax=2, nu_max=2, normalize=False)
         
-        # Rotate structure 45 degrees around z-axis
-        angle = np.pi / 4
-        rot = np.array([
-            [np.cos(angle), -np.sin(angle), 0],
-            [np.sin(angle), np.cos(angle), 0],
-            [0, 0, 1]
-        ])
+        # 90° rotation about z axis (keeps cubic cell shape)
+        rot90 = np.array([[0.0, -1.0, 0.0],
+                          [1.0, 0.0, 0.0],
+                          [0.0, 0.0, 1.0]])
         
         atoms_rot = atoms.copy()
-        atoms_rot.positions = atoms.positions @ rot.T
-        atoms_rot.cell = atoms.cell @ rot.T
+        atoms_rot.positions = atoms.positions @ rot90.T
+        atoms_rot.cell = np.array(atoms.cell) @ rot90.T
+        atoms_rot.wrap()
         pyscal3.find_neighbors(atoms_rot, method="cutoff", cutoff=4.0)
-        result_rot = pyscal3.ace(atoms_rot, nmax=3, lmax=4, nu_max=2, normalize=False)
+        result_rot = pyscal3.ace(atoms_rot, nmax=3, lmax=2, nu_max=2, normalize=False)
         
-        # Total descriptor sums should be rotation invariant
-        sum_orig = np.abs(result_orig['full']).sum(axis=0)
-        sum_rot = np.abs(result_rot['full']).sum(axis=0)
+        np.testing.assert_allclose(
+            result_orig['full'].mean(axis=0),
+            result_rot['full'].mean(axis=0),
+            atol=1e-10,
+        )
+
+    def test_rotation_invariance_arbitrary(self):
+        """Test rotation invariance with arbitrary angle using cluster in large box.
         
-        # Total absolute values should be similar
-        relative_diff = np.abs(sum_orig - sum_rot) / (sum_orig + 1e-10)
-        assert np.mean(relative_diff < 0.5) > 0.5, "Less than half of descriptors are rotation invariant"
+        Uses an isolated cluster inside a large cubic box to avoid
+        non-orthogonal cell issues in the neighbor finder.
+        """
+        from ase import Atoms
+        
+        cutoff = 4.0
+        nmax, lmax = 3, 2
+        
+        # Build cluster centered in a large cubic box
+        fcc_big = bulk("Cu", "fcc", cubic=True).repeat(6)
+        center = fcc_big.positions.mean(axis=0)
+        dists = np.linalg.norm(fcc_big.positions - center, axis=1)
+        keep = dists < 8.0
+        cluster_pos = fcc_big.positions[keep] - center
+        
+        L = 100.0
+        cluster = Atoms("Cu" * int(keep.sum()),
+                         positions=cluster_pos + L / 2,
+                         cell=[L, L, L], pbc=True)
+        pyscal3.find_neighbors(cluster, method="cutoff", cutoff=cutoff)
+        desc1 = pyscal3.ace(cluster, nmax=nmax, lmax=lmax, nu_max=2,
+                             cutoff=cutoff, normalize=False)
+        
+        # 37° rotation around [1,1,1]
+        ax = np.array([1.0, 1.0, 1.0])
+        ax /= np.linalg.norm(ax)
+        ang = 37 * np.pi / 180
+        K = np.array([[0, -ax[2], ax[1]], [ax[2], 0, -ax[0]], [-ax[1], ax[0], 0]])
+        rot = np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * K @ K
+        
+        cluster_r = Atoms("Cu" * int(keep.sum()),
+                           positions=cluster_pos @ rot.T + L / 2,
+                           cell=[L, L, L], pbc=True)
+        pyscal3.find_neighbors(cluster_r, method="cutoff", cutoff=cutoff)
+        desc2 = pyscal3.ace(cluster_r, nmax=nmax, lmax=lmax, nu_max=2,
+                             cutoff=cutoff, normalize=False)
+        
+        # Compare only interior atoms (all neighbors present)
+        interior = np.linalg.norm(cluster.positions - L / 2, axis=1) < 4.0
+        interior_idx = np.where(interior)[0]
+        assert len(interior_idx) > 0, "No interior atoms found"
+        
+        np.testing.assert_allclose(
+            desc1['full'][interior_idx].mean(axis=0),
+            desc2['full'][interior_idx].mean(axis=0),
+            atol=1e-10,
+        )
     
     def test_translation_invariance(self):
         """Test that ACE descriptors are translation invariant."""
