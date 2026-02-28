@@ -108,6 +108,91 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
 
 
 # ---------------------------------------------------------------------------
+# Wigner W_l Parameter (Third-order rotational invariant)
+# ---------------------------------------------------------------------------
+
+def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
+    """
+    Calculate the third-order Steinhardt invariant W_l.
+
+    W_l is the third-order rotational invariant of the bond-orientational
+    order parameters, constructed by contracting q_lm with Wigner 3j
+    symbols. It distinguishes crystal structures that have similar q_l
+    values (e.g., FCC vs HCP via the sign of W_6).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed via find_neighbors.
+    l : int or list of int
+        Order(s) for the W parameter. Only even values give nonzero
+        results (W_l = 0 for odd l when j1=j2=j3=l).
+    averaged : bool, optional
+        If True, compute neighbor-averaged W_l (Lechner-Dellago).
+        Default False.
+    normalized : bool, optional
+        If True (default), return the normalized hat{W}_l =
+        W_l / (sum |q_lm|^2)^(3/2). If False, return raw W_l.
+
+    Returns
+    -------
+    list of numpy arrays
+        One array per requested l value, each of shape (natoms,).
+
+    References
+    ----------
+    .. [1] Steinhardt, Nelson & Ronchetti, Phys. Rev. B 28, 784 (1983).
+    .. [2] Lechner & Dellago, J. Chem. Phys. 129, 114707 (2008).
+
+    Notes
+    -----
+    Known values for hat{W}_6:
+      - FCC: −0.01316
+      - HCP: −0.01244
+      - BCC: +0.01316
+      - ICO (Mackay): −0.16975
+      - Liquid: ≈ 0
+    """
+    if isinstance(l, int):
+        ll = [l]
+    else:
+        ll = list(l)
+
+    d = _get_dict_with_neighbors(atoms)
+
+    # Ensure q_lm are computed first (W_l requires them)
+    for val in ll:
+        pc.calculate_q_single(d, val)
+
+    if averaged:
+        for val in ll:
+            pc.calculate_aw_single(d, val)
+        if normalized:
+            result_keys = ["avg_what%d" % v for v in ll]
+        else:
+            result_keys = ["avg_w%d" % v for v in ll]
+    else:
+        for val in ll:
+            pc.calculate_w_single(d, val)
+        if normalized:
+            result_keys = ["what%d" % v for v in ll]
+        else:
+            result_keys = ["w%d" % v for v in ll]
+
+    # Sync all W-related keys back
+    sync_keys = []
+    for val in ll:
+        sync_keys.extend([
+            "q%d" % val, "q%d_real" % val, "q%d_imag" % val,
+            "w%d" % val, "what%d" % val,
+            "avg_w%d" % val, "avg_what%d" % val,
+        ])
+    _sync_back(d, atoms, sync_keys)
+
+    return [np.array(d[k]) for k in result_keys]
+
+
+# ---------------------------------------------------------------------------
 # Disorder Parameter
 # ---------------------------------------------------------------------------
 
