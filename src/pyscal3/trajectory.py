@@ -135,12 +135,26 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
 
 class Timeslice:
     """
-    Timeslice containing info about a single time slice
-    Timeslices can also be added to each
+    A slice of a trajectory containing one or more consecutive timesteps.
+
+    Timeslices are created by indexing a :class:`Trajectory` object. Multiple
+    slices can be concatenated with ``+``.
+
+    Attributes
+    ----------
+    trajectory : Trajectory
+        Parent trajectory.
+    blocklist : range or list of int
+        Indices of the blocks in this slice.
     """
     def __init__(self, trajectory, blocklist):
         """
-        Initialize instance with data
+        Parameters
+        ----------
+        trajectory : Trajectory
+            The source trajectory.
+        blocklist : range or list of int
+            Block indices for this slice.
         """
         self.trajectory = trajectory
         self.blocklist = blocklist
@@ -214,9 +228,14 @@ class Timeslice:
         """Alias for :meth:`to_atoms` (legacy name)."""
         return self.to_atoms(species=species, customkeys=customkeys)
 
-    def to_dict(self,):
+    def to_dict(self):
         """
-        Get the required block as data
+        Get raw lines for each block in this slice.
+
+        Returns
+        -------
+        list of list of str
+            Raw line data for each block.
         """
         data = []
         for count, traj in enumerate(self.trajectories):
@@ -254,20 +273,36 @@ class Timeslice:
 
 class Trajectory:
     """
-    A Trajectory class for LAMMPS
+    Lazy reader for LAMMPS dump trajectory files.
+
+    Supports block-level random access via indexing and slicing.
+    Blocks are loaded on demand and can be converted to ASE Atoms.
+
+    Parameters
+    ----------
+    filename : str
+        Path to a LAMMPS dump file.
+
+    Attributes
+    ----------
+    nblocks : int
+        Number of timestep blocks in the file.
+    natoms : int
+        Number of atoms per block.
+
+    Examples
+    --------
+    >>> traj = pyscal3.Trajectory("dump.lammpstrj")
+    >>> ts = traj[0]                    # single block → Timeslice
+    >>> atoms_list = ts.to_atoms(species=["Cu"])
+    >>> atoms_list = traj[0:10].to_atoms(species=["Cu"])  # slice
     """
     def __init__(self, filename):
         """
-        Initiaze the class
-
         Parameters
         ----------
-        filename : string
-            name of the inputfile
-
-        customkeys : list of string
-            keys other than position, id that needs to be read
-            in from the input file
+        filename : str
+            Path to a LAMMPS dump file.
         """
         if os.path.exists(filename):
             self.filename = filename

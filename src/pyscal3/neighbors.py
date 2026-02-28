@@ -55,6 +55,21 @@ def find_neighbors(atoms: Atoms, method='cutoff', cutoff=0,
         Number of neighbors for 'number' method. Default 12.
     assign_neighbor : bool, optional
         Whether to assign neighbors (for 'number' method). Default True.
+
+    Returns
+    -------
+    None
+        Results are stored in-place on the ``atoms`` object:
+
+        - ``atoms.arrays["pyscal_neighbors"]`` — neighbor indices (natoms, max_neighbors)
+        - ``atoms.arrays["pyscal_neighbordist"]`` — neighbor distances
+        - ``atoms.arrays["pyscal_theta"]`` — polar angles to neighbors
+        - ``atoms.arrays["pyscal_phi"]`` — azimuthal angles to neighbors
+        - ``atoms.info["pyscal_neighbors_found"]`` — set to True
+        - ``atoms.info["pyscal_neighbor_method"]`` — the method used
+
+        For Voronoi, additional keys include ``face_vertices``, ``face_perimeters``,
+        ``face_areas``, ``vertex_vectors``, and ``voronoivol``.
     """
     if threshold < 1:
         raise ValueError("threshold must be >= 1.0")

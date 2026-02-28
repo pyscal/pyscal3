@@ -19,20 +19,18 @@ chapters:
     sections:
     - file: examples/01_getting_started
     - file: examples/02_creating_structures
-    - file: examples/03_atoms_in_more_detail
-    - file: examples/04_creating_grain_boundaries
-    - file: examples/05_finding_neighbors
-    - file: examples/06_steinhardt_parameters
-    - file: examples/07_disorder_parameters
-    - file: examples/08_angular_parameters
-    - file: examples/09_distinguishing_solid_liquid
-    - file: examples/10_voronoi_tessellation
-    - file: examples/11_chi_params
-    - file: examples/12_centrosymmetry_parameter
-    - file: examples/13_short_range_order
-    - file: examples/14_common_neighbor_analysis
-    - file: examples/15_trajectory_module
-    - file: examples/16_entropy_parameter
+    - file: examples/03_finding_neighbors
+    - file: examples/04_steinhardt_parameters
+    - file: examples/05_common_neighbor_analysis
+    - file: examples/06_voronoi_tessellation
+    - file: examples/07_disorder_parameter
+    - file: examples/08_angular_and_chi_params
+    - file: examples/09_centrosymmetry_parameter
+    - file: examples/10_entropy_parameter
+    - file: examples/11_short_range_order
+    - file: examples/12_solid_liquid_clustering
+    - file: examples/13_trajectory_module
+  - file: docs/api.md
   - file: docs/epilogue.md
 
 
