@@ -1,1 +1,4 @@
 include src/pyscal3/data/*.yaml
+include src/pyscal3/system.h
+recursive-include lib/voro++ *.cc *.hh *.h
+recursive-include src/pyscal3 *.cpp *.h

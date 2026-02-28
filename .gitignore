@@ -12,5 +12,18 @@ docs/doctrees/*
 docs/source/examples
 .ipynb_check*
 *.dump
-src/pyscal3/csystem.cpython-311-darwin.so
+
+# C++ extension build artifacts
+*.so
+*.pyd
+*.dylib
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Test artifacts
 test.out
+*.xml
+.coverage
+htmlcov/
