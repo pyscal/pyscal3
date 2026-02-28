@@ -1,0 +1,19 @@
+feat(symmetry-functions): add Behler-Parrinello ACSFs
+
+New Behler-Parrinello atom-centered symmetry functions:
+- symmetry_functions(): compute G2, G4, G5 descriptors
+- ACSF_PARAMS_SIMPLE: default parameter set
+
+G2 (radial): Gaussian functions probing distance shells
+G4 (angular): Three-body terms with j-k distance
+G5 (angular): Three-body terms without j-k distance
+
+Features:
+- Multi-element support with per-type/pair features
+- Element filtering
+- Cosine cutoff function
+- Feature names for interpretability
+
+Pure Python pedagogical implementation.
+Ref: Behler & Parrinello, PRL 98, 146401 (2007)
+17 tests, example notebook 23_symmetry_functions.ipynb

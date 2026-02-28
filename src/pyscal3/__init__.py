@@ -37,6 +37,8 @@ from pyscal3.descriptors import (
     find_solids,
     find_clusters,
     average_over_neighbors,
+    symmetry_functions,
+    ACSF_PARAMS_SIMPLE,
 )
 
 # Trajectory
@@ -63,6 +65,8 @@ __all__ = [
     "find_solids",
     "find_clusters",
     "average_over_neighbors",
+    "symmetry_functions",
+    "ACSF_PARAMS_SIMPLE",
     # Trajectory
     "Trajectory",
 ]

@@ -675,6 +675,352 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
 
 
 # ---------------------------------------------------------------------------
+# Behler-Parrinello Symmetry Functions (ACSFs)
+# ---------------------------------------------------------------------------
+
+# Default parameter sets for common systems
+ACSF_PARAMS_SIMPLE = {
+    "cutoff": 6.0,
+    "G2": [(0.001, 0.0), (0.01, 0.0), (0.03, 0.0), (0.06, 0.0),
+           (0.01, 1.5), (0.01, 2.5), (0.01, 3.5), (0.01, 4.5)],
+    "G4": [(0.001, 1, 1), (0.001, 1, -1), (0.001, 2, 1), (0.001, 2, -1),
+           (0.01, 1, 1), (0.01, 1, -1), (0.01, 4, 1), (0.01, 4, -1)],
+}
+
+
+def _cutoff_cosine(r: np.ndarray, rc: float) -> np.ndarray:
+    """
+    Cosine cutoff function.
+    
+    f_c(r) = 0.5 * (cos(π r / r_c) + 1) for r < r_c, else 0
+    """
+    result = np.zeros_like(r)
+    mask = r < rc
+    result[mask] = 0.5 * (np.cos(np.pi * r[mask] / rc) + 1.0)
+    return result
+
+
+def symmetry_functions(
+    atoms: Atoms,
+    cutoff: float = 6.0,
+    g2_params: list = None,
+    g4_params: list = None,
+    g5_params: list = None,
+    element_filter: list = None,
+) -> dict:
+    """
+    Compute Behler-Parrinello atom-centered symmetry functions (ACSFs).
+    
+    These are smooth, many-body descriptors useful as input features for
+    machine learning potentials. This is a pedagogical implementation;
+    for production use, consider specialized packages like DScribe.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        ASE Atoms object (neighbors must be found via find_neighbors first
+        with cutoff >= the ACSF cutoff).
+    cutoff : float, optional
+        Cutoff radius in Angstroms (default: 6.0).
+    g2_params : list of (eta, Rs) tuples, optional
+        Parameters for G2 radial functions. Default uses 8 standard values.
+        - eta: Gaussian width (Å⁻²)
+        - Rs: Gaussian center (Å)
+    g4_params : list of (eta, zeta, lambda) tuples, optional
+        Parameters for G4 angular functions. Default uses 8 standard values.
+        - eta: radial decay (Å⁻²)
+        - zeta: angular resolution exponent
+        - lambda: +1 or -1 (preferred angle direction)
+    g5_params : list of (eta, zeta, lambda) tuples, optional
+        Parameters for G5 angular functions (like G4 but without j-k distance).
+        Default: None (not computed).
+    element_filter : list of int, optional
+        Atomic numbers to include. Default: all unique elements in atoms.
+    
+    Returns
+    -------
+    dict with keys:
+        "G2": (N, n_g2 * n_elements) array of G2 values
+        "G4": (N, n_g4 * n_element_pairs) array of G4 values (if g4_params)
+        "G5": (N, n_g5 * n_element_pairs) array of G5 values (if g5_params)
+        "features": concatenation of all features
+        "element_types": list of atomic numbers used
+        "feature_names": list of feature descriptions
+    
+    Notes
+    -----
+    Results also stored in:
+    - atoms.arrays["pyscal_acsf"]: concatenated feature vector
+    - atoms.info["pyscal_acsf_params"]: parameter metadata
+    
+    References
+    ----------
+    Behler & Parrinello, PRL 98, 146401 (2007)
+    Behler, J. Chem. Phys. 134, 074106 (2011)
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=6.0)
+    >>> sf = pyscal3.symmetry_functions(atoms, cutoff=6.0)
+    >>> print(sf["features"].shape)  # (108, n_features)
+    """
+    # Default parameters
+    if g2_params is None:
+        g2_params = ACSF_PARAMS_SIMPLE["G2"]
+    if g4_params is None:
+        g4_params = ACSF_PARAMS_SIMPLE["G4"]
+    
+    d = _get_dict_with_neighbors(atoms)
+    n = len(atoms)
+    positions = np.array(d["positions"])
+    atomic_numbers = np.array(atoms.get_atomic_numbers())
+    
+    # Determine element types
+    if element_filter is not None:
+        element_types = sorted(element_filter)
+    else:
+        element_types = sorted(set(atomic_numbers))
+    n_elements = len(element_types)
+    
+    # Prepare neighbor data
+    neighbor_lists = d["neighbors"]
+    neighbor_dists = d["neighbordist"]
+    neighbor_diffs = d["diff"]
+    
+    results = {}
+    feature_names = []
+    
+    # -------------------------------------------------------------------------
+    # G2 Radial Symmetry Functions
+    # -------------------------------------------------------------------------
+    n_g2 = len(g2_params)
+    g2_features = np.zeros((n, n_g2 * n_elements))
+    
+    for i in range(n):
+        neigh_idx = neighbor_lists[i]
+        if len(neigh_idx) == 0:
+            continue
+        
+        neigh_dists = np.array(neighbor_dists[i])
+        neigh_types = atomic_numbers[neigh_idx]
+        
+        # Apply cutoff
+        mask = neigh_dists < cutoff
+        neigh_dists = neigh_dists[mask]
+        neigh_types = neigh_types[mask]
+        
+        if len(neigh_dists) == 0:
+            continue
+        
+        fc = _cutoff_cosine(neigh_dists, cutoff)
+        
+        # For each element type
+        for ie, elem_z in enumerate(element_types):
+            elem_mask = (neigh_types == elem_z)
+            if not np.any(elem_mask):
+                continue
+            
+            r_elem = neigh_dists[elem_mask]
+            fc_elem = fc[elem_mask]
+            
+            # For each G2 parameter set
+            for ip, (eta, rs) in enumerate(g2_params):
+                g2_val = np.sum(np.exp(-eta * (r_elem - rs)**2) * fc_elem)
+                g2_features[i, ip * n_elements + ie] = g2_val
+    
+    results["G2"] = g2_features
+    for ip, (eta, rs) in enumerate(g2_params):
+        for elem_z in element_types:
+            feature_names.append(f"G2(η={eta},Rs={rs},Z={elem_z})")
+    
+    # -------------------------------------------------------------------------
+    # G4 Angular Symmetry Functions
+    # -------------------------------------------------------------------------
+    if g4_params:
+        # Element pairs (with ordering for j <= k)
+        element_pairs = []
+        for ie1, z1 in enumerate(element_types):
+            for ie2, z2 in enumerate(element_types):
+                if ie2 >= ie1:
+                    element_pairs.append((z1, z2))
+        n_pairs = len(element_pairs)
+        
+        n_g4 = len(g4_params)
+        g4_features = np.zeros((n, n_g4 * n_pairs))
+        
+        for i in range(n):
+            neigh_idx = neighbor_lists[i]
+            if len(neigh_idx) < 2:
+                continue
+            
+            neigh_dists = np.array(neighbor_dists[i])
+            neigh_diffs = np.array(neighbor_diffs[i])
+            neigh_types = atomic_numbers[neigh_idx]
+            
+            # Apply cutoff
+            mask = neigh_dists < cutoff
+            neigh_idx_filt = np.array(neigh_idx)[mask]
+            neigh_dists = neigh_dists[mask]
+            neigh_diffs = neigh_diffs[mask]
+            neigh_types = neigh_types[mask]
+            
+            n_neigh = len(neigh_dists)
+            if n_neigh < 2:
+                continue
+            
+            fc = _cutoff_cosine(neigh_dists, cutoff)
+            
+            # Loop over unique pairs of neighbors
+            for j_idx in range(n_neigh):
+                r_ij = neigh_dists[j_idx]
+                vec_ij = neigh_diffs[j_idx]
+                type_j = neigh_types[j_idx]
+                fc_ij = fc[j_idx]
+                
+                for k_idx in range(j_idx + 1, n_neigh):
+                    r_ik = neigh_dists[k_idx]
+                    vec_ik = neigh_diffs[k_idx]
+                    type_k = neigh_types[k_idx]
+                    fc_ik = fc[k_idx]
+                    
+                    # Compute angle via dot product
+                    cos_theta = np.dot(vec_ij, vec_ik) / (r_ij * r_ik + 1e-10)
+                    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+                    
+                    # Compute j-k distance
+                    # vec_jk = pos_k - pos_j = (pos_k - pos_i) - (pos_j - pos_i) = vec_ik - vec_ij
+                    vec_jk = vec_ik - vec_ij
+                    r_jk = np.linalg.norm(vec_jk)
+                    fc_jk = _cutoff_cosine(np.array([r_jk]), cutoff)[0]
+                    
+                    # Determine element pair index (sorted)
+                    if type_j <= type_k:
+                        pair = (type_j, type_k)
+                    else:
+                        pair = (type_k, type_j)
+                    
+                    try:
+                        pair_idx = element_pairs.index(pair)
+                    except ValueError:
+                        continue
+                    
+                    # For each G4 parameter set
+                    for ip, (eta, zeta, lam) in enumerate(g4_params):
+                        angular = (1.0 + lam * cos_theta) ** zeta
+                        radial = np.exp(-eta * (r_ij**2 + r_ik**2 + r_jk**2))
+                        prefactor = 2.0 ** (1 - zeta)
+                        g4_val = prefactor * angular * radial * fc_ij * fc_ik * fc_jk
+                        g4_features[i, ip * n_pairs + pair_idx] += g4_val
+        
+        results["G4"] = g4_features
+        for ip, (eta, zeta, lam) in enumerate(g4_params):
+            for z1, z2 in element_pairs:
+                feature_names.append(f"G4(η={eta},ζ={zeta},λ={lam},Z={z1}-{z2})")
+    
+    # -------------------------------------------------------------------------
+    # G5 Angular Symmetry Functions (no j-k term)
+    # -------------------------------------------------------------------------
+    if g5_params:
+        element_pairs = []
+        for ie1, z1 in enumerate(element_types):
+            for ie2, z2 in enumerate(element_types):
+                if ie2 >= ie1:
+                    element_pairs.append((z1, z2))
+        n_pairs = len(element_pairs)
+        
+        n_g5 = len(g5_params)
+        g5_features = np.zeros((n, n_g5 * n_pairs))
+        
+        for i in range(n):
+            neigh_idx = neighbor_lists[i]
+            if len(neigh_idx) < 2:
+                continue
+            
+            neigh_dists = np.array(neighbor_dists[i])
+            neigh_diffs = np.array(neighbor_diffs[i])
+            neigh_types = atomic_numbers[neigh_idx]
+            
+            # Apply cutoff
+            mask = neigh_dists < cutoff
+            neigh_dists = neigh_dists[mask]
+            neigh_diffs = neigh_diffs[mask]
+            neigh_types = neigh_types[mask]
+            
+            n_neigh = len(neigh_dists)
+            if n_neigh < 2:
+                continue
+            
+            fc = _cutoff_cosine(neigh_dists, cutoff)
+            
+            for j_idx in range(n_neigh):
+                r_ij = neigh_dists[j_idx]
+                vec_ij = neigh_diffs[j_idx]
+                type_j = neigh_types[j_idx]
+                fc_ij = fc[j_idx]
+                
+                for k_idx in range(j_idx + 1, n_neigh):
+                    r_ik = neigh_dists[k_idx]
+                    vec_ik = neigh_diffs[k_idx]
+                    type_k = neigh_types[k_idx]
+                    fc_ik = fc[k_idx]
+                    
+                    cos_theta = np.dot(vec_ij, vec_ik) / (r_ij * r_ik + 1e-10)
+                    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+                    
+                    if type_j <= type_k:
+                        pair = (type_j, type_k)
+                    else:
+                        pair = (type_k, type_j)
+                    
+                    try:
+                        pair_idx = element_pairs.index(pair)
+                    except ValueError:
+                        continue
+                    
+                    for ip, (eta, zeta, lam) in enumerate(g5_params):
+                        angular = (1.0 + lam * cos_theta) ** zeta
+                        radial = np.exp(-eta * (r_ij**2 + r_ik**2))
+                        prefactor = 2.0 ** (1 - zeta)
+                        g5_val = prefactor * angular * radial * fc_ij * fc_ik
+                        g5_features[i, ip * n_pairs + pair_idx] += g5_val
+        
+        results["G5"] = g5_features
+        for ip, (eta, zeta, lam) in enumerate(g5_params):
+            for z1, z2 in element_pairs:
+                feature_names.append(f"G5(η={eta},ζ={zeta},λ={lam},Z={z1}-{z2})")
+    
+    # -------------------------------------------------------------------------
+    # Combine all features
+    # -------------------------------------------------------------------------
+    feature_list = [results["G2"]]
+    if "G4" in results:
+        feature_list.append(results["G4"])
+    if "G5" in results:
+        feature_list.append(results["G5"])
+    
+    features = np.hstack(feature_list)
+    results["features"] = features
+    results["element_types"] = element_types
+    results["feature_names"] = feature_names
+    
+    # Store on atoms
+    atoms.arrays["pyscal_acsf"] = features
+    atoms.info["pyscal_acsf_params"] = {
+        "cutoff": cutoff,
+        "g2_params": g2_params,
+        "g4_params": g4_params,
+        "g5_params": g5_params,
+        "element_types": element_types,
+        "n_features": features.shape[1],
+    }
+    
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
