@@ -695,3 +695,481 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     pc.get_all_neighbors_bynumber(
         d, 0.0, triclinic, rot, rotinv, boxdims,
         2, nmax, (n > 250), False)
+
+
+# ---------------------------------------------------------------------------
+# Coulomb Matrix
+# ---------------------------------------------------------------------------
+
+def coulomb_matrix(atoms: Atoms, representation='eigenvalues', max_atoms=None, 
+                   use_atomic_numbers=True):
+    """
+    Compute the Coulomb matrix descriptor.
+    
+    The Coulomb matrix encodes electrostatic interactions between atoms,
+    originally introduced by Rupp et al. (2012) for predicting molecular
+    atomization energies.
+    
+    Matrix elements:
+    - Diagonal: M_ii = 0.5 * Z_i^2.4 (atomic self-energy proxy)
+    - Off-diagonal: M_ij = Z_i * Z_j / |R_i - R_j| (Coulomb repulsion)
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure to compute descriptor for.
+    representation : str, default 'eigenvalues'
+        How to convert matrix to fixed-size descriptor:
+        - 'eigenvalues': Sorted eigenvalues (permutation invariant)
+        - 'sorted': Sorted by row norm (upper triangle)
+        - 'matrix': Raw matrix (only for same-size systems)
+    max_atoms : int, optional
+        Maximum number of atoms for padding. Required for 'eigenvalues'
+        and 'sorted' representations. If None, uses len(atoms).
+    use_atomic_numbers : bool, default True
+        If True, use atomic numbers. If False, use 1 for all atoms.
+        
+    Returns
+    -------
+    ndarray
+        Coulomb matrix descriptor:
+        - 'eigenvalues': shape (max_atoms,)
+        - 'sorted': shape (max_atoms * (max_atoms + 1) // 2,)
+        - 'matrix': shape (N, N)
+        
+    Notes
+    -----
+    The Coulomb matrix is:
+    - Translationally invariant
+    - Rotationally invariant (eigenvalues)
+    - NOT permutationally invariant unless sorted
+    
+    References
+    ----------
+    .. [1] Rupp, M. et al. (2012). "Fast and Accurate Modeling of Molecular 
+           Atomization Energies with Machine Learning." Phys. Rev. Lett. 108, 058301.
+    
+    Examples
+    --------
+    >>> from ase.build import molecule
+    >>> import pyscal3
+    >>> mol = molecule('H2O')
+    >>> desc = pyscal3.coulomb_matrix(mol, representation='eigenvalues', max_atoms=10)
+    >>> print(desc.shape)
+    (10,)
+    """
+    positions = atoms.get_positions()
+    N = len(atoms)
+    
+    if use_atomic_numbers:
+        Z = atoms.get_atomic_numbers().astype(float)
+    else:
+        Z = np.ones(N)
+    
+    # Compute distance matrix
+    diff = positions[:, None, :] - positions[None, :, :]
+    dist = np.linalg.norm(diff, axis=-1)
+    
+    # Build Coulomb matrix
+    # Off-diagonal: Z_i * Z_j / r_ij
+    with np.errstate(divide='ignore', invalid='ignore'):
+        M = np.outer(Z, Z) / dist
+    
+    # Diagonal: 0.5 * Z^2.4
+    np.fill_diagonal(M, 0.5 * Z ** 2.4)
+    
+    # Handle inf on diagonal (already set above)
+    M = np.nan_to_num(M, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    if representation == 'matrix':
+        atoms.arrays["pyscal_coulomb_matrix"] = M
+        return M
+    
+    if max_atoms is None:
+        max_atoms = N
+    
+    if representation == 'eigenvalues':
+        eigenvalues = np.linalg.eigvalsh(M)
+        eigenvalues = np.sort(eigenvalues)[::-1]  # Descending order
+        
+        # Pad with zeros
+        result = np.zeros(max_atoms)
+        n_eig = min(len(eigenvalues), max_atoms)
+        result[:n_eig] = eigenvalues[:n_eig]
+        
+        atoms.arrays["pyscal_coulomb_eigenvalues"] = result
+        return result
+    
+    elif representation == 'sorted':
+        # Sort rows/cols by row norm
+        row_norms = np.linalg.norm(M, axis=1)
+        order = np.argsort(row_norms)[::-1]
+        M_sorted = M[order][:, order]
+        
+        # Pad to max_atoms
+        M_padded = np.zeros((max_atoms, max_atoms))
+        n = min(N, max_atoms)
+        M_padded[:n, :n] = M_sorted[:n, :n]
+        
+        # Extract upper triangle
+        i_upper, j_upper = np.triu_indices(max_atoms)
+        result = M_padded[i_upper, j_upper]
+        
+        atoms.info["pyscal_coulomb_sorted"] = result
+        return result
+    
+    else:
+        raise ValueError(f"Unknown representation: {representation}")
+
+
+# ---------------------------------------------------------------------------
+# MBTR (Many-Body Tensor Representation)
+# ---------------------------------------------------------------------------
+
+def _mbtr_k1(atomic_numbers, grid, sigma):
+    """
+    Compute k=1 MBTR term: atomic species distribution.
+    
+    Parameters
+    ----------
+    atomic_numbers : ndarray
+        Atomic numbers of all atoms.
+    grid : ndarray
+        Grid points for histogram.
+    sigma : float
+        Gaussian broadening width.
+        
+    Returns
+    -------
+    ndarray
+        k=1 MBTR values on grid.
+    """
+    Z = atomic_numbers.astype(float)
+    
+    # Gaussian broadening: sum over atoms
+    diff = grid[:, None] - Z[None, :]
+    gaussians = np.exp(-0.5 * (diff / sigma) ** 2)
+    
+    return gaussians.sum(axis=1)
+
+
+def _mbtr_k2(positions, atomic_numbers, grid, sigma, weighting='exponential', 
+             alpha=0.5, species_filter=None):
+    """
+    Compute k=2 MBTR term: inverse distance distribution.
+    
+    Parameters
+    ----------
+    positions : ndarray
+        Atomic positions.
+    atomic_numbers : ndarray
+        Atomic numbers.
+    grid : ndarray
+        Grid points (1/r values).
+    sigma : float
+        Gaussian broadening width.
+    weighting : str
+        'unity' or 'exponential'.
+    alpha : float
+        Decay constant for exponential weighting.
+    species_filter : tuple, optional
+        (Z1, Z2) to filter specific pairs.
+        
+    Returns
+    -------
+    ndarray
+        k=2 MBTR values on grid.
+    """
+    N = len(positions)
+    if N < 2:
+        return np.zeros(len(grid))
+    
+    # All pairwise distances
+    diff = positions[:, None, :] - positions[None, :, :]
+    dist = np.linalg.norm(diff, axis=-1)
+    
+    # Upper triangle indices (i < j)
+    i_idx, j_idx = np.triu_indices(N, k=1)
+    r_ij = dist[i_idx, j_idx]
+    
+    # Species filter
+    if species_filter is not None:
+        Z1, Z2 = species_filter
+        mask = (((atomic_numbers[i_idx] == Z1) & (atomic_numbers[j_idx] == Z2)) |
+                ((atomic_numbers[i_idx] == Z2) & (atomic_numbers[j_idx] == Z1)))
+        r_ij = r_ij[mask]
+        i_idx = i_idx[mask]
+        j_idx = j_idx[mask]
+    
+    if len(r_ij) == 0:
+        return np.zeros(len(grid))
+    
+    # Filter out very small distances
+    valid = r_ij > 1e-10
+    r_ij = r_ij[valid]
+    
+    if len(r_ij) == 0:
+        return np.zeros(len(grid))
+    
+    # Inverse distances
+    inv_r = 1.0 / r_ij
+    
+    # Weighting
+    if weighting == 'exponential':
+        weights = np.exp(-alpha * r_ij)
+    else:
+        weights = np.ones_like(r_ij)
+    
+    # Gaussian broadening
+    diff_grid = grid[:, None] - inv_r[None, :]
+    gaussians = np.exp(-0.5 * (diff_grid / sigma) ** 2)
+    
+    return (gaussians * weights[None, :]).sum(axis=1)
+
+
+def _mbtr_k3(positions, atomic_numbers, grid, sigma, weighting='exponential',
+             alpha=0.5, cutoff=5.0, species_filter=None):
+    """
+    Compute k=3 MBTR term: angular distribution.
+    
+    Parameters
+    ----------
+    positions : ndarray
+        Atomic positions.
+    atomic_numbers : ndarray
+        Atomic numbers.
+    grid : ndarray
+        Grid points (angles in radians from 0 to pi).
+    sigma : float
+        Gaussian broadening width (radians).
+    weighting : str
+        'unity' or 'exponential'.
+    alpha : float
+        Decay constant for exponential weighting.
+    cutoff : float
+        Distance cutoff for considering triplets.
+    species_filter : tuple, optional
+        (Z_center, Z1, Z2) to filter specific triplets.
+        
+    Returns
+    -------
+    ndarray
+        k=3 MBTR values on grid.
+    """
+    N = len(positions)
+    if N < 3:
+        return np.zeros(len(grid))
+    
+    # Distance matrix
+    diff = positions[:, None, :] - positions[None, :, :]
+    dist = np.linalg.norm(diff, axis=-1)
+    
+    angles = []
+    weights = []
+    
+    # Loop over central atom i
+    for i in range(N):
+        # Check species filter for central atom
+        if species_filter is not None:
+            Zc, Z1, Z2 = species_filter
+            if atomic_numbers[i] != Zc:
+                continue
+        
+        # Find neighbors within cutoff
+        neighbors = np.where((dist[i] < cutoff) & (dist[i] > 1e-10))[0]
+        
+        # Loop over pairs (j, k) with j < k
+        for idx_j, j in enumerate(neighbors):
+            for k in neighbors[idx_j + 1:]:
+                # Species filter for j and k
+                if species_filter is not None:
+                    Z1, Z2 = species_filter[1], species_filter[2]
+                    pair_Z = {atomic_numbers[j], atomic_numbers[k]}
+                    filter_Z = {Z1, Z2}
+                    if pair_Z != filter_Z:
+                        continue
+                
+                # Vectors from i to j and i to k
+                v_ij = positions[j] - positions[i]
+                v_ik = positions[k] - positions[i]
+                r_ij = dist[i, j]
+                r_ik = dist[i, k]
+                
+                # Angle
+                cos_theta = np.dot(v_ij, v_ik) / (r_ij * r_ik)
+                cos_theta = np.clip(cos_theta, -1.0, 1.0)
+                theta = np.arccos(cos_theta)
+                
+                angles.append(theta)
+                
+                # Weighting
+                if weighting == 'exponential':
+                    r_jk = dist[j, k]
+                    w = np.exp(-alpha * (r_ij + r_ik + r_jk))
+                else:
+                    w = 1.0
+                weights.append(w)
+    
+    if len(angles) == 0:
+        return np.zeros(len(grid))
+    
+    angles = np.array(angles)
+    weights = np.array(weights)
+    
+    # Gaussian broadening
+    diff_grid = grid[:, None] - angles[None, :]
+    gaussians = np.exp(-0.5 * (diff_grid / sigma) ** 2)
+    
+    return (gaussians * weights[None, :]).sum(axis=1)
+
+
+def mbtr(atoms: Atoms, k=(1, 2), n_grid=100, sigma_k1=0.5, sigma_k2=0.05,
+         sigma_k3=0.1, alpha=0.5, cutoff_k3=5.0, weighting='exponential',
+         normalize=True, species_resolved=False):
+    """
+    Compute Many-Body Tensor Representation (MBTR) descriptors.
+    
+    MBTR provides a smooth, continuous representation of atomic environments
+    using Gaussian-broadened distributions for different body orders.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure to compute descriptors for.
+    k : tuple of int, default (1, 2)
+        Body orders to include:
+        - k=1: Atomic species distribution
+        - k=2: Inverse distance distribution (RDF-like)
+        - k=3: Angular distribution
+    n_grid : int, default 100
+        Number of grid points for each term.
+    sigma_k1 : float, default 0.5
+        Gaussian width for k=1 (atomic number units).
+    sigma_k2 : float, default 0.05
+        Gaussian width for k=2 (1/Angstrom units).
+    sigma_k3 : float, default 0.1
+        Gaussian width for k=3 (radians).
+    alpha : float, default 0.5
+        Decay constant for exponential weighting.
+    cutoff_k3 : float, default 5.0
+        Distance cutoff for k=3 triplets (Angstrom).
+    weighting : str, default 'exponential'
+        Weighting scheme: 'unity' or 'exponential'.
+    normalize : bool, default True
+        If True, normalize descriptor to unit norm.
+    species_resolved : bool, default False
+        If True, compute separate channels per species combination.
+        If False, aggregate all species together.
+        
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+        - 'k1': ndarray for k=1 term (if included)
+        - 'k2': ndarray for k=2 term (if included)
+        - 'k3': ndarray for k=3 term (if included)
+        - 'full': concatenated descriptor
+        - 'grids': dict of grid arrays
+        
+    Notes
+    -----
+    MBTR is:
+    - Translationally invariant
+    - Rotationally invariant
+    - Permutationally invariant
+    - Fixed-size regardless of system size
+    
+    References
+    ----------
+    .. [1] Huo, H. & Rupp, M. (2017). "Unified Representation of Molecules and 
+           Crystals for Machine Learning." arXiv:1704.06439.
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(2)
+    >>> result = pyscal3.mbtr(atoms, k=(1, 2), n_grid=50)
+    >>> print(result['full'].shape)
+    """
+    positions = atoms.get_positions()
+    atomic_numbers = atoms.get_atomic_numbers()
+    species = np.unique(atomic_numbers)
+    
+    result = {'grids': {}}
+    all_descriptors = []
+    
+    # Grid definitions
+    # k=1: atomic number range
+    grid_k1 = np.linspace(0, max(100, max(species) + 10), n_grid)
+    # k=2: inverse distance range (0.01 to 2.0 1/Angstrom typical)
+    grid_k2 = np.linspace(0.01, 2.0, n_grid)
+    # k=3: angle range (0 to pi)
+    grid_k3 = np.linspace(0.01, np.pi - 0.01, n_grid)
+    
+    if 1 in k:
+        result['grids']['k1'] = grid_k1
+        if species_resolved:
+            k1_list = []
+            for Z in species:
+                mask = atomic_numbers == Z
+                k1_term = _mbtr_k1(atomic_numbers[mask], grid_k1, sigma_k1)
+                k1_list.append(k1_term)
+            k1 = np.concatenate(k1_list)
+        else:
+            k1 = _mbtr_k1(atomic_numbers, grid_k1, sigma_k1)
+        result['k1'] = k1
+        all_descriptors.append(k1)
+    
+    if 2 in k:
+        result['grids']['k2'] = grid_k2
+        if species_resolved:
+            k2_list = []
+            for i, Z1 in enumerate(species):
+                for Z2 in species[i:]:
+                    k2_term = _mbtr_k2(positions, atomic_numbers, grid_k2,
+                                       sigma_k2, weighting, alpha,
+                                       species_filter=(Z1, Z2))
+                    k2_list.append(k2_term)
+            k2 = np.concatenate(k2_list)
+        else:
+            k2 = _mbtr_k2(positions, atomic_numbers, grid_k2, sigma_k2,
+                          weighting, alpha)
+        result['k2'] = k2
+        all_descriptors.append(k2)
+    
+    if 3 in k:
+        result['grids']['k3'] = grid_k3
+        if species_resolved:
+            k3_list = []
+            for Zc in species:
+                for i, Z1 in enumerate(species):
+                    for Z2 in species[i:]:
+                        k3_term = _mbtr_k3(positions, atomic_numbers, grid_k3,
+                                           sigma_k3, weighting, alpha, cutoff_k3,
+                                           species_filter=(Zc, Z1, Z2))
+                        k3_list.append(k3_term)
+            k3 = np.concatenate(k3_list)
+        else:
+            k3 = _mbtr_k3(positions, atomic_numbers, grid_k3, sigma_k3,
+                          weighting, alpha, cutoff_k3)
+        result['k3'] = k3
+        all_descriptors.append(k3)
+    
+    # Concatenate all
+    full = np.concatenate(all_descriptors)
+    
+    if normalize:
+        norm = np.linalg.norm(full)
+        if norm > 1e-10:
+            full = full / norm
+            for key in ['k1', 'k2', 'k3']:
+                if key in result:
+                    result[key] = result[key] / norm
+    
+    result['full'] = full
+    
+    # Store in atoms
+    atoms.info["pyscal_mbtr"] = full
+    
+    return result

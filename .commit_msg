@@ -1,0 +1,17 @@
+feat(coulomb-mbtr): add Coulomb Matrix and MBTR descriptors
+
+Implements two global molecular/structure descriptors:
+
+Coulomb Matrix:
+- Encodes electrostatic interactions between atoms
+- M_ii = 0.5 * Z^2.4 (self-energy), M_ij = Z_i*Z_j/r_ij
+- Representations: eigenvalues (invariant), sorted, raw matrix
+- Padding for variable-sized systems
+
+MBTR (Many-Body Tensor Representation):
+- k=1: Atomic species distribution 
+- k=2: Inverse distance distribution (RDF-like)
+- k=3: Angular distribution
+- Gaussian broadening on discretized grids
+- Optional species-resolved channels
+- Exponential or unity weighting
