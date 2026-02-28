@@ -37,6 +37,11 @@ from pyscal3.descriptors import (
     find_solids,
     find_clusters,
     average_over_neighbors,
+    # Density correlation functions
+    structure_factor,
+    local_density,
+    density_fluctuations,
+    hyperuniformity,
 )
 
 # Trajectory
@@ -63,6 +68,11 @@ __all__ = [
     "find_solids",
     "find_clusters",
     "average_over_neighbors",
+    # Density correlations
+    "structure_factor",
+    "local_density",
+    "density_fluctuations",
+    "hyperuniformity",
     # Trajectory
     "Trajectory",
 ]
