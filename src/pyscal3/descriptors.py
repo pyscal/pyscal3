@@ -695,3 +695,465 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     pc.get_all_neighbors_bynumber(
         d, 0.0, triclinic, rot, rotinv, boxdims,
         2, nmax, (n > 250), False)
+
+
+# ---------------------------------------------------------------------------
+# Topological / Graph-based Descriptors
+# ---------------------------------------------------------------------------
+
+def coordination_numbers(atoms: Atoms):
+    """
+    Compute coordination number for each atom.
+    
+    The coordination number is the count of neighbors within the cutoff
+    used during neighbor finding.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+        
+    Returns
+    -------
+    ndarray
+        Coordination number for each atom.
+        
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.5)
+    >>> cn = pyscal3.coordination_numbers(atoms)
+    >>> print(f"Mean coordination: {cn.mean():.1f}")
+    """
+    d = _get_dict_with_neighbors(atoms)
+    
+    cn = np.array([len(n) for n in d["neighbors"]])
+    atoms.arrays["pyscal_coordination"] = cn
+    
+    return cn
+
+
+def coordination_stats(atoms: Atoms):
+    """
+    Compute coordination number statistics.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - 'coordination': per-atom coordination numbers
+        - 'mean': mean coordination
+        - 'std': standard deviation
+        - 'distribution': dict mapping coordination -> fraction
+        
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.5)
+    >>> stats = pyscal3.coordination_stats(atoms)
+    >>> print(f"Mean: {stats['mean']:.2f}, Std: {stats['std']:.2f}")
+    """
+    cn = coordination_numbers(atoms)
+    
+    values, counts = np.unique(cn, return_counts=True)
+    distribution = dict(zip(values.tolist(), (counts / len(cn)).tolist()))
+    
+    return {
+        'coordination': cn,
+        'mean': float(np.mean(cn)),
+        'std': float(np.std(cn)),
+        'distribution': distribution
+    }
+
+
+def bond_angle_distribution(atoms: Atoms, bins=90, range_deg=(0, 180)):
+    """
+    Compute the bond angle distribution.
+    
+    For each atom with at least 2 neighbors, computes all bond angles
+    formed by pairs of neighbors. This is useful for characterizing
+    local structure in amorphous materials.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    bins : int, default 90
+        Number of histogram bins.
+    range_deg : tuple, default (0, 180)
+        Range of angles in degrees.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - 'angles': all bond angles (degrees)
+        - 'bin_centers': histogram bin centers
+        - 'histogram': normalized histogram values
+        - 'mean': mean angle
+        - 'std': standard deviation
+        
+    Notes
+    -----
+    Common peaks in crystalline structures:
+    - FCC: 60°, 90°, 120°, 180° (for 1st shell neighbors)
+    - BCC: ~70.5°, ~109.5° (for 1st shell)
+    - Diamond: 109.5° (tetrahedral)
+    
+    References
+    ----------
+    .. [1] Stillinger, F.H. & Weber, T.A. (1985). "Computer simulation of 
+           local order in condensed phases of silicon." Phys. Rev. B 31, 5262.
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Si", "diamond", cubic=True).repeat(2)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)
+    >>> bad = pyscal3.bond_angle_distribution(atoms)
+    >>> peak_angle = bad['bin_centers'][np.argmax(bad['histogram'])]
+    >>> print(f"Peak angle: {peak_angle:.1f} degrees")
+    """
+    d = _get_dict_with_neighbors(atoms)
+    positions = np.array(d['positions'])
+    neighbors = d['neighbors']
+    diffs = d['diff']
+    
+    angles = []
+    
+    for i in range(len(atoms)):
+        neighs = neighbors[i]
+        if len(neighs) < 2:
+            continue
+        
+        diff_i = diffs[i]
+        
+        # All pairs of neighbors
+        for j_idx in range(len(neighs)):
+            for k_idx in range(j_idx + 1, len(neighs)):
+                rij = np.array(diff_i[j_idx])
+                rik = np.array(diff_i[k_idx])
+                
+                rij_norm = np.linalg.norm(rij)
+                rik_norm = np.linalg.norm(rik)
+                
+                if rij_norm < 1e-10 or rik_norm < 1e-10:
+                    continue
+                
+                cos_theta = np.dot(rij, rik) / (rij_norm * rik_norm)
+                cos_theta = np.clip(cos_theta, -1.0, 1.0)
+                theta_deg = np.degrees(np.arccos(cos_theta))
+                
+                angles.append(theta_deg)
+    
+    angles = np.array(angles)
+    
+    if len(angles) > 0:
+        hist, bin_edges = np.histogram(angles, bins=bins, range=range_deg, density=True)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        mean_angle = float(np.mean(angles))
+        std_angle = float(np.std(angles))
+    else:
+        bin_centers = np.linspace(range_deg[0], range_deg[1], bins)
+        hist = np.zeros(bins)
+        mean_angle = 0.0
+        std_angle = 0.0
+    
+    result = {
+        'angles': angles,
+        'bin_centers': bin_centers,
+        'histogram': hist,
+        'mean': mean_angle,
+        'std': std_angle
+    }
+    
+    atoms.info["pyscal_bond_angle_distribution"] = {
+        'mean': mean_angle, 'std': std_angle
+    }
+    
+    return result
+
+
+def clustering_coefficient(atoms: Atoms):
+    """
+    Compute local and global clustering coefficients.
+    
+    The clustering coefficient measures how connected the neighbors
+    of each atom are to each other. High values indicate dense local
+    networks, low values indicate sparse or chain-like connections.
+    
+    For atom i with k neighbors, the local clustering coefficient is:
+    C_i = 2 * e_i / (k * (k-1))
+    
+    where e_i is the number of bonds between neighbors of i.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - 'local': per-atom clustering coefficients
+        - 'global': mean clustering coefficient
+        - 'transitivity': ratio of triangles to connected triples
+        
+    Notes
+    -----
+    Typical values:
+    - FCC perfect crystal: 0.5-0.6 (depends on cutoff)  
+    - Random network: ~0.1-0.2
+    - Linear chain: 0.0
+    
+    References
+    ----------
+    .. [1] Watts, D.J. & Strogatz, S.H. (1998). "Collective dynamics of 
+           'small-world' networks." Nature 393, 440.
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.5)
+    >>> cc = pyscal3.clustering_coefficient(atoms)
+    >>> print(f"Global clustering: {cc['global']:.3f}")
+    """
+    d = _get_dict_with_neighbors(atoms)
+    neighbors = d['neighbors']
+    n_atoms = len(atoms)
+    
+    # Convert to sets for O(1) lookup
+    neighbor_sets = [set(n) for n in neighbors]
+    
+    local_cc = np.zeros(n_atoms)
+    triangles = 0
+    connected_triples = 0
+    
+    for i in range(n_atoms):
+        neighs = list(neighbor_sets[i])
+        k = len(neighs)
+        
+        if k < 2:
+            local_cc[i] = 0.0
+            continue
+        
+        # Count edges between neighbors of i
+        edges_between = 0
+        for j_idx in range(len(neighs)):
+            for k_idx in range(j_idx + 1, len(neighs)):
+                if neighs[k_idx] in neighbor_sets[neighs[j_idx]]:
+                    edges_between += 1
+        
+        # Local clustering coefficient
+        possible_edges = k * (k - 1) // 2
+        local_cc[i] = edges_between / possible_edges if possible_edges > 0 else 0.0
+        
+        triangles += edges_between
+        connected_triples += possible_edges
+    
+    global_cc = float(np.mean(local_cc))
+    transitivity = triangles / connected_triples if connected_triples > 0 else 0.0
+    
+    atoms.arrays["pyscal_clustering_coefficient"] = local_cc
+    
+    return {
+        'local': local_cc,
+        'global': global_cc,
+        'transitivity': float(transitivity)
+    }
+
+
+def ring_statistics(atoms: Atoms, max_ring_size=8):
+    """
+    Compute ring statistics using shortest-path method.
+    
+    Counts primitive rings of different sizes in the bond network.
+    Important for characterizing network topology in glasses, zeolites,
+    and other network-forming materials.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    max_ring_size : int, default 8
+        Maximum ring size to search for.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - 'counts': dict mapping ring size to total count
+        - 'per_atom': dict mapping ring size to count per atom
+        - 'mean_size': mean ring size
+        - 'rings': list of ring atom indices (if not too many)
+        
+    Notes
+    -----
+    The algorithm uses Franzblau's shortest-path method:
+    For each bond (i,j), find the shortest path from i to j 
+    that doesn't use the direct bond, forming a ring.
+    
+    Common ring sizes:
+    - Silica glass: predominantly 5, 6, 7-membered rings
+    - Crystalline quartz: 6-membered rings only
+    - Diamond: 6-membered (chair) rings
+    
+    References
+    ----------
+    .. [1] Franzblau, D.S. (1991). "Computation of ring statistics for 
+           network models of solids." Phys. Rev. B 44, 4925.
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Si", "diamond", cubic=True).repeat(2)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=2.8)
+    >>> rings = pyscal3.ring_statistics(atoms, max_ring_size=8)
+    >>> print(f"Ring counts: {rings['counts']}")
+    """
+    from collections import deque
+    
+    d = _get_dict_with_neighbors(atoms)
+    neighbors = d['neighbors']
+    n_atoms = len(atoms)
+    
+    # Convert to sets for O(1) lookup
+    neighbor_sets = [set(n) for n in neighbors]
+    
+    def bfs_shortest_path(start, target, exclude_direct=True):
+        """Find shortest path from start to target."""
+        if start == target:
+            return None
+            
+        visited = {start: None}
+        queue = deque([start])
+        
+        while queue:
+            current = queue.popleft()
+            
+            for neighbor in neighbor_sets[current]:
+                # Skip direct bond if requested
+                if exclude_direct and current == start and neighbor == target:
+                    continue
+                    
+                if neighbor == target:
+                    # Found target - reconstruct path
+                    path = [neighbor]
+                    node = current
+                    while node is not None:
+                        path.append(node)
+                        node = visited[node]
+                    return path[::-1]
+                
+                if neighbor not in visited:
+                    visited[neighbor] = current
+                    queue.append(neighbor)
+        
+        return None
+    
+    ring_counts = {n: 0 for n in range(3, max_ring_size + 1)}
+    found_rings = set()
+    rings_list = []
+    
+    # For each bond, find shortest path not using that bond
+    for i in range(n_atoms):
+        for j in neighbor_sets[i]:
+            if j <= i:  # Process each bond once
+                continue
+            
+            path = bfs_shortest_path(i, j, exclude_direct=True)
+            
+            if path and len(path) >= 3 and len(path) <= max_ring_size:
+                # Canonical form for deduplication
+                ring_canonical = tuple(sorted(path))
+                
+                if ring_canonical not in found_rings:
+                    found_rings.add(ring_canonical)
+                    ring_size = len(path)
+                    ring_counts[ring_size] += 1
+                    
+                    if len(rings_list) < 10000:  # Limit stored rings
+                        rings_list.append(list(path))
+    
+    # Per-atom ring counts
+    per_atom = {n: c / n_atoms for n, c in ring_counts.items()}
+    
+    # Mean ring size
+    total_rings = sum(ring_counts.values())
+    if total_rings > 0:
+        mean_size = sum(n * c for n, c in ring_counts.items()) / total_rings
+    else:
+        mean_size = 0.0
+    
+    atoms.info["pyscal_ring_statistics"] = {
+        'counts': ring_counts,
+        'mean_size': mean_size
+    }
+    
+    return {
+        'counts': ring_counts,
+        'per_atom': per_atom,
+        'mean_size': float(mean_size),
+        'rings': rings_list
+    }
+
+
+def topological_descriptors(atoms: Atoms, compute_rings=False, max_ring_size=6):
+    """
+    Compute a comprehensive set of topological descriptors.
+    
+    This is a convenience function that computes multiple graph-based
+    descriptors in one call.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    compute_rings : bool, default False
+        Whether to compute ring statistics (can be slow for large systems).
+    max_ring_size : int, default 6
+        Maximum ring size if computing rings.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - 'coordination': coordination statistics
+        - 'clustering': clustering coefficients
+        - 'bond_angles': bond angle distribution statistics
+        - 'rings': ring statistics (if compute_rings=True)
+        
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.5)
+    >>> topo = pyscal3.topological_descriptors(atoms)
+    >>> print(f"Mean coordination: {topo['coordination']['mean']:.1f}")
+    >>> print(f"Clustering: {topo['clustering']['global']:.3f}")
+    """
+    result = {
+        'coordination': coordination_stats(atoms),
+        'clustering': clustering_coefficient(atoms),
+        'bond_angles': bond_angle_distribution(atoms)
+    }
+    
+    if compute_rings:
+        result['rings'] = ring_statistics(atoms, max_ring_size)
+    
+    return result
