@@ -256,6 +256,51 @@ def diamond_structure(atoms: Atoms):
 
 
 # ---------------------------------------------------------------------------
+# Common Neighbor Parameter (CNP)
+# ---------------------------------------------------------------------------
+
+def common_neighbor_parameter(atoms: Atoms):
+    """
+    Calculate the Common Neighbor Parameter (CNP).
+
+    CNP quantifies local structural deviation from a perfect crystal.
+    For each atom *i* with neighbors *j*, the parameter is:
+
+        CNP(i) = (1/n_i) sum_j |Q_ij|^2
+
+    where Q_ij = sum_{k in common(i,j)} (R_ik + R_jk), and *k* runs over
+    the common neighbors of *i* and *j*.  In a perfect crystal every
+    pair-wise Q_ij cancels and CNP = 0.  Non-zero values indicate
+    defects: stacking faults, surfaces, grain boundaries, etc.
+
+    Neighbors must be pre-computed via :func:`find_neighbors`.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        Per-atom CNP values.
+
+    References
+    ----------
+    Tsuzuki, Branicio & Rino, Comput. Phys. Commun. 177, 518 (2007).
+    https://doi.org/10.1016/j.cpc.2007.05.018
+    """
+    d = _get_dict_with_neighbors(atoms)
+    triclinic, rot, rotinv, boxdims = get_box_params(atoms)
+
+    pc.calculate_cnp(d, triclinic, rot, rotinv, boxdims)
+
+    cnp = np.array(d["cnp"])
+    atoms.arrays["pyscal_cnp"] = cnp
+    return cnp
+
+
+# ---------------------------------------------------------------------------
 # Centrosymmetry Parameter
 # ---------------------------------------------------------------------------
 

@@ -617,3 +617,84 @@ void identify_diamond_cna(py::dict& atoms,
     atoms[py::str("structure")] = structure;     
 
 }
+
+
+// ---------------------------------------------------------------------------
+// Common Neighbor Parameter (CNP)
+//
+// Tsuzuki, Branicio & Rino, Comput. Phys. Commun. 177, 518 (2007)
+//
+// For atom i with neighbors j:
+//   Q_ij = sum_{k in common(i,j)} (R_ik + R_jk)
+//   CNP(i) = (1/n_i) * sum_j |Q_ij|^2
+//
+// Perfect crystals: CNP = 0.  Defects: CNP > 0.
+// ---------------------------------------------------------------------------
+void calculate_cnp(py::dict& atoms,
+    const int& triclinic,
+    const vector<vector<double>>& rot,
+    const vector<vector<double>>& rotinv,
+    const vector<double>& box) {
+
+    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
+    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
+    vector<double> cutoff_arr = atoms[py::str("cutoff")].cast<vector<double>>();
+
+    int nop = positions.size();
+    vector<double> cnp(nop, 0.0);
+
+    for (int ti = 0; ti < nop; ti++) {
+        int nn = neighbors[ti].size();
+        if (nn == 0) continue;
+
+        double cnp_sum = 0.0;
+
+        for (int i = 0; i < nn; i++) {
+            int tj = neighbors[ti][i];
+
+            // Find common neighbors of ti and tj
+            // A common neighbor k is one that appears in both neighbor lists
+            // AND is within cutoff distance of both ti and tj
+            vector<int> common_k;
+            for (int a = 0; a < nn; a++) {
+                int ka = neighbors[ti][a];
+                if (ka == tj) continue;
+                // Check if ka is also a neighbor of tj
+                for (int b = 0; b < (int)neighbors[tj].size(); b++) {
+                    if (neighbors[tj][b] == ka) {
+                        common_k.push_back(ka);
+                        break;
+                    }
+                }
+            }
+
+            // Q_ij = sum_k (R_ik + R_jk) for common neighbors k
+            double qx = 0.0, qy = 0.0, qz = 0.0;
+            double dx, dy, dz;
+
+            for (int c = 0; c < (int)common_k.size(); c++) {
+                int k = common_k[c];
+
+                // R_ik
+                get_abs_distance(positions[ti], positions[k],
+                    triclinic, rot, rotinv, box, dx, dy, dz);
+                qx += dx;
+                qy += dy;
+                qz += dz;
+
+                // R_jk
+                get_abs_distance(positions[tj], positions[k],
+                    triclinic, rot, rotinv, box, dx, dy, dz);
+                qx += dx;
+                qy += dy;
+                qz += dz;
+            }
+
+            cnp_sum += qx * qx + qy * qy + qz * qz;
+        }
+
+        cnp[ti] = cnp_sum / (double)nn;
+    }
+
+    atoms[py::str("cnp")] = cnp;
+}

@@ -45,6 +45,7 @@ PYBIND11_MODULE(csystem, m) {
     m.def("identify_cn12", &identify_cn12);
     m.def("identify_cn14", &identify_cn14);
     m.def("identify_diamond_cna", &identify_diamond_cna);
+    m.def("calculate_cnp", &calculate_cnp);
     m.def("calculate_centrosymmetry", &calculate_centrosymmetry);
     m.def("calculate_entropy", &calculate_entropy);
     m.def("calculate_average_entropy", &calculate_average_entropy);

@@ -330,6 +330,12 @@ void identify_diamond_cna(py::dict& atoms,
     const vector<vector<double>>& rotinv,
     const vector<double>& box);
 
+void calculate_cnp(py::dict& atoms,
+    const int& triclinic,
+    const vector<vector<double>>& rot,
+    const vector<vector<double>>& rotinv,
+    const vector<double>& box);
+
 /*-----------------------------------------------------
     Other Methods
 -----------------------------------------------------*/
