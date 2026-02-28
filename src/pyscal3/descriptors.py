@@ -675,6 +675,370 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
 
 
 # ---------------------------------------------------------------------------
+# Translational Order Parameters
+# ---------------------------------------------------------------------------
+
+def _get_reciprocal_vectors(cell):
+    """
+    Compute reciprocal lattice vectors from real-space cell.
+    
+    G_i = 2π (a_j × a_k) / (a_i · (a_j × a_k))
+    """
+    cell = np.asarray(cell)
+    a1, a2, a3 = cell[0], cell[1], cell[2]
+    volume = np.dot(a1, np.cross(a2, a3))
+    
+    if abs(volume) < 1e-10:
+        raise ValueError("Cell has zero or near-zero volume")
+    
+    G1 = 2 * np.pi * np.cross(a2, a3) / volume
+    G2 = 2 * np.pi * np.cross(a3, a1) / volume
+    G3 = 2 * np.pi * np.cross(a1, a2) / volume
+    
+    return np.array([G1, G2, G3])
+
+
+def _estimate_nn_distance(positions, n_samples=100):
+    """Estimate nearest-neighbor distance from positions."""
+    from scipy.spatial import cKDTree
+    
+    if len(positions) < 2:
+        return 1.0
+    
+    tree = cKDTree(positions)
+    # Sample atoms and find nearest neighbor
+    n_samples = min(n_samples, len(positions))
+    indices = np.random.choice(len(positions), n_samples, replace=False)
+    
+    nn_dists = []
+    for i in indices:
+        dist, _ = tree.query(positions[i], k=2)  # k=2: self and nearest
+        nn_dists.append(dist[1])
+    
+    return np.mean(nn_dists)
+
+
+def translational_order(atoms: Atoms, method='displacement', G_vectors=None,
+                       reference=None, sigma=None):
+    """
+    Compute translational order parameter τ.
+    
+    The translational order parameter measures how well atoms maintain
+    positions relative to an ideal crystalline lattice.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure to analyze.
+    method : str, default 'displacement'
+        Calculation method:
+        - 'displacement': Uses displacement from reference positions (default)
+        - 'fourier': Uses reciprocal lattice vectors (advanced)
+    G_vectors : array-like, optional
+        Custom reciprocal lattice vectors for Fourier method.
+        Should be fundamental reciprocal lattice vectors of the 
+        crystal (not supercell). Required for 'fourier' method.
+    reference : ase.Atoms, optional
+        Reference structure for displacement method. Must have same
+        number of atoms.
+    sigma : float, optional
+        Gaussian width for displacement method. If None, uses 0.1
+        times the estimated nearest-neighbor distance.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - 'tau': per-atom translational order (N,)
+        - 'tau_global': global order parameter
+        - 'mean': mean of per-atom τ
+        - 'std': standard deviation
+        - 'method': calculation method used
+        
+    Notes
+    -----
+    **Displacement method** (recommended): τ_i = exp(-u_i²/2σ²) where 
+    u_i is the displacement from reference position. Values range from 0 to 1.
+    A perfect match gives τ = 1, large displacements give τ → 0.
+    
+    **Fourier method**: τ = (1/N) |Σ_j exp(iG·r_j)| computed using 
+    reciprocal lattice vectors G. This is structure-dependent and 
+    requires appropriate G vectors for the crystal type.
+    
+    Typical values:
+    - Perfect crystal: τ ≈ 1
+    - Crystal near melting: τ ≈ 0.3-0.7
+    - Liquid: τ ≈ 0
+    
+    References
+    ----------
+    .. [1] Hansen, J.P. & McDonald, I.R. "Theory of Simple Liquids"
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(4)
+    >>> reference = atoms.copy()
+    >>> # Add thermal displacements
+    >>> atoms.positions += 0.1 * np.random.randn(*atoms.positions.shape)
+    >>> result = pyscal3.translational_order(atoms, reference=reference)
+    >>> print(f"Global τ: {result['tau_global']:.3f}")
+    """
+    positions = atoms.get_positions()
+    cell = np.array(atoms.get_cell())
+    N = len(atoms)
+    
+    if method == 'fourier':
+        if G_vectors is None:
+            raise ValueError(
+                "G_vectors required for Fourier method. "
+                "Provide reciprocal lattice vectors of the crystal "
+                "(not supercell). Use method='displacement' for a "
+                "simpler approach."
+            )
+        G_vectors = np.asarray(G_vectors)
+        if G_vectors.ndim == 1:
+            G_vectors = G_vectors.reshape(1, -1)
+        
+        # Compute global τ for each G vector (|⟨exp(iG·r)⟩|)
+        tau_global_components = []
+        tau_per_atom_components = []
+        
+        for G in G_vectors:
+            phases = np.dot(positions, G)
+            
+            # Global: |sum of complex exponentials| / N
+            complex_sum = np.sum(np.exp(1j * phases))
+            tau_G_global = np.abs(complex_sum) / N
+            tau_global_components.append(tau_G_global)
+            
+            # Per-atom: cos²(phase/2) = (1 + cos(phase))/2
+            # This gives 1 when atom is on a lattice plane (phase = 0 mod 2π)
+            tau_G_local = (1 + np.cos(phases)) / 2
+            tau_per_atom_components.append(tau_G_local)
+        
+        # Average over reciprocal vectors
+        tau_global = np.mean(tau_global_components)
+        tau = np.mean(tau_per_atom_components, axis=0)
+        
+    elif method == 'displacement':
+        if reference is None:
+            raise ValueError(
+                "reference structure required for displacement method."
+            )
+        
+        ref_positions = reference.get_positions()
+        
+        if len(ref_positions) != N:
+            raise ValueError(
+                f"Reference has {len(ref_positions)} atoms but structure "
+                f"has {N}. They must match."
+            )
+        
+        # Compute displacements with minimum image convention
+        u = positions - ref_positions
+        
+        # Apply minimum image convention for PBC
+        if np.any(atoms.pbc):
+            cell_inv = np.linalg.inv(cell)
+            fractional_u = u @ cell_inv
+            fractional_u = fractional_u - np.round(fractional_u)
+            u = fractional_u @ cell
+        
+        u_sq = np.sum(u**2, axis=1)
+        
+        if sigma is None:
+            nn_dist = _estimate_nn_distance(ref_positions)
+            sigma = 0.1 * nn_dist
+        
+        tau = np.exp(-u_sq / (2 * sigma**2))
+        tau_global = float(np.mean(tau))
+        
+    else:
+        raise ValueError(f"Unknown method: {method}. Use 'fourier' or 'displacement'.")
+    
+    atoms.arrays['pyscal_translational_order'] = tau
+    
+    return {
+        'tau': tau,
+        'tau_global': float(tau_global),
+        'mean': float(np.mean(tau)),
+        'std': float(np.std(tau)),
+        'method': method
+    }
+
+
+def lindemann_parameter(atoms: Atoms, reference: Atoms = None,
+                       nn_distance: float = None):
+    """
+    Compute Lindemann parameter δ.
+    
+    The Lindemann parameter measures RMS displacement relative to the
+    nearest-neighbor distance. The Lindemann criterion states that
+    melting occurs when δ ≈ 0.1-0.15.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure to analyze.
+    reference : ase.Atoms
+        Reference structure (ideal lattice positions).
+    nn_distance : float, optional
+        Nearest-neighbor distance. If None, estimated from reference.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - 'delta': per-atom Lindemann parameter (N,)
+        - 'global': global Lindemann parameter √⟨u²⟩/a
+        - 'msd': mean squared displacement ⟨u²⟩
+        - 'nn_distance': nearest-neighbor distance used
+        
+    Notes
+    -----
+    The Lindemann parameter is defined as:
+    
+    δ_i = |u_i| / a
+    
+    where u_i is the displacement from the ideal position and a is
+    the nearest-neighbor distance.
+    
+    The global parameter is:
+    δ = √⟨u²⟩ / a
+    
+    Lindemann criterion for melting: δ ≈ 0.1-0.15
+    
+    References
+    ----------
+    .. [1] Lindemann, F.A. (1910). "Über die Berechnung molekularer 
+           Eigenfrequenzen." Physikalische Zeitschrift 11: 609.
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> import numpy as np
+    >>> 
+    >>> # Create structure with thermal displacements
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(4)
+    >>> reference = atoms.copy()
+    >>> atoms.positions += 0.1 * np.random.randn(*atoms.positions.shape)
+    >>> 
+    >>> result = pyscal3.lindemann_parameter(atoms, reference)
+    >>> print(f"Global δ: {result['global']:.3f}")
+    """
+    if reference is None:
+        raise ValueError("reference structure required for Lindemann parameter")
+    
+    positions = atoms.get_positions()
+    ref_positions = reference.get_positions()
+    cell = np.array(atoms.get_cell())
+    N = len(atoms)
+    
+    if len(ref_positions) != N:
+        raise ValueError(
+            f"Reference has {len(ref_positions)} atoms but structure "
+            f"has {N}. They must match."
+        )
+    
+    # Compute displacements
+    u = positions - ref_positions
+    
+    # Apply minimum image convention for PBC
+    if np.any(atoms.pbc):
+        cell_inv = np.linalg.inv(cell)
+        fractional_u = u @ cell_inv
+        fractional_u = fractional_u - np.round(fractional_u)
+        u = fractional_u @ cell
+    
+    u_mag = np.linalg.norm(u, axis=1)
+    u_sq = u_mag ** 2
+    msd = np.mean(u_sq)
+    
+    if nn_distance is None:
+        nn_distance = _estimate_nn_distance(ref_positions)
+    
+    delta = u_mag / nn_distance
+    delta_global = np.sqrt(msd) / nn_distance
+    
+    atoms.arrays['pyscal_lindemann'] = delta
+    
+    return {
+        'delta': delta,
+        'global': float(delta_global),
+        'msd': float(msd),
+        'nn_distance': float(nn_distance)
+    }
+
+
+def mean_squared_displacement(atoms: Atoms, reference: Atoms):
+    """
+    Compute mean squared displacement from reference structure.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Current structure.
+    reference : ase.Atoms
+        Reference structure (e.g., initial positions).
+        
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - 'displacement': per-atom displacement magnitude (N,)
+        - 'msd': global mean squared displacement
+        - 'rmsd': root mean squared displacement
+        
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> import numpy as np
+    >>> 
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(4)
+    >>> reference = atoms.copy()
+    >>> atoms.positions += 0.5 * np.random.randn(*atoms.positions.shape)
+    >>> 
+    >>> result = pyscal3.mean_squared_displacement(atoms, reference)
+    >>> print(f"MSD: {result['msd']:.3f} Å²")
+    """
+    positions = atoms.get_positions()
+    ref_positions = reference.get_positions()
+    cell = np.array(atoms.get_cell())
+    N = len(atoms)
+    
+    if len(ref_positions) != N:
+        raise ValueError(
+            f"Reference has {len(ref_positions)} atoms but structure "
+            f"has {N}. They must match."
+        )
+    
+    # Compute displacements
+    u = positions - ref_positions
+    
+    # Apply minimum image convention for PBC
+    if np.any(atoms.pbc):
+        cell_inv = np.linalg.inv(cell)
+        fractional_u = u @ cell_inv
+        fractional_u = fractional_u - np.round(fractional_u)
+        u = fractional_u @ cell
+    
+    u_mag = np.linalg.norm(u, axis=1)
+    msd = np.mean(u_mag ** 2)
+    
+    atoms.arrays['pyscal_displacement'] = u_mag
+    
+    return {
+        'displacement': u_mag,
+        'msd': float(msd),
+        'rmsd': float(np.sqrt(msd))
+    }
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 

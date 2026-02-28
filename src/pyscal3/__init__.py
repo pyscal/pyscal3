@@ -37,6 +37,10 @@ from pyscal3.descriptors import (
     find_solids,
     find_clusters,
     average_over_neighbors,
+    # Translational order
+    translational_order,
+    lindemann_parameter,
+    mean_squared_displacement,
 )
 
 # Trajectory
@@ -63,6 +67,10 @@ __all__ = [
     "find_solids",
     "find_clusters",
     "average_over_neighbors",
+    # Translational order
+    "translational_order",
+    "lindemann_parameter",
+    "mean_squared_displacement",
     # Trajectory
     "Trajectory",
 ]
