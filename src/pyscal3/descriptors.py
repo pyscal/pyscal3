@@ -16,6 +16,7 @@ Example
 """
 import numpy as np
 import itertools
+from scipy.spatial import cKDTree
 from ase import Atoms
 
 import pyscal3.csystem as pc
@@ -695,3 +696,288 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     pc.get_all_neighbors_bynumber(
         d, 0.0, triclinic, rot, rotinv, boxdims,
         2, nmax, (n > 250), False)
+
+
+# ---------------------------------------------------------------------------
+# Wigner-Seitz defect analysis
+# ---------------------------------------------------------------------------
+
+def wigner_seitz_analysis(
+    atoms: Atoms,
+    reference: Atoms,
+    affine_mapping: str = "none",
+    per_type_occupancies: bool = False,
+) -> dict:
+    """
+    Wigner-Seitz cell analysis for vacancy/interstitial detection.
+    
+    This assigns each atom in `atoms` to the nearest lattice site in `reference`
+    and counts site occupancies. Sites with occupancy 0 are vacancies; sites
+    with occupancy > 1 contain interstitials.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        The configuration to analyze (containing defects).
+    reference : Atoms
+        The perfect/reference configuration defining lattice sites.
+    affine_mapping : str, optional
+        How to handle cell distortion:
+        - "none" (default): Use positions as-is
+        - "to_reference": Rescale `atoms` positions to match reference cell
+    per_type_occupancies : bool, optional
+        If True, track occupancy by atom type (for antisite detection).
+    
+    Returns
+    -------
+    dict
+        Keys:
+        - "vacancy_count": Number of sites with occupancy = 0
+        - "interstitial_count": Total excess atoms (sum of max(occ-1, 0))
+        - "occupancy": (N_ref,) array of site occupancies
+        - "site_index": (N_atoms,) array mapping each atom to its assigned site
+        - "vacancy_indices": indices of reference sites with vacancies
+        - "interstitial_sites": indices of sites with excess atoms
+        
+        If per_type_occupancies=True, also includes:
+        - "occupancy_by_type": dict mapping type → (N_ref,) occupancy array
+    
+    Notes
+    -----
+    Results are also stored on `atoms`:
+    - atoms.arrays["pyscal_ws_site_index"]: site assignment
+    - atoms.arrays["pyscal_ws_occupancy"]: occupancy of assigned site
+    - atoms.info["pyscal_ws_vacancy_count"]
+    - atoms.info["pyscal_ws_interstitial_count"]
+    
+    The algorithm uses nearest-neighbor search via cKDTree. For periodic
+    systems, reference sites near cell boundaries are replicated to handle
+    atoms that may have wrapped to different periodic images.
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> # Perfect FCC reference
+    >>> ref = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> # Create vacancy by deleting atom
+    >>> defected = ref.copy()
+    >>> del defected[0]
+    >>> result = pyscal3.wigner_seitz_analysis(defected, ref)
+    >>> print(f"Vacancies: {result['vacancy_count']}")  # 1
+    >>> print(f"Interstitials: {result['interstitial_count']}")  # 0
+    """
+    ref_pos = reference.get_positions()
+    disp_pos = atoms.get_positions().copy()
+    n_ref = len(reference)
+    n_atoms = len(atoms)
+    
+    # Apply affine mapping if requested
+    if affine_mapping == "to_reference":
+        # Transform displaced positions to fractional coords using displaced cell,
+        # then to Cartesian using reference cell
+        disp_cell = atoms.get_cell()
+        ref_cell = reference.get_cell()
+        if disp_cell.any() and ref_cell.any():
+            # Convert to fractional, then to reference Cartesian
+            disp_frac = np.linalg.solve(disp_cell.T, disp_pos.T).T
+            disp_pos = disp_frac @ ref_cell
+    elif affine_mapping != "none":
+        raise ValueError(f"affine_mapping must be 'none' or 'to_reference', got '{affine_mapping}'")
+    
+    # Handle periodicity by replicating reference sites near boundaries
+    # We'll use the reference cell for PBC handling
+    ref_cell = reference.get_cell()
+    pbc = reference.get_pbc()
+    
+    if any(pbc) and ref_cell.any():
+        # Build expanded reference with periodic images
+        expanded_ref, expanded_indices = _expand_for_pbc(ref_pos, ref_cell, pbc)
+    else:
+        expanded_ref = ref_pos
+        expanded_indices = np.arange(n_ref)
+    
+    # Build KD-tree on expanded reference
+    tree = cKDTree(expanded_ref)
+    
+    # Find nearest reference site for each atom
+    distances, nearest_expanded = tree.query(disp_pos, k=1)
+    
+    # Map back to original reference indices
+    site_index = expanded_indices[nearest_expanded]
+    
+    # Count occupancies
+    occupancy = np.bincount(site_index, minlength=n_ref)
+    
+    # Compute summary statistics
+    vacancy_count = int(np.sum(occupancy == 0))
+    interstitial_count = int(np.sum(np.maximum(occupancy - 1, 0)))
+    vacancy_indices = np.where(occupancy == 0)[0]
+    interstitial_sites = np.where(occupancy > 1)[0]
+    
+    result = {
+        "occupancy": occupancy,
+        "site_index": site_index,
+        "vacancy_count": vacancy_count,
+        "interstitial_count": interstitial_count,
+        "vacancy_indices": vacancy_indices,
+        "interstitial_sites": interstitial_sites,
+    }
+    
+    # Per-type occupancies for antisite detection
+    if per_type_occupancies:
+        atom_types = atoms.get_chemical_symbols()
+        unique_types = sorted(set(atom_types))
+        occupancy_by_type = {}
+        for t in unique_types:
+            mask = np.array([s == t for s in atom_types])
+            type_sites = site_index[mask]
+            occupancy_by_type[t] = np.bincount(type_sites, minlength=n_ref)
+        result["occupancy_by_type"] = occupancy_by_type
+    
+    # Store results on atoms
+    atoms.arrays["pyscal_ws_site_index"] = site_index
+    atoms.arrays["pyscal_ws_occupancy"] = occupancy[site_index]  # Per-atom view
+    atoms.info["pyscal_ws_vacancy_count"] = vacancy_count
+    atoms.info["pyscal_ws_interstitial_count"] = interstitial_count
+    
+    return result
+
+
+def _expand_for_pbc(positions, cell, pbc, skin=3.0):
+    """
+    Expand reference positions with periodic images near boundaries.
+    
+    Parameters
+    ----------
+    positions : ndarray (N, 3)
+        Original positions
+    cell : ndarray (3, 3)
+        Cell vectors (rows)
+    pbc : array-like of bool
+        Periodic boundary conditions
+    skin : float
+        Distance from boundary to include images (Angstroms)
+    
+    Returns
+    -------
+    expanded_positions : ndarray (M, 3)
+        Positions including relevant periodic images
+    original_indices : ndarray (M,)
+        Index into original positions for each expanded position
+    """
+    cell = np.asarray(cell)
+    pbc = np.asarray(pbc)
+    n = len(positions)
+    
+    # Convert to fractional coordinates
+    try:
+        cell_inv = np.linalg.inv(cell)
+    except np.linalg.LinAlgError:
+        # Degenerate cell, return as-is
+        return positions, np.arange(n)
+    
+    frac_pos = positions @ cell_inv
+    
+    # Determine which shifts to apply
+    shifts = []
+    for ix in ([-1, 0, 1] if pbc[0] else [0]):
+        for iy in ([-1, 0, 1] if pbc[1] else [0]):
+            for iz in ([-1, 0, 1] if pbc[2] else [0]):
+                shifts.append([ix, iy, iz])
+    shifts = np.array(shifts)
+    
+    # Just apply all 27 (or fewer) shifts and let KDTree handle it
+    # This is simpler and the overhead is small for typical systems
+    all_positions = []
+    all_indices = []
+    
+    for shift in shifts:
+        shifted_frac = frac_pos + shift
+        shifted_cart = shifted_frac @ cell
+        all_positions.append(shifted_cart)
+        all_indices.append(np.arange(n))
+    
+    expanded_positions = np.vstack(all_positions)
+    original_indices = np.concatenate(all_indices)
+    
+    return expanded_positions, original_indices
+
+
+def identify_defect_atoms(
+    atoms: Atoms,
+    reference: Atoms,
+    affine_mapping: str = "none",
+) -> dict:
+    """
+    Identify which atoms are at vacancies, interstitials, or antisites.
+    
+    This is a convenience wrapper around wigner_seitz_analysis that
+    returns masks for different defect types.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        The configuration to analyze.
+    reference : Atoms 
+        The reference configuration.
+    affine_mapping : str, optional
+        Affine mapping mode (see wigner_seitz_analysis).
+    
+    Returns
+    -------
+    dict
+        - "perfect_mask": bool array, atoms at singly-occupied sites
+        - "interstitial_mask": bool array, atoms at multiply-occupied sites
+        - "vacancy_positions": (N_vac, 3) positions of empty reference sites
+        - "defect_summary": string description of defects found
+    """
+    result = wigner_seitz_analysis(atoms, reference, affine_mapping, 
+                                    per_type_occupancies=True)
+    
+    occupancy = result["occupancy"]
+    site_index = result["site_index"]
+    
+    # Atoms at singly-occupied sites are "perfect"
+    perfect_mask = (occupancy[site_index] == 1)
+    
+    # Atoms at multiply-occupied sites are interstitials (or share with one)
+    interstitial_mask = (occupancy[site_index] > 1)
+    
+    # Vacancy positions
+    ref_pos = reference.get_positions()
+    vacancy_positions = ref_pos[result["vacancy_indices"]]
+    
+    # Summary
+    summary_parts = []
+    if result["vacancy_count"] > 0:
+        summary_parts.append(f"{result['vacancy_count']} vacancies")
+    if result["interstitial_count"] > 0:
+        summary_parts.append(f"{result['interstitial_count']} interstitials")
+    
+    # Check for antisites in multi-component systems
+    if "occupancy_by_type" in result and len(result["occupancy_by_type"]) > 1:
+        ref_types = reference.get_chemical_symbols()
+        antisite_count = 0
+        for site_idx in range(len(reference)):
+            if occupancy[site_idx] == 1:
+                # Single atom at this site - check type match
+                site_type = ref_types[site_idx]
+                atom_at_site = np.where(site_index == site_idx)[0]
+                if len(atom_at_site) == 1:
+                    atom_type = atoms.get_chemical_symbols()[atom_at_site[0]]
+                    if atom_type != site_type:
+                        antisite_count += 1
+        if antisite_count > 0:
+            summary_parts.append(f"{antisite_count} antisites")
+    
+    defect_summary = ", ".join(summary_parts) if summary_parts else "No defects"
+    
+    return {
+        "perfect_mask": perfect_mask,
+        "interstitial_mask": interstitial_mask,
+        "vacancy_positions": vacancy_positions,
+        "defect_summary": defect_summary,
+        **result,  # Include all WS results
+    }
+

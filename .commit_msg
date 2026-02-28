@@ -1,0 +1,15 @@
+feat(wigner-seitz): add vacancy/interstitial detection
+
+New Wigner-Seitz cell defect analysis:
+- wigner_seitz_analysis(): assign atoms to nearest reference lattice sites
+- identify_defect_atoms(): convenience wrapper with defect masks
+
+Features:
+- Vacancy detection (empty sites)
+- Interstitial detection (multiply-occupied sites)
+- Antisite tracking via per_type_occupancies
+- Affine mapping for thermal expansion
+- PBC via periodic image expansion
+
+Pure Python with scipy.spatial.cKDTree for O(N log N) performance.
+17 tests, example notebook 22_wigner_seitz_defects.ipynb
