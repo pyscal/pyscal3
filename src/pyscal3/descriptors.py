@@ -167,6 +167,227 @@ def disorder(atoms: Atoms, q=6, averaged=False):
 
 
 # ---------------------------------------------------------------------------
+# SOAP (Smooth Overlap of Atomic Positions)
+# ---------------------------------------------------------------------------
+
+def _soap_cutoff(r, r_cut):
+    """Smooth cutoff function for SOAP: 0.5*(cos(pi*r/r_cut) + 1) for r < r_cut."""
+    mask = r < r_cut
+    result = np.zeros_like(r)
+    result[mask] = 0.5 * (np.cos(np.pi * r[mask] / r_cut) + 1.0)
+    return result
+
+
+def _soap_radial_basis(r, n_max, r_cut, sigma):
+    """
+    Compute orthonormalized radial basis functions evaluated at distances r.
+    
+    Uses polynomial basis phi_n(r) = r^n * exp(-alpha*r^2), orthonormalized
+    via Cholesky decomposition.
+    
+    Parameters
+    ----------
+    r : array
+        Distances to evaluate at
+    n_max : int
+        Number of radial basis functions
+    r_cut : float
+        Cutoff radius
+    sigma : float
+        Gaussian width
+        
+    Returns
+    -------
+    array of shape (len(r), n_max)
+        Radial basis values
+    """
+    alpha = 1.0 / (2 * sigma**2)
+    
+    # Build primitive basis and overlap matrix on a fine grid
+    n_grid = 500
+    r_grid = np.linspace(0, r_cut, n_grid)
+    dr = r_grid[1] - r_grid[0]
+    
+    # Primitive basis on grid: phi_n(r) = r^n * exp(-alpha*r^2)
+    phi_grid = np.zeros((n_grid, n_max))
+    for n in range(n_max):
+        phi_grid[:, n] = (r_grid ** n) * np.exp(-alpha * r_grid**2)
+    
+    # Overlap matrix S_nn' = integral of phi_n * phi_n' * r^2 dr
+    # Numerical integration
+    weight = r_grid**2 * dr
+    S = phi_grid.T @ (phi_grid * weight[:, np.newaxis])
+    
+    # Regularize if needed
+    S += 1e-10 * np.eye(n_max)
+    
+    # Orthonormalization via Cholesky: S = L L^T, W = inv(L)
+    try:
+        L = np.linalg.cholesky(S)
+        W = np.linalg.inv(L)
+    except np.linalg.LinAlgError:
+        # Fallback to SVD-based orthonormalization
+        U, s, Vt = np.linalg.svd(S)
+        W = U @ np.diag(1.0 / np.sqrt(s + 1e-10)) @ Vt
+    
+    # Evaluate primitive basis at actual r values
+    phi_r = np.zeros((len(r), n_max))
+    for n in range(n_max):
+        phi_r[:, n] = (r ** n) * np.exp(-alpha * r**2)
+    
+    # Apply orthonormalization: g_n = sum_n' W_nn' * phi_n'
+    g_r = phi_r @ W.T
+    
+    return g_r
+
+
+def soap(atoms: Atoms, r_cut=5.0, n_max=8, l_max=6, sigma=0.5, normalized=True):
+    """
+    Calculate SOAP (Smooth Overlap of Atomic Positions) descriptors.
+    
+    SOAP provides a rotationally invariant representation of the local atomic
+    environment, widely used in machine learning potentials.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        Structure with neighbors already computed via find_neighbors.
+        The cutoff used for find_neighbors should be >= r_cut.
+    r_cut : float, optional
+        Cutoff radius in Angstrom. Default 5.0.
+    n_max : int, optional
+        Number of radial basis functions. Default 8.
+    l_max : int, optional
+        Maximum angular momentum. Default 6.
+    sigma : float, optional
+        Gaussian width for smearing. Default 0.5.
+    normalized : bool, optional
+        If True, L2-normalize the power spectrum. Default True.
+    
+    Returns
+    -------
+    dict
+        "power_spectrum": (N, D) array of SOAP power spectra
+        "n_max": n_max used
+        "l_max": l_max used
+        "descriptor_size": D
+        
+    Notes
+    -----
+    The density of each environment is expanded as:
+    
+        rho(r) = sum_j f_cut(r_ij) * exp(-|r - r_ij|^2 / 2*sigma^2)
+    
+    Expansion coefficients c_nlm are computed, and the rotationally invariant
+    power spectrum is:
+    
+        p_nn'l = sqrt(8/(2l+1)) * sum_m c*_nlm c_n'lm
+    
+    Results stored in atoms.arrays["pyscal_soap"].
+    
+    References
+    ----------
+    Bartók, Kondor, Csányi, Phys. Rev. B 87, 184115 (2013)
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(2)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=6.0)
+    >>> result = pyscal3.soap(atoms, r_cut=5.0, n_max=6, l_max=4)
+    >>> print(result["power_spectrum"].shape)
+    """
+    from scipy.special import sph_harm_y
+    
+    d = _get_dict_with_neighbors(atoms)
+    n_atoms = len(atoms)
+    positions = np.array(d["positions"])
+    
+    # Descriptor dimension: n_max*(n_max+1)/2 * (l_max+1)
+    # (using symmetry p_nn'l = p_n'nl)
+    n_pairs = n_max * (n_max + 1) // 2
+    desc_size = n_pairs * (l_max + 1)
+    
+    power_spectrum = np.zeros((n_atoms, desc_size))
+    
+    for i in range(n_atoms):
+        neighbors_i = d["neighbors"][i]
+        n_neigh = len(neighbors_i) if hasattr(neighbors_i, '__len__') else 0
+        
+        if n_neigh == 0:
+            continue
+        
+        # Get neighbor displacements and distances
+        diffs = np.array(d["diff"][i])  # (n_neigh, 3)
+        dists = np.array(d["neighbordist"][i])  # (n_neigh,)
+        
+        # Filter to within r_cut
+        mask = dists < r_cut
+        if not np.any(mask):
+            continue
+            
+        diffs = diffs[mask]
+        dists = dists[mask]
+        n_neigh = len(dists)
+        
+        # Cutoff weights
+        f_cut = _soap_cutoff(dists, r_cut)
+        
+        # Spherical coordinates
+        # theta = arccos(z/r), phi = arctan2(y, x)
+        theta = np.arccos(np.clip(diffs[:, 2] / dists, -1.0, 1.0))
+        phi = np.arctan2(diffs[:, 1], diffs[:, 0])
+        
+        # Radial basis values: (n_neigh, n_max)
+        g_nj = _soap_radial_basis(dists, n_max, r_cut, sigma)
+        
+        # Weight by cutoff
+        g_nj = g_nj * f_cut[:, np.newaxis]
+        
+        # Compute c_nlm coefficients by summing over neighbors
+        # c_nlm = sum_j g_n(r_j) * Y_l^m(theta_j, phi_j)*
+        c_nlm = np.zeros((n_max, l_max + 1, 2 * l_max + 1), dtype=complex)
+        
+        for l in range(l_max + 1):
+            for m in range(-l, l + 1):
+                # scipy.special.sph_harm_y uses (n, m, theta, phi) where n=l
+                ylm = sph_harm_y(l, m, theta, phi)  # (n_neigh,)
+                for n in range(n_max):
+                    c_nlm[n, l, m + l_max] = np.sum(g_nj[:, n] * np.conj(ylm))
+        
+        # Compute power spectrum p_nn'l
+        idx = 0
+        for l in range(l_max + 1):
+            for n in range(n_max):
+                for np_ in range(n, n_max):  # n' >= n (exploit symmetry)
+                    # p_nn'l = sqrt(8/(2l+1)) * sum_m c*_nlm c_n'lm
+                    val = 0.0
+                    for m in range(-l, l + 1):
+                        val += np.conj(c_nlm[n, l, m + l_max]) * c_nlm[np_, l, m + l_max]
+                    power_spectrum[i, idx] = np.real(val) * np.sqrt(8.0 / (2 * l + 1))
+                    idx += 1
+    
+    if normalized:
+        # L2 normalize each atom's descriptor
+        norms = np.linalg.norm(power_spectrum, axis=1, keepdims=True)
+        norms[norms < 1e-15] = 1.0
+        power_spectrum = power_spectrum / norms
+    
+    # Store results
+    atoms.arrays["pyscal_soap"] = power_spectrum
+    
+    return {
+        "power_spectrum": power_spectrum,
+        "n_max": n_max,
+        "l_max": l_max,
+        "r_cut": r_cut,
+        "sigma": sigma,
+        "descriptor_size": desc_size,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Common Neighbor Analysis
 # ---------------------------------------------------------------------------
 
