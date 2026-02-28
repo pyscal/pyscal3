@@ -4,6 +4,7 @@ Reference values from:
   Steinhardt, Nelson & Ronchetti, Phys. Rev. B 28, 784 (1983), Table I.
   Lechner & Dellago, J. Chem. Phys. 129, 114707 (2008).
 """
+
 import numpy as np
 import pytest
 import pyscal3
@@ -11,6 +12,7 @@ from pyscal3.structures import make_crystal
 
 
 # --------------- perfect-crystal fixtures ---------------
+
 
 @pytest.fixture
 def fcc_atoms():
@@ -35,6 +37,7 @@ def hcp_atoms():
 
 # --------------- FCC tests ---------------
 
+
 def test_what6_fcc(fcc_atoms):
     """W-hat_6 for FCC = -0.01316 (Steinhardt 1983, Table I)."""
     [w6] = pyscal3.wigner_w_parameter(fcc_atoms, l=[6])
@@ -48,6 +51,7 @@ def test_what4_fcc(fcc_atoms):
 
 
 # --------------- BCC tests ---------------
+
 
 def test_what6_bcc(bcc_atoms):
     """W-hat_6 for BCC = +0.01316 (Steinhardt 1983, Table I)."""
@@ -63,6 +67,7 @@ def test_what4_bcc(bcc_atoms):
 
 # --------------- HCP tests ---------------
 
+
 def test_what6_hcp(hcp_atoms):
     """W-hat_6 for HCP = -0.01244 (Steinhardt 1983, Table I)."""
     [w6] = pyscal3.wigner_w_parameter(hcp_atoms, l=[6])
@@ -71,6 +76,7 @@ def test_what6_hcp(hcp_atoms):
 
 # --------------- odd l → zero ---------------
 
+
 def test_odd_l_zero(fcc_atoms):
     """W_l = 0 for odd l (3j symbol vanishes when 3l is odd)."""
     [w5] = pyscal3.wigner_w_parameter(fcc_atoms, l=[5])
@@ -78,6 +84,7 @@ def test_odd_l_zero(fcc_atoms):
 
 
 # --------------- unnormalised W_l ---------------
+
 
 def test_raw_w6_fcc(fcc_atoms):
     """Raw (unnormalised) W_6 for FCC should be finite and non-zero."""
@@ -89,6 +96,7 @@ def test_raw_w6_fcc(fcc_atoms):
 
 # --------------- multi-l call ---------------
 
+
 def test_multi_l(fcc_atoms):
     """Passing l=[4,6] returns two arrays with correct values."""
     w4, w6 = pyscal3.wigner_w_parameter(fcc_atoms, l=[4, 6])
@@ -98,6 +106,7 @@ def test_multi_l(fcc_atoms):
 
 # --------------- single int l ---------------
 
+
 def test_single_int_l(bcc_atoms):
     """Passing l as int (not list) should work."""
     [w6] = pyscal3.wigner_w_parameter(bcc_atoms, l=6)
@@ -105,6 +114,7 @@ def test_single_int_l(bcc_atoms):
 
 
 # --------------- averaged (Lechner-Dellago) ---------------
+
 
 def test_averaged_what6_fcc(fcc_atoms):
     """Averaged W-hat_6 for perfect FCC equals the per-atom value."""
@@ -119,6 +129,7 @@ def test_averaged_what6_bcc(bcc_atoms):
 
 
 # --------------- FCC vs BCC sign discrimination ---------------
+
 
 def test_fcc_bcc_sign_discriminate():
     """W-hat_6 has opposite sign for FCC and BCC — useful for classification."""
