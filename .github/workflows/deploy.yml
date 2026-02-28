@@ -28,13 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Linux aarch64 builds need QEMU emulation
-      - name: Set up QEMU
-        if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
 
