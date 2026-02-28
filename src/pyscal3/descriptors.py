@@ -461,6 +461,100 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
 
 
 # ---------------------------------------------------------------------------
+# Angular Distribution Function
+# ---------------------------------------------------------------------------
+
+def angular_distribution_function(atoms: Atoms, bins=180):
+    """
+    Calculate the angular distribution function (ADF).
+
+    The ADF is the histogram of all bond angles :math:`\\theta_{jik}` formed
+    by pairs of neighbors (j, k) around each atom i.  It characterises the
+    local angular environment independently of a specific order parameter.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    bins : int
+        Number of histogram bins in the angle range [0, 180] degrees.
+        Default 180 (1-degree resolution).
+
+    Returns
+    -------
+    (adf, angles) : tuple of numpy.ndarray
+        ``adf`` is the normalised probability density of bond angles, and
+        ``angles`` is the array of bin left-edges in degrees.
+
+    Notes
+    -----
+    Angles are computed from the cosine of the angle between displacement
+    vectors, using the same C++ infrastructure as :func:`chi_params`.
+    Results are also stored in ``atoms.info["pyscal_adf"]`` and
+    ``atoms.info["pyscal_adf_angles"]``.
+    """
+    # Use chi_params(angles=True) to get all pairwise cosines
+    _, cosines_list = chi_params(atoms, angles=True)
+
+    # Flatten all cosines and convert to degrees
+    all_cosines = np.concatenate([np.array(c) for c in cosines_list])
+    # Clamp to [-1, 1] to avoid NaN from acos
+    all_cosines = np.clip(all_cosines, -1.0, 1.0)
+    all_angles = np.degrees(np.arccos(all_cosines))
+
+    hist, bin_edges = np.histogram(all_angles, bins=bins, range=(0, 180),
+                                   density=True)
+    angles = bin_edges[:-1]
+
+    atoms.info["pyscal_adf"] = hist
+    atoms.info["pyscal_adf_angles"] = angles
+    return hist, angles
+
+
+def bond_length_distribution(atoms: Atoms, bins=100, rmin=None, rmax=None):
+    """
+    Calculate the bond-length distribution function (BLDF).
+
+    Unlike the full radial distribution function, the BLDF histograms only
+    the bonds defined by the current neighbor list (no shell-volume
+    normalisation).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    bins : int
+        Number of histogram bins.  Default 100.
+    rmin, rmax : float or None
+        Distance range.  If None, determined from the data.
+
+    Returns
+    -------
+    (bldf, r) : tuple of numpy.ndarray
+        ``bldf`` is the normalised probability density, and ``r`` is the
+        array of bin left-edges.  Results are also stored in
+        ``atoms.info["pyscal_bldf"]`` and ``atoms.info["pyscal_bldf_r"]``.
+    """
+    ensure_neighbors(atoms)
+    dists = atoms.arrays["pyscal_neighbordist"]
+    mask = dists > 0
+    all_dists = dists[mask].ravel()
+
+    if rmin is None:
+        rmin = all_dists.min() * 0.9
+    if rmax is None:
+        rmax = all_dists.max() * 1.1
+
+    hist, bin_edges = np.histogram(all_dists, bins=bins, range=(rmin, rmax),
+                                   density=True)
+    r = bin_edges[:-1]
+
+    atoms.info["pyscal_bldf"] = hist
+    atoms.info["pyscal_bldf_r"] = r
+    return hist, r
+
+
+# ---------------------------------------------------------------------------
 # Angular Criteria
 # ---------------------------------------------------------------------------
 

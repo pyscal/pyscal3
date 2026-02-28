@@ -1,0 +1,14 @@
+feat(adf): add angular & bond-length distribution functions
+
+New descriptors:
+- angular_distribution_function(): histogram of all bond angles
+  theta_jik formed by neighbor pairs around each atom
+- bond_length_distribution(): histogram of neighbor distances
+  (like RDF but without shell-volume normalisation)
+
+Both are pure-Python wrappers (no C++ changes needed):
+- ADF reuses chi_params(angles=True) cosine computation
+- BLDF uses existing pyscal_neighbordist neighbor data
+
+Validated: FCC peaks at 60/90/120/180 deg; BCC at ~70.5/109.5 deg
+13 tests, example notebook 18_angular_bond_distributions.ipynb
