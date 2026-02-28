@@ -85,8 +85,9 @@ test-command = "pytest {project}/tests --ignore={project}/tests/_old_tests -x -q
 [tool.cibuildwheel.linux]
 # Build x86_64 and aarch64; skip testing aarch64 (QEMU too slow)
 archs = ["x86_64", "aarch64"]
-manylinux-x86_64-image = "manylinux2014"
-manylinux-aarch64-image = "manylinux2014"
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+before-test = "pip install --upgrade pip"
 test-skip = "*-manylinux_aarch64"
 
 [tool.cibuildwheel.macos]
