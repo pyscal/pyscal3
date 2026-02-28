@@ -522,6 +522,120 @@ def chi_params(atoms: Atoms, angles=False):
 
 
 # ---------------------------------------------------------------------------
+# Polyhedral Template Matching
+# ---------------------------------------------------------------------------
+
+# PTM structure-type flags (from ptm_constants.h)
+_PTM_CHECK_FCC      = 1 << 0
+_PTM_CHECK_HCP      = 1 << 1
+_PTM_CHECK_BCC      = 1 << 2
+_PTM_CHECK_ICO      = 1 << 3
+_PTM_CHECK_SC       = 1 << 4
+_PTM_CHECK_DCUB     = 1 << 5
+_PTM_CHECK_DHEX     = 1 << 6
+_PTM_CHECK_GRAPHENE = 1 << 7
+_PTM_CHECK_DEFAULT  = _PTM_CHECK_FCC | _PTM_CHECK_HCP | _PTM_CHECK_ICO | _PTM_CHECK_BCC
+_PTM_CHECK_ALL      = (_PTM_CHECK_SC | _PTM_CHECK_FCC | _PTM_CHECK_HCP |
+                       _PTM_CHECK_ICO | _PTM_CHECK_BCC | _PTM_CHECK_DCUB |
+                       _PTM_CHECK_DHEX | _PTM_CHECK_GRAPHENE)
+
+_PTM_STRUCTURE_MAP = {
+    "fcc": _PTM_CHECK_FCC, "hcp": _PTM_CHECK_HCP, "bcc": _PTM_CHECK_BCC,
+    "ico": _PTM_CHECK_ICO, "sc": _PTM_CHECK_SC, "dcub": _PTM_CHECK_DCUB,
+    "dhex": _PTM_CHECK_DHEX, "graphene": _PTM_CHECK_GRAPHENE,
+    "default": _PTM_CHECK_DEFAULT, "all": _PTM_CHECK_ALL,
+}
+
+# Output type → label mapping
+PTM_TYPES = {
+    0: "other", 1: "fcc", 2: "hcp", 3: "bcc", 4: "ico",
+    5: "sc", 6: "dcub", 7: "dhex", 8: "graphene",
+}
+
+
+def polyhedral_template_matching(
+    atoms: Atoms,
+    structures="default",
+    rmsd_cutoff=0.1,
+):
+    """
+    Identify local crystal structures via Polyhedral Template Matching.
+
+    PTM (Larsen, Schmidt & Schiøtz, *MSMSE* 24, 055007, 2016) matches
+    each atom's neighbourhood against ideal polyhedral templates.  It is
+    more robust than CNA at finite temperature and also yields the
+    crystal orientation.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure.  Neighbors are computed automatically if needed
+        (at least 18 nearest neighbors are required).
+    structures : str or list of str
+        Which structures to check.  ``"default"`` = FCC/HCP/BCC/ICO.
+        ``"all"`` = all eight types.  Or a list like ``["fcc", "bcc"]``.
+        Valid names: fcc, hcp, bcc, ico, sc, dcub, dhex, graphene.
+    rmsd_cutoff : float
+        Maximum RMSD for a match; atoms above this are labelled "other".
+        Use 0 or ``inf`` for no cutoff.  Default 0.1.
+
+    Returns
+    -------
+    numpy.ndarray of int32, shape (natoms,)
+        Structure-type codes (see :data:`PTM_TYPES`).
+        Also stored as ``atoms.arrays["pyscal_ptm_type"]``
+        together with ``pyscal_ptm_rmsd`` (float64) and
+        ``pyscal_ptm_orientation`` ([N, 4] quaternion).
+
+    Notes
+    -----
+    Requires at least 18 neighbors for single-shell structures and
+    16 for diamond/graphene two-shell matching.  If neighbors have
+    not yet been computed, ``find_neighbors`` is called with
+    ``method='number', nmax=18``.
+    """
+    # Parse structure flags
+    if isinstance(structures, str):
+        structures = [structures]
+    flags = 0
+    for s in structures:
+        s = s.lower().strip()
+        if s not in _PTM_STRUCTURE_MAP:
+            raise ValueError(
+                "Unknown PTM structure '{}'. Valid: {}".format(
+                    s, list(_PTM_STRUCTURE_MAP.keys())
+                )
+            )
+        flags |= _PTM_STRUCTURE_MAP[s]
+
+    # Ensure enough neighbors (PTM needs up to 18)
+    if "pyscal_neighbors" not in atoms.arrays:
+        from pyscal3.neighbors import find_neighbors
+        find_neighbors(atoms, method="number", nmax=18)
+    else:
+        max_nn = atoms.arrays["pyscal_neighbors"].shape[1]
+        if max_nn < 18:
+            from pyscal3.neighbors import find_neighbors
+            find_neighbors(atoms, method="number", nmax=18)
+
+    d = _get_dict_with_neighbors(atoms)
+
+    pc.calculate_ptm(d, flags, rmsd_cutoff)
+
+    types = np.array(d["ptm_type"], dtype=np.int32)
+    rmsds = np.array(d["ptm_rmsd"], dtype=np.float64)
+    quats = np.array(d["ptm_quat"], dtype=np.float64).reshape(-1, 4)
+    iad   = np.array(d["ptm_interatomic_distance"], dtype=np.float64)
+
+    atoms.arrays["pyscal_ptm_type"] = types
+    atoms.arrays["pyscal_ptm_rmsd"] = rmsds
+    atoms.arrays["pyscal_ptm_orientation"] = quats
+    atoms.arrays["pyscal_ptm_interatomic_distance"] = iad
+
+    return types
+
+
+# ---------------------------------------------------------------------------
 # Solid/Liquid Identification
 # ---------------------------------------------------------------------------
 

@@ -1,0 +1,17 @@
+feat(ptm): add Polyhedral Template Matching
+
+Vendor the PTM C++ library (MIT, Larsen et al. MSMSE 2016) into
+lib/ptm/ and integrate with pyscal3 via a pybind11 wrapper.
+
+New function polyhedral_template_matching() identifies 8 structure
+types: FCC, HCP, BCC, ICO, SC, diamond cubic, diamond hex, graphene.
+
+Outputs per atom: structure type, RMSD, orientation quaternion,
+interatomic distance, lattice constant, alloy type.
+
+- C++ wrapper (ptm_wrapper.cpp) implements PTM neighbor callback
+  using pyscal3's displacement-vector neighbor data
+- Automatic neighbor finding (18 nearest) if not pre-computed
+- Configurable structure checks and RMSD cutoff
+- 15 tests (perfect crystals, noisy, parameter validation)
+- Example notebook 19_polyhedral_template_matching.ipynb

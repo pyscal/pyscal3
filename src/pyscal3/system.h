@@ -372,3 +372,8 @@ void calculate_average_disorder(py::dict& atoms);
 py::list calculate_average_over_neighbors(py::dict& atoms,
     const vector<double>& values,
     bool include_self);
+
+/*-----------------------------------------------------
+    Polyhedral Template Matching (ptm_wrapper.cpp)
+-----------------------------------------------------*/
+void calculate_ptm(py::dict& atoms, int32_t flags, double rmsd_cutoff);
