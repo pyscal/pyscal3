@@ -58,6 +58,8 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     vector<double> volume(nop);
     vector<vector<int>> face_vertices(nop);
     vector<vector<double>> face_perimeters(nop);
+    vector<vector<double>> face_areas(nop);
+    vector<double> surface_area(nop, 0.0);
     vector<vector<double>> vertex_vectors(nop);
     vector<vector<int>> vertex_numbers(nop);
     vector<vector<vector<double>>> vertex_positions(nop);
@@ -126,6 +128,8 @@ void get_all_neighbors_voronoi(py::dict& atoms,
 
             face_vertices[ti].emplace_back(f_vert[tj]);
             face_perimeters[ti].emplace_back(faceperimeters[tj]);
+            face_areas[ti].emplace_back(facearea[tj]);
+            surface_area[ti] += facearea[tj];
 
             diffi.clear();
             diffi.emplace_back(diffx);
@@ -157,6 +161,8 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     atoms[py::str("voronoi_volume")] = volume;
     atoms[py::str("face_vertices")] = face_vertices;
     atoms[py::str("face_perimeters")] = face_perimeters;
+    atoms[py::str("face_areas")] = face_areas;
+    atoms[py::str("voronoi_surface_area")] = surface_area;
     atoms[py::str("vertex_vectors")] = vertex_vectors;
     atoms[py::str("vertex_numbers")] = vertex_numbers;
     atoms[py::str("vertex_is_unique")] = vertex_unique;

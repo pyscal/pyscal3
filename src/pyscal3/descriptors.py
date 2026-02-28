@@ -329,6 +329,128 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
 
 
 # ---------------------------------------------------------------------------
+# Voronoi Topology Descriptors
+# ---------------------------------------------------------------------------
+
+def _ensure_voronoi(atoms):
+    """Ensure Voronoi tessellation has been computed."""
+    d = _get_dict_with_neighbors(atoms)
+    if "face_vertices" not in d:
+        raise ValueError(
+            "Voronoi analysis required. "
+            "Call find_neighbors(atoms, method='voronoi') first."
+        )
+    return d
+
+
+def voronoi_cell_volume(atoms: Atoms):
+    """
+    Return the Voronoi cell volume for each atom.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with Voronoi neighbors computed.
+
+    Returns
+    -------
+    numpy.ndarray of float64
+        Per-atom cell volumes (Angstrom^3).
+        Also stored as ``atoms.arrays["pyscal_voronoi_volume"]``.
+    """
+    d = _ensure_voronoi(atoms)
+    vol = np.array(d["voronoi_volume"], dtype=np.float64)
+    atoms.arrays["pyscal_voronoi_volume"] = vol
+    return vol
+
+
+def voronoi_sphericity(atoms: Atoms):
+    r"""
+    Isoperimetric quotient (sphericity) of each Voronoi cell.
+
+    .. math::
+
+        \text{IQ} = \frac{36 \pi V^2}{A^3}
+
+    where *V* is the cell volume and *A* the total surface area.
+    IQ = 1 for a perfect sphere; smaller for less spherical cells.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with Voronoi neighbors computed.
+
+    Returns
+    -------
+    numpy.ndarray of float64
+        Per-atom isoperimetric quotient.
+        Also stored as ``atoms.arrays["pyscal_voronoi_sphericity"]``.
+    """
+    d = _ensure_voronoi(atoms)
+    vol = np.array(d["voronoi_volume"], dtype=np.float64)
+    sa  = np.array(d["voronoi_surface_area"], dtype=np.float64)
+    iq = np.where(sa > 0, 36 * np.pi * vol**2 / sa**3, 0.0)
+    atoms.arrays["pyscal_voronoi_sphericity"] = iq
+    return iq
+
+
+def voronoi_face_analysis(atoms: Atoms):
+    """
+    Compute per-atom statistics of Voronoi face areas and perimeters.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with Voronoi neighbors computed.
+
+    Returns
+    -------
+    dict
+        Keys: ``"n_faces"`` (int, number of faces per atom),
+        ``"mean_face_area"`` (float), ``"std_face_area"`` (float),
+        ``"max_face_area"`` (float), ``"mean_face_perimeter"`` (float).
+        All values are numpy arrays of shape (natoms,).
+        Results are also stored in ``atoms.arrays`` under the names
+        ``pyscal_voronoi_nfaces``, ``pyscal_voronoi_mean_face_area``,
+        etc.
+    """
+    d = _ensure_voronoi(atoms)
+    face_areas_list = d["face_areas"]
+    face_perim_list = d["face_perimeters"]
+
+    n = len(atoms)
+    nfaces = np.zeros(n, dtype=np.int32)
+    mean_area = np.zeros(n)
+    std_area  = np.zeros(n)
+    max_area  = np.zeros(n)
+    mean_perim = np.zeros(n)
+
+    for i in range(n):
+        fa = np.array(face_areas_list[i], dtype=np.float64)
+        fp = np.array(face_perim_list[i], dtype=np.float64)
+        nfaces[i] = len(fa)
+        if len(fa) > 0:
+            mean_area[i] = fa.mean()
+            std_area[i]  = fa.std()
+            max_area[i]  = fa.max()
+            mean_perim[i] = fp.mean()
+
+    atoms.arrays["pyscal_voronoi_nfaces"] = nfaces
+    atoms.arrays["pyscal_voronoi_mean_face_area"] = mean_area
+    atoms.arrays["pyscal_voronoi_std_face_area"] = std_area
+    atoms.arrays["pyscal_voronoi_max_face_area"] = max_area
+    atoms.arrays["pyscal_voronoi_mean_face_perimeter"] = mean_perim
+
+    return {
+        "n_faces": nfaces,
+        "mean_face_area": mean_area,
+        "std_face_area": std_area,
+        "max_face_area": max_area,
+        "mean_face_perimeter": mean_perim,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Entropy Parameter
 # ---------------------------------------------------------------------------
 

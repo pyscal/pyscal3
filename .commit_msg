@@ -1,0 +1,11 @@
+feat(voronoi-topology): add cell volume, sphericity, face analysis
+
+New Voronoi topology descriptors:
+- voronoi_cell_volume(): per-atom Voronoi cell volumes
+- voronoi_sphericity(): isoperimetric quotient IQ = 36piV^2/A^3
+- voronoi_face_analysis(): per-face statistics (count, areas, perimeters)
+
+C++ changes: store face areas and total surface area from voro++
+(previously computed but discarded after weight calculation).
+
+14 tests, example notebook 20_voronoi_topology.ipynb
