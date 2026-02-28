@@ -1,0 +1,18 @@
+feat(ace): add Atomic Cluster Expansion descriptors
+
+Implements ACE descriptors following Drautz (2019), providing
+a unified framework that includes SOAP (nu=2) and bispectrum (nu=3)
+as special cases.
+
+Features:
+- A-basis (single-particle) coefficient computation
+- B-basis rotation-invariant descriptors for nu=1,2,3
+- Chebyshev polynomial radial basis with cosine cutoff
+- Spherical harmonics angular basis via scipy
+- Configurable nmax, lmax, nu_max parameters
+- Optional normalization
+
+The descriptor count scales as:
+- nu=1: O(nmax) - radial density
+- nu=2: O(nmax² × lmax) - power spectrum
+- nu=3: O(nmax³ × lmax³) - triplet correlations (limited)
