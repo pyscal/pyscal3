@@ -108,6 +108,227 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
 
 
 # ---------------------------------------------------------------------------
+# Moment Tensor Potentials (MTP) Descriptors
+# ---------------------------------------------------------------------------
+
+def _mtp_cutoff(r, r_cut):
+    """Smooth polynomial cutoff for MTP: (1 - r/r_cut)^2."""
+    mask = r < r_cut
+    result = np.zeros_like(r)
+    result[mask] = (1.0 - r[mask] / r_cut)**2
+    return result
+
+
+def _chebyshev_basis(r, n_basis, r_min, r_max):
+    """
+    Evaluate Chebyshev polynomials T_0 to T_{n_basis-1}.
+    
+    Maps r to [-1, 1] via: x = (2r - r_min - r_max) / (r_max - r_min)
+    """
+    # Clip r to [r_min, r_max] for stability
+    r_clipped = np.clip(r, r_min, r_max)
+    
+    # Map to [-1, 1]
+    x = (2*r_clipped - r_min - r_max) / (r_max - r_min + 1e-10)
+    
+    basis = np.zeros((len(r), n_basis))
+    basis[:, 0] = 1.0
+    if n_basis > 1:
+        basis[:, 1] = x
+    for n in range(2, n_basis):
+        basis[:, n] = 2*x*basis[:, n-1] - basis[:, n-2]
+    
+    return basis
+
+
+def moment_tensor_descriptors(atoms: Atoms, level=8, n_radial=4, r_cut=5.0,
+                               normalized=True):
+    """
+    Calculate MTP (Moment Tensor Potentials) descriptors.
+    
+    MTP descriptors provide systematically improvable invariant descriptions
+    of local atomic environments through moment tensor contractions.
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        Structure with neighbors already computed via find_neighbors.
+    level : int, optional
+        Maximum level for basis functions. Higher = more descriptors.
+        Typical values: 8, 10, 12. Default 8.
+    n_radial : int, optional
+        Number of radial (Chebyshev) basis functions. Default 4.
+    r_cut : float, optional
+        Cutoff radius. Default 5.0.
+    normalized : bool, optional
+        If True, L2-normalize descriptors. Default True.
+    
+    Returns
+    -------
+    dict
+        "descriptors": (N, D) array of MTP descriptors
+        "level": level used
+        "n_radial": number of radial functions
+        "descriptor_size": D
+    
+    Notes
+    -----
+    The moment tensor of rank nu is:
+    
+        M_{mu,nu} = sum_j f_mu(r_ij) * r_ij ⊗ r_ij ⊗ ... ⊗ r_ij (nu times)
+    
+    Scalar invariants are obtained by contracting these tensors.
+    
+    Level controls which basis functions are included:
+    - Level 2: M_{0,0} (coordination-like)
+    - Level 6: M_{1,0}, tr(M_{0,2})
+    - Level 8: M_{0,1} · M_{0,1} (angular correlations)
+    - Higher: More body-order terms
+    
+    Results stored in atoms.arrays["pyscal_mtp"].
+    
+    References
+    ----------
+    Shapeev, Multiscale Model. Simul. 14, 1153-1173 (2016)
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(2)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=6.0)
+    >>> result = pyscal3.moment_tensor_descriptors(atoms, level=8)
+    >>> print(result["descriptors"].shape)
+    """
+    d = _get_dict_with_neighbors(atoms)
+    n_atoms = len(atoms)
+    
+    # Collect all distances to determine r_min
+    all_dists = []
+    for i in range(n_atoms):
+        neighbors_i = d["neighbors"][i]
+        if hasattr(neighbors_i, '__len__') and len(neighbors_i) > 0:
+            dists_i = np.array(d["neighbordist"][i])
+            mask = dists_i < r_cut
+            if np.any(mask):
+                all_dists.extend(dists_i[mask].tolist())
+    
+    r_min = min(all_dists) * 0.5 if all_dists else 0.5
+    r_max = r_cut
+    
+    # Determine which basis functions to include based on level
+    # Format: list of (function_name, mu_list, nu_list)
+    # Level formula: lev = 2 + 4*mu + nu for single tensor
+    basis_specs = []
+    
+    # Level 2: M_{0,0}
+    if level >= 2:
+        for mu in range(n_radial):
+            if 2 + 4*mu <= level:
+                basis_specs.append(("M", mu, 0))
+    
+    # Level 6+: tr(M_{mu,2}) 
+    if level >= 6:
+        for mu in range(n_radial):
+            if 2 + 4*mu + 2 <= level:
+                basis_specs.append(("trM2", mu, 2))
+    
+    # Level 8+: M_{mu1,1} · M_{mu2,1} (dot product of rank-1 tensors)
+    if level >= 8:
+        for mu1 in range(n_radial):
+            for mu2 in range(mu1, n_radial):  # mu2 >= mu1 by symmetry
+                if 2 + 4*mu1 + 1 + 4*mu2 + 1 <= level:
+                    basis_specs.append(("M1M1", mu1, mu2))
+    
+    # Level 10+: tr(tr(M_{mu,4})) - trace twice on rank-4 tensor
+    if level >= 10:
+        for mu in range(n_radial):
+            if 2 + 4*mu + 4 <= level:
+                basis_specs.append(("trtrM4", mu, 4))
+    
+    desc_size = len(basis_specs)
+    if desc_size == 0:
+        desc_size = 1  # Ensure at least one descriptor
+        basis_specs.append(("M", 0, 0))
+    
+    descriptors = np.zeros((n_atoms, desc_size))
+    
+    for i in range(n_atoms):
+        neighbors_i = d["neighbors"][i]
+        n_neigh = len(neighbors_i) if hasattr(neighbors_i, '__len__') else 0
+        
+        if n_neigh == 0:
+            continue
+        
+        # Get neighbor displacements and distances
+        diffs = np.array(d["diff"][i])  # (n_neigh, 3)
+        dists = np.array(d["neighbordist"][i])  # (n_neigh,)
+        
+        # Filter to within r_cut
+        mask = dists < r_cut
+        if not np.any(mask):
+            continue
+        
+        diffs = diffs[mask]
+        dists = dists[mask]
+        n_neigh = len(dists)
+        
+        # Cutoff weights
+        f_cut = _mtp_cutoff(dists, r_cut)
+        
+        # Radial basis values: (n_neigh, n_radial)
+        phi = _chebyshev_basis(dists, n_radial, r_min, r_max)
+        
+        # Weighted radial basis
+        f_mu = phi * f_cut[:, np.newaxis]  # (n_neigh, n_radial)
+        
+        # Compute each basis function
+        for idx, spec in enumerate(basis_specs):
+            if spec[0] == "M":
+                # M_{mu,0} = sum_j f_mu(r_ij) - just radial sum
+                mu = spec[1]
+                descriptors[i, idx] = np.sum(f_mu[:, mu])
+            
+            elif spec[0] == "trM2":
+                # tr(M_{mu,2}) = sum_j f_mu * |r_ij|^2
+                mu = spec[1]
+                r2 = dists**2
+                descriptors[i, idx] = np.sum(f_mu[:, mu] * r2)
+            
+            elif spec[0] == "M1M1":
+                # M_{mu1,1} · M_{mu2,1} = sum_{j,k} f_mu1(j) f_mu2(k) (r_j · r_k)
+                mu1, mu2 = spec[1], spec[2]
+                # M_{mu,1} = sum_j f_mu(j) * r_j  -> (3,) vector
+                M1 = np.sum(f_mu[:, mu1, np.newaxis] * diffs, axis=0)
+                M2 = np.sum(f_mu[:, mu2, np.newaxis] * diffs, axis=0)
+                descriptors[i, idx] = np.dot(M1, M2)
+            
+            elif spec[0] == "trtrM4":
+                # Double trace of rank-4 tensor: sum_j f_mu |r_j|^4
+                # This is trace(trace(M_{mu,4})) which simplifies to scalar
+                mu = spec[1]
+                r4 = dists**4
+                descriptors[i, idx] = np.sum(f_mu[:, mu] * r4)
+    
+    if normalized:
+        norms = np.linalg.norm(descriptors, axis=1, keepdims=True)
+        norms[norms < 1e-15] = 1.0
+        descriptors = descriptors / norms
+    
+    # Store results
+    atoms.arrays["pyscal_mtp"] = descriptors
+    
+    return {
+        "descriptors": descriptors,
+        "level": level,
+        "n_radial": n_radial,
+        "r_cut": r_cut,
+        "descriptor_size": desc_size,
+        "basis_specs": basis_specs,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Disorder Parameter
 # ---------------------------------------------------------------------------
 
