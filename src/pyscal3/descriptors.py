@@ -14,14 +14,18 @@ Example
 >>> q = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
 >>> print(atoms.arrays["pyscal_q4"])
 """
+
 import numpy as np
 import itertools
 from ase import Atoms
 
 import pyscal3.csystem as pc
 from pyscal3._bridge import (
-    get_box_params, atoms_to_dict, dict_to_atoms,
-    ensure_neighbors, create_attribute,
+    get_box_params,
+    atoms_to_dict,
+    dict_to_atoms,
+    ensure_neighbors,
+    create_attribute,
     pad_atoms_for_neighbor_finding,
 )
 from pyscal3.neighbors import find_neighbors
@@ -30,6 +34,7 @@ from pyscal3.neighbors import find_neighbors
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_dict_with_neighbors(atoms: Atoms) -> dict:
     """Build the C++ dict, ensuring neighbors exist."""
@@ -46,7 +51,7 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
         store_key = "pyscal_" + key
         try:
             arr = np.asarray(d[key])
-            if arr.ndim >= 1 and len(arr) == n and arr.dtype.kind != 'O':
+            if arr.ndim >= 1 and len(arr) == n and arr.dtype.kind != "O":
                 atoms.arrays[store_key] = arr
                 continue
         except (ValueError, TypeError):
@@ -57,6 +62,7 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
 # ---------------------------------------------------------------------------
 # Steinhardt Parameters
 # ---------------------------------------------------------------------------
+
 
 def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     """
@@ -98,10 +104,14 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     # Sync all q-related keys back
     sync_keys = []
     for val in ll:
-        sync_keys.extend([
-            "q%d" % val, "q%d_real" % val, "q%d_imag" % val,
-            "avg_q%d" % val,
-        ])
+        sync_keys.extend(
+            [
+                "q%d" % val,
+                "q%d_real" % val,
+                "q%d_imag" % val,
+                "avg_q%d" % val,
+            ]
+        )
     _sync_back(d, atoms, sync_keys)
 
     return [np.array(d[k]) for k in result_keys]
@@ -110,6 +120,7 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
 # ---------------------------------------------------------------------------
 # Disorder Parameter
 # ---------------------------------------------------------------------------
+
 
 def disorder(atoms: Atoms, q=6, averaged=False):
     """
@@ -139,12 +150,12 @@ def disorder(atoms: Atoms, q=6, averaged=False):
             need_calc = True
             break
         v = d[k]
-        if not hasattr(v, '__len__') or len(v) == 0:
+        if not hasattr(v, "__len__") or len(v) == 0:
             need_calc = True
             break
         # Check if it looks like a 2-D container (list-of-lists or 2-D array)
         first = v[0]
-        if not (hasattr(first, '__len__') and not isinstance(first, str)):
+        if not (hasattr(first, "__len__") and not isinstance(first, str)):
             need_calc = True
             break
     if need_calc:
@@ -169,6 +180,7 @@ def disorder(atoms: Atoms, q=6, averaged=False):
 # ---------------------------------------------------------------------------
 # Common Neighbor Analysis
 # ---------------------------------------------------------------------------
+
 
 def common_neighbor_analysis(atoms: Atoms, lattice_constant=None):
     """
@@ -259,6 +271,7 @@ def diamond_structure(atoms: Atoms):
 # Centrosymmetry Parameter
 # ---------------------------------------------------------------------------
 
+
 def centrosymmetry(atoms: Atoms, nmax=12):
     """
     Calculate the centrosymmetry parameter.
@@ -281,7 +294,7 @@ def centrosymmetry(atoms: Atoms, nmax=12):
         raise ValueError("nmax must be even")
 
     # Find neighbors by number
-    find_neighbors(atoms, method='number', nmax=nmax, assign_neighbor=True)
+    find_neighbors(atoms, method="number", nmax=nmax, assign_neighbor=True)
     d = _get_dict_with_neighbors(atoms)
     d["centrosymmetry"] = [0.0] * len(atoms)
 
@@ -295,6 +308,7 @@ def centrosymmetry(atoms: Atoms, nmax=12):
 # ---------------------------------------------------------------------------
 # Voronoi Vector
 # ---------------------------------------------------------------------------
+
 
 def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
     """
@@ -332,8 +346,10 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
 # Entropy Parameter
 # ---------------------------------------------------------------------------
 
-def entropy(atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001,
-            local=False, average=False):
+
+def entropy(
+    atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001, local=False, average=False
+):
     """
     Calculate the entropy parameter for each atom.
 
@@ -389,6 +405,7 @@ def entropy(atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001,
 # Short-Range Order
 # ---------------------------------------------------------------------------
 
+
 def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=True):
     """
     Calculate Warren-Cowley short-range order parameter.
@@ -425,6 +442,7 @@ def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=Tr
 # Radial Distribution Function
 # ---------------------------------------------------------------------------
 
+
 def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     """
     Calculate radial distribution function g(r).
@@ -446,7 +464,9 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     d = atoms_to_dict(atoms)
 
     distances = np.concatenate(d["neighbordist"])
-    hist, bin_edges = np.histogram(distances, bins=bins, range=(rmin, rmax), density=True)
+    hist, bin_edges = np.histogram(
+        distances, bins=bins, range=(rmin, rmax), density=True
+    )
 
     edgewidth = abs(bin_edges[1] - bin_edges[0])
     r = bin_edges[:-1]
@@ -454,7 +474,7 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     volume = abs(np.linalg.det(atoms.cell))
     rho = n / volume
 
-    shell_vols = (4.0 / 3.0) * np.pi * ((r + edgewidth) ** 3 - r ** 3)
+    shell_vols = (4.0 / 3.0) * np.pi * ((r + edgewidth) ** 3 - r**3)
     rdf = (hist / shell_vols) / rho
 
     return rdf, r
@@ -463,6 +483,7 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
 # ---------------------------------------------------------------------------
 # Angular Criteria
 # ---------------------------------------------------------------------------
+
 
 def angular_criteria(atoms: Atoms):
     """
@@ -490,6 +511,7 @@ def angular_criteria(atoms: Atoms):
 # ---------------------------------------------------------------------------
 # Chi Parameters
 # ---------------------------------------------------------------------------
+
 
 def chi_params(atoms: Atoms, angles=False):
     """
@@ -525,8 +547,17 @@ def chi_params(atoms: Atoms, angles=False):
 # Solid/Liquid Identification
 # ---------------------------------------------------------------------------
 
-def find_solids(atoms: Atoms, bonds=0.5, threshold=0.5, avgthreshold=0.6,
-                cluster=True, q=6, cutoff=0, right=True):
+
+def find_solids(
+    atoms: Atoms,
+    bonds=0.5,
+    threshold=0.5,
+    avgthreshold=0.6,
+    cluster=True,
+    q=6,
+    cutoff=0,
+    right=True,
+):
     """
     Distinguish solid and liquid atoms.
 
@@ -571,12 +602,16 @@ def find_solids(atoms: Atoms, bonds=0.5, threshold=0.5, avgthreshold=0.6,
     # Calculate bonds/solid classification
     pc.calculate_bonds(d, q, threshold, avgthreshold, bonds, compare_criteria, criteria)
 
-    _sync_back(d, atoms, ["solid", "bonds", "sij", "avg_sij",
-                           "q%d" % q, "q%d_real" % q, "q%d_imag" % q])
+    _sync_back(
+        d,
+        atoms,
+        ["solid", "bonds", "sij", "avg_sij", "q%d" % q, "q%d_real" % q, "q%d_imag" % q],
+    )
 
     if cluster:
-        return find_clusters(atoms, condition=np.array(d["solid"]) > 0,
-                            cutoff=cutoff, d=d)
+        return find_clusters(
+            atoms, condition=np.array(d["solid"]) > 0, cutoff=cutoff, d=d
+        )
     return None
 
 
@@ -617,7 +652,7 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
             unique, counts = np.unique(valid, return_counts=True)
             largest_size = int(counts.max())
             largest_id = unique[counts.argmax()]
-            atoms.arrays["pyscal_largest_cluster"] = (cluster_ids == largest_id)
+            atoms.arrays["pyscal_largest_cluster"] = cluster_ids == largest_id
             return largest_size
         return 0
     return None
@@ -626,6 +661,7 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
 # ---------------------------------------------------------------------------
 # Average over neighbors (utility)
 # ---------------------------------------------------------------------------
+
 
 def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     """
@@ -659,8 +695,7 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     # 1-D values: use fast C++ averaging
     values = np.asarray(values)
     if values.ndim == 1:
-        result = pc.calculate_average_over_neighbors(
-            d, values.tolist(), include_self)
+        result = pc.calculate_average_over_neighbors(d, values.tolist(), include_self)
         return np.array(result)
 
     # Multi-dimensional: fall back to Python loop
@@ -678,14 +713,20 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
 # Density Correlation Functions
 # ---------------------------------------------------------------------------
 
-def structure_factor(atoms: Atoms, k_max: float = 10.0, n_k: int = 100,
-                    n_samples: int = 50, method: str = 'direct'):
+
+def structure_factor(
+    atoms: Atoms,
+    k_max: float = 10.0,
+    n_k: int = 100,
+    n_samples: int = 50,
+    method: str = "direct",
+):
     """
     Compute static structure factor S(k).
-    
+
     The structure factor is the Fourier transform of density correlations,
     directly comparable to X-ray/neutron scattering experiments.
-    
+
     Parameters
     ----------
     atoms : ase.Atoms
@@ -699,7 +740,7 @@ def structure_factor(atoms: Atoms, k_max: float = 10.0, n_k: int = 100,
     method : str, default 'direct'
         Calculation method:
         - 'direct': Direct sum over k-vectors (more accurate for small systems)
-        
+
     Returns
     -------
     dict
@@ -707,24 +748,24 @@ def structure_factor(atoms: Atoms, k_max: float = 10.0, n_k: int = 100,
         - 'k': wavevector magnitudes (Å⁻¹)
         - 'S': structure factor values
         - 'S_0': extrapolated S(k→0), related to compressibility
-        
+
     Notes
     -----
     The structure factor is defined as:
-    
+
     S(k) = (1/N) |Σⱼ exp(ik·rⱼ)|²
-    
+
     For isotropic systems, averaged over all directions with |k| = k.
-    
+
     Physical interpretation:
     - S(k→0) ∝ isothermal compressibility
     - First peak position k₁ ≈ 2π/d where d is interatomic spacing
     - Peak height indicates degree of short-range order
-    
+
     References
     ----------
     .. [1] Hansen, J.P. & McDonald, I.R. "Theory of Simple Liquids"
-    
+
     Examples
     --------
     >>> from ase.build import bulk
@@ -735,30 +776,32 @@ def structure_factor(atoms: Atoms, k_max: float = 10.0, n_k: int = 100,
     """
     positions = atoms.get_positions()
     N = len(atoms)
-    
+
     k_values = np.linspace(0.1, k_max, n_k)
     S_k = np.zeros(n_k)
-    
+
     for i, k_mag in enumerate(k_values):
         S_acc = 0.0
-        
+
         for _ in range(n_samples):
             # Random direction on unit sphere
             theta = np.arccos(2 * np.random.random() - 1)
             phi = 2 * np.pi * np.random.random()
-            k_vec = k_mag * np.array([
-                np.sin(theta) * np.cos(phi),
-                np.sin(theta) * np.sin(phi),
-                np.cos(theta)
-            ])
-            
+            k_vec = k_mag * np.array(
+                [
+                    np.sin(theta) * np.cos(phi),
+                    np.sin(theta) * np.sin(phi),
+                    np.cos(theta),
+                ]
+            )
+
             # Compute |ρ(k)|² / N
             phase = np.dot(positions, k_vec)
             rho_k = np.sum(np.exp(1j * phase))
-            S_acc += np.abs(rho_k)**2 / N
-        
+            S_acc += np.abs(rho_k) ** 2 / N
+
         S_k[i] = S_acc / n_samples
-    
+
     # Extrapolate S(k→0) using linear fit of small-k region
     k_fit_mask = k_values < 1.5
     if np.sum(k_fit_mask) >= 3:
@@ -766,21 +809,22 @@ def structure_factor(atoms: Atoms, k_max: float = 10.0, n_k: int = 100,
         S_0 = coeffs[1]  # y-intercept
     else:
         S_0 = S_k[0]
-    
-    atoms.info['pyscal_structure_factor'] = {'k_max': k_max, 'n_k': n_k}
-    
+
+    atoms.info["pyscal_structure_factor"] = {"k_max": k_max, "n_k": n_k}
+
     return {
-        'k': k_values,
-        'S': S_k,
-        'S_0': float(max(0, S_0))  # S(0) should be non-negative
+        "k": k_values,
+        "S": S_k,
+        "S_0": float(max(0, S_0)),  # S(0) should be non-negative
     }
 
 
-def local_density(atoms: Atoms, method: str = 'voronoi', cutoff: float = None,
-                 sigma: float = None):
+def local_density(
+    atoms: Atoms, method: str = "voronoi", cutoff: float = None, sigma: float = None
+):
     """
     Compute local atomic density.
-    
+
     Parameters
     ----------
     atoms : ase.Atoms
@@ -795,7 +839,7 @@ def local_density(atoms: Atoms, method: str = 'voronoi', cutoff: float = None,
         Cutoff radius for 'neighbor' method. Required if method='neighbor'.
     sigma : float, optional
         Smoothing width for 'gaussian' method. Required if method='gaussian'.
-        
+
     Returns
     -------
     dict
@@ -804,18 +848,18 @@ def local_density(atoms: Atoms, method: str = 'voronoi', cutoff: float = None,
         - 'mean': mean density
         - 'std': standard deviation
         - 'method': calculation method used
-        
+
     Notes
     -----
     **Voronoi method**: Uses the reciprocal of Voronoi cell volume.
     Higher values indicate more densely packed regions.
-    
+
     **Neighbor method**: Counts neighbors in a sphere of given radius.
     Simple but cutoff-dependent.
-    
+
     **Gaussian method**: Smoothed density using Gaussian kernel.
     Good for continuous density fields.
-    
+
     Examples
     --------
     >>> from ase.build import bulk
@@ -826,24 +870,24 @@ def local_density(atoms: Atoms, method: str = 'voronoi', cutoff: float = None,
     >>> print(f"Mean density: {result['mean']:.4f} atoms/Å³")
     """
     N = len(atoms)
-    
-    if method == 'voronoi':
-        if 'pyscal_voronoi_volume' not in atoms.arrays:
+
+    if method == "voronoi":
+        if "pyscal_voronoi_volume" not in atoms.arrays:
             raise ValueError(
                 "Voronoi tessellation required. Run "
                 "pyscal3.find_neighbors(atoms, method='voronoi') first."
             )
-        volumes = atoms.arrays['pyscal_voronoi_volume']
+        volumes = atoms.arrays["pyscal_voronoi_volume"]
         density = 1.0 / volumes
-        
-    elif method == 'neighbor':
+
+    elif method == "neighbor":
         if cutoff is None:
             raise ValueError("cutoff required for 'neighbor' method")
-        
+
         d = _get_dict_with_neighbors(atoms)
-        neighbors = d['neighbors']
-        neighbordist = d['neighbordist']
-        
+        neighbors = d["neighbors"]
+        neighbordist = d["neighbordist"]
+
         # Count neighbors within cutoff
         counts = np.zeros(N)
         for i in range(N):
@@ -852,67 +896,69 @@ def local_density(atoms: Atoms, method: str = 'voronoi', cutoff: float = None,
                 if dist <= cutoff:
                     count += 1
             counts[i] = count
-        
-        sphere_vol = (4/3) * np.pi * cutoff**3
+
+        sphere_vol = (4 / 3) * np.pi * cutoff**3
         density = counts / sphere_vol
-        
-    elif method == 'gaussian':
+
+    elif method == "gaussian":
         if sigma is None:
             raise ValueError("sigma required for 'gaussian' method")
-        
+
         positions = atoms.get_positions()
         cell = np.array(atoms.get_cell())
-        
+
         cutoff_gauss = 4 * sigma  # Truncate at 4σ
-        norm = 1.0 / (2 * np.pi * sigma**2)**1.5
-        
+        norm = 1.0 / (2 * np.pi * sigma**2) ** 1.5
+
         density = np.zeros(N)
-        
+
         for i in range(N):
             for j in range(N):
                 if i == j:
                     continue
-                
+
                 r_ij = positions[j] - positions[i]
-                
+
                 # Minimum image convention
                 if np.any(atoms.pbc):
                     cell_inv = np.linalg.inv(cell)
                     frac = r_ij @ cell_inv
                     frac = frac - np.round(frac)
                     r_ij = frac @ cell
-                
+
                 dist = np.linalg.norm(r_ij)
-                
+
                 if dist < cutoff_gauss:
-                    density[i] += norm * np.exp(-dist**2 / (2 * sigma**2))
+                    density[i] += norm * np.exp(-(dist**2) / (2 * sigma**2))
     else:
-        raise ValueError(f"Unknown method: {method}. Use 'voronoi', 'neighbor', or 'gaussian'.")
-    
-    atoms.arrays['pyscal_local_density'] = density
-    
+        raise ValueError(
+            f"Unknown method: {method}. Use 'voronoi', 'neighbor', or 'gaussian'."
+        )
+
+    atoms.arrays["pyscal_local_density"] = density
+
     return {
-        'density': density,
-        'mean': float(np.mean(density)),
-        'std': float(np.std(density)),
-        'method': method
+        "density": density,
+        "mean": float(np.mean(density)),
+        "std": float(np.std(density)),
+        "method": method,
     }
 
 
 def density_fluctuations(atoms: Atoms, n_blocks: int = 5):
     """
     Compute density fluctuations by block analysis.
-    
+
     Divides the simulation cell into n_blocks³ subcells and
     measures the variance in atom count.
-    
+
     Parameters
     ----------
     atoms : ase.Atoms
         Structure to analyze. Must have periodic boundary conditions.
     n_blocks : int, default 5
         Number of blocks per dimension.
-        
+
     Returns
     -------
     dict
@@ -921,19 +967,19 @@ def density_fluctuations(atoms: Atoms, n_blocks: int = 5):
         - 'var_N': variance in atom count
         - 'normalized_variance': ⟨(ΔN)²⟩/⟨N⟩ (related to compressibility)
         - 'block_counts': atom counts per block
-        
+
     Notes
     -----
     The normalized variance is related to the static structure factor:
-    
+
     ⟨(ΔN)²⟩/⟨N⟩ = S(k→0) = ρ k_B T κ_T
-    
+
     where κ_T is the isothermal compressibility.
-    
+
     For ideal gas: normalized_variance = 1
     For liquids: typically 0.02-0.05
     For crystals: → 0 (hyperuniform)
-    
+
     Examples
     --------
     >>> from ase.build import bulk
@@ -944,50 +990,51 @@ def density_fluctuations(atoms: Atoms, n_blocks: int = 5):
     """
     positions = atoms.get_positions()
     cell = np.array(atoms.get_cell())
-    
+
     # Convert to fractional coordinates
     cell_inv = np.linalg.inv(cell)
     frac_pos = positions @ cell_inv
-    
+
     # Wrap to [0, 1)
     frac_pos = frac_pos % 1.0
-    
+
     # Scale to block indices
     block_indices = (frac_pos * n_blocks).astype(int)
     block_indices = np.clip(block_indices, 0, n_blocks - 1)
-    
+
     # Count atoms per block
     block_counts = np.zeros((n_blocks, n_blocks, n_blocks))
     for ix, iy, iz in block_indices:
         block_counts[ix, iy, iz] += 1
-    
+
     counts = block_counts.flatten()
     mean_N = np.mean(counts)
     var_N = np.var(counts)
-    
+
     normalized_var = var_N / mean_N if mean_N > 0 else 0.0
-    
-    atoms.info['pyscal_density_fluctuations'] = {
-        'n_blocks': n_blocks,
-        'normalized_variance': normalized_var
+
+    atoms.info["pyscal_density_fluctuations"] = {
+        "n_blocks": n_blocks,
+        "normalized_variance": normalized_var,
     }
-    
+
     return {
-        'mean_N': float(mean_N),
-        'var_N': float(var_N),
-        'normalized_variance': float(normalized_var),
-        'block_counts': counts
+        "mean_N": float(mean_N),
+        "var_N": float(var_N),
+        "normalized_variance": float(normalized_var),
+        "block_counts": counts,
     }
 
 
-def hyperuniformity(atoms: Atoms, k_max: float = 5.0, n_k: int = 50,
-                   k_fit_max: float = 1.0):
+def hyperuniformity(
+    atoms: Atoms, k_max: float = 5.0, n_k: int = 50, k_fit_max: float = 1.0
+):
     """
     Analyze hyperuniformity from structure factor.
-    
+
     A system is hyperuniform if S(k) → 0 as k → 0, indicating
     suppressed large-scale density fluctuations.
-    
+
     Parameters
     ----------
     atoms : ase.Atoms
@@ -998,7 +1045,7 @@ def hyperuniformity(atoms: Atoms, k_max: float = 5.0, n_k: int = 50,
         Number of k points.
     k_fit_max : float, default 1.0
         Maximum k for power-law fit.
-        
+
     Returns
     -------
     dict
@@ -1008,25 +1055,25 @@ def hyperuniformity(atoms: Atoms, k_max: float = 5.0, n_k: int = 50,
         - 'A': power-law prefactor
         - 'is_hyperuniform': True if system appears hyperuniform
         - 'hyperuniform_class': 'I' (α>1), 'II' (α=1), 'III' (0<α<1), or None
-        
+
     Notes
     -----
     Hyperuniform materials have unusual properties:
     - Density fluctuations scale as surface area, not volume
     - Include crystals, certain disordered systems
     - Important for photonic materials, optimal packing
-    
+
     Hyperuniformity classes:
     - Class I: S(k) ~ k^α with α > 1
     - Class II: S(k) ~ k (linear)
     - Class III: S(k) ~ k^α with 0 < α < 1
-    
+
     References
     ----------
-    .. [1] Torquato, S. & Stillinger, F.H. (2003). "Local density 
-           fluctuations, hyperuniformity, and order metrics." 
+    .. [1] Torquato, S. & Stillinger, F.H. (2003). "Local density
+           fluctuations, hyperuniformity, and order metrics."
            Phys. Rev. E 68, 041113.
-    
+
     Examples
     --------
     >>> from ase.build import bulk
@@ -1038,14 +1085,14 @@ def hyperuniformity(atoms: Atoms, k_max: float = 5.0, n_k: int = 50,
     """
     # Compute structure factor
     S_result = structure_factor(atoms, k_max=k_max, n_k=n_k)
-    k_values = S_result['k']
-    S_k = S_result['S']
-    
+    k_values = S_result["k"]
+    S_k = S_result["S"]
+
     # Fit S(k) ~ A * k^α for small k
     mask = k_values <= k_fit_max
     k_fit = k_values[mask]
     S_fit = S_k[mask]
-    
+
     # Log-log fit (avoid log(0))
     valid = S_fit > 1e-10
     if np.sum(valid) >= 3:
@@ -1057,37 +1104,38 @@ def hyperuniformity(atoms: Atoms, k_max: float = 5.0, n_k: int = 50,
     else:
         alpha = 0.0
         A = S_fit[0] if len(S_fit) > 0 else 1.0
-    
+
     # Determine hyperuniformity
-    is_hyperuniform = alpha > 0.3 and S_result['S_0'] < 0.1
-    
+    is_hyperuniform = alpha > 0.3 and S_result["S_0"] < 0.1
+
     if is_hyperuniform:
         if alpha > 1.5:
-            hu_class = 'I'
+            hu_class = "I"
         elif 0.7 < alpha <= 1.5:
-            hu_class = 'II'
+            hu_class = "II"
         else:
-            hu_class = 'III'
+            hu_class = "III"
     else:
         hu_class = None
-    
-    atoms.info['pyscal_hyperuniformity'] = {
-        'alpha': alpha,
-        'is_hyperuniform': is_hyperuniform
+
+    atoms.info["pyscal_hyperuniformity"] = {
+        "alpha": alpha,
+        "is_hyperuniform": is_hyperuniform,
     }
-    
+
     return {
-        'S_k': S_result,
-        'alpha': float(alpha),
-        'A': float(A),
-        'is_hyperuniform': is_hyperuniform,
-        'hyperuniform_class': hu_class
+        "S_k": S_result,
+        "alpha": float(alpha),
+        "A": float(A),
+        "is_hyperuniform": is_hyperuniform,
+        "hyperuniform_class": hu_class,
     }
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     """Reset neighbors and find by number (for CNA/diamond)."""
@@ -1104,5 +1152,5 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     d["cutoff"] = [0.0] * n
 
     pc.get_all_neighbors_bynumber(
-        d, 0.0, triclinic, rot, rotinv, boxdims,
-        2, nmax, (n > 250), False)
+        d, 0.0, triclinic, rot, rotinv, boxdims, 2, nmax, (n > 250), False
+    )

@@ -4,6 +4,7 @@ Build configuration for pyscal3 C++ extension.
 All project metadata lives in pyproject.toml (PEP 621).
 This file only defines the C++ extension module.
 """
+
 import sys
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
