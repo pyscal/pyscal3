@@ -522,6 +522,255 @@ def chi_params(atoms: Atoms, angles=False):
 
 
 # ---------------------------------------------------------------------------
+# Deformation Descriptors (require reference configuration)
+# ---------------------------------------------------------------------------
+
+def _match_neighbor_indices(atoms_cur, atoms_ref):
+    """
+    Match atoms across deformed/reference configs and return neighbor mapping.
+
+    Returns dict mapping atom index → list of (neighbor_index_cur, neighbor_index_ref)
+    for atoms that appear in both neighbor lists.
+    """
+    # Get current neighbor data
+    neighbors_cur = atoms_cur.arrays["pyscal_neighbors"]
+    neighbors_ref = atoms_ref.arrays["pyscal_neighbors"]
+    diff_cur = atoms_cur.arrays["pyscal_diff"]
+    diff_ref = atoms_ref.arrays["pyscal_diff"]
+
+    n = len(atoms_cur)
+    mapping = {}
+
+    for i in range(n):
+        nbrs_cur = neighbors_cur[i]
+        nbrs_ref = neighbors_ref[i]
+        valid_cur = nbrs_cur[nbrs_cur >= 0]
+        valid_ref = nbrs_ref[nbrs_ref >= 0]
+        # Find common neighbors
+        common = set(valid_cur) & set(valid_ref)
+        pairs = []
+        for j in common:
+            j_cur_idx = np.where(nbrs_cur == j)[0][0]
+            j_ref_idx = np.where(nbrs_ref == j)[0][0]
+            pairs.append((j_cur_idx, j_ref_idx))
+        mapping[i] = pairs
+
+    return mapping, diff_cur, diff_ref
+
+
+def atomic_strain(atoms: Atoms, reference: Atoms):
+    """
+    Calculate the atomic (Green-Lagrange) strain tensor for each atom.
+
+    The local deformation gradient F is computed by minimizing the
+    squared difference between reference and deformed neighbor vectors.
+    The Lagrangian strain is then E = (F^T F - I) / 2.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Deformed configuration with neighbors computed.
+    reference : ase.Atoms
+        Reference (undeformed) configuration with the same neighbor list.
+
+    Returns
+    -------
+    numpy.ndarray of shape (natoms, 3, 3)
+        Green-Lagrange strain tensor per atom.
+        Also stored as ``atoms.arrays["pyscal_strain"]``.
+
+    Notes
+    -----
+    Both configurations must have neighbors computed with identical
+    neighbor lists (same method and cutoff).
+    Reference: Falk & Langer, PRE 57 (1998) 7192 (D^2_min);
+    Shimizu, Ogata, Li, Mat. Trans. 48 (2007) 2923 (atomic strain).
+    """
+    ensure_neighbors(atoms)
+    ensure_neighbors(reference)
+
+    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
+    n = len(atoms)
+    strain = np.zeros((n, 3, 3))
+
+    for i in range(n):
+        pairs = mapping[i]
+        if len(pairs) < 3:
+            strain[i] = np.nan
+            continue
+
+        # Build matrices: rows = neighbor displacement vectors
+        X = np.array([diff_ref[i, j_ref] for (_, j_ref) in pairs])  # reference
+        Y = np.array([diff_cur[i, j_cur] for (j_cur, _) in pairs])  # current
+
+        # Deformation gradient F via least squares: Y = X @ F^T
+        # => F^T = (X^T X)^-1 X^T Y
+        XtX = X.T @ X
+        try:
+            XtX_inv = np.linalg.inv(XtX)
+        except np.linalg.LinAlgError:
+            strain[i] = np.nan
+            continue
+        F = (XtX_inv @ X.T @ Y).T
+
+        # Green-Lagrange strain E = (F^T F - I) / 2
+        C = F.T @ F
+        E = 0.5 * (C - np.eye(3))
+        strain[i] = E
+
+    atoms.arrays["pyscal_strain"] = strain
+    return strain
+
+
+def von_mises_strain(atoms: Atoms, reference: Atoms):
+    """
+    Compute the von Mises shear strain invariant from the atomic strain.
+
+    .. math::
+
+        \\eta^{\\text{Mises}} = \\sqrt{
+            \\frac{1}{2} \\left[
+                (E_{xx}-E_{yy})^2 + (E_{yy}-E_{zz})^2 + (E_{zz}-E_{xx})^2
+            \\right]
+            + E_{xy}^2 + E_{yz}^2 + E_{xz}^2
+        }
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Deformed configuration.
+    reference : ase.Atoms
+        Reference configuration.
+
+    Returns
+    -------
+    numpy.ndarray of shape (natoms,)
+        Scalar von Mises strain per atom.
+        Also stored as ``atoms.arrays["pyscal_von_mises"]``.
+    """
+    E = atomic_strain(atoms, reference)
+    n = len(atoms)
+    vm = np.zeros(n)
+
+    for i in range(n):
+        if np.any(np.isnan(E[i])):
+            vm[i] = np.nan
+            continue
+        exx, eyy, ezz = E[i, 0, 0], E[i, 1, 1], E[i, 2, 2]
+        exy, eyz, exz = E[i, 0, 1], E[i, 1, 2], E[i, 0, 2]
+        vm[i] = np.sqrt(
+            0.5 * ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2)
+            + exy**2 + eyz**2 + exz**2
+        )
+
+    atoms.arrays["pyscal_von_mises"] = vm
+    return vm
+
+
+def d2min(atoms: Atoms, reference: Atoms):
+    """
+    Compute the D^2_min non-affine displacement (Falk & Langer 1998).
+
+    D^2_min is the residual mean-squared displacement after subtracting
+    the best-fit affine deformation.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Deformed configuration with neighbors computed.
+    reference : ase.Atoms
+        Reference configuration with neighbors computed.
+
+    Returns
+    -------
+    numpy.ndarray of shape (natoms,)
+        D^2_min per atom (Angstrom^2).
+        Also stored as ``atoms.arrays["pyscal_d2min"]``.
+    """
+    ensure_neighbors(atoms)
+    ensure_neighbors(reference)
+
+    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
+    n = len(atoms)
+    d2 = np.zeros(n)
+
+    for i in range(n):
+        pairs = mapping[i]
+        if len(pairs) < 3:
+            d2[i] = np.nan
+            continue
+
+        X = np.array([diff_ref[i, j_ref] for (_, j_ref) in pairs])
+        Y = np.array([diff_cur[i, j_cur] for (j_cur, _) in pairs])
+
+        XtX = X.T @ X
+        try:
+            XtX_inv = np.linalg.inv(XtX)
+        except np.linalg.LinAlgError:
+            d2[i] = np.nan
+            continue
+        F = (XtX_inv @ X.T @ Y).T
+
+        # Predicted positions from affine: Y_pred = X @ F^T
+        Y_pred = X @ F.T
+        residuals = Y - Y_pred
+        d2[i] = np.mean(np.sum(residuals**2, axis=1))
+
+    atoms.arrays["pyscal_d2min"] = d2
+    return d2
+
+
+def slip_vector(atoms: Atoms, reference: Atoms):
+    """
+    Compute the slip vector for each atom.
+
+    The slip vector s_i = (1/N_s) sum_j (dX_ij - dx_ij) is the average
+    difference between reference and current displacement vectors,
+    without fitting an affine transformation.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Deformed configuration.
+    reference : ase.Atoms
+        Reference configuration.
+
+    Returns
+    -------
+    numpy.ndarray of shape (natoms, 3)
+        Slip vector per atom.
+        Also stored as ``atoms.arrays["pyscal_slip_vector"]``.
+
+    Notes
+    -----
+    Ref: Zimmerman, Kelchner, Klein, Hamilton, Foiles, PRL 87 (2001) 165507.
+    """
+    ensure_neighbors(atoms)
+    ensure_neighbors(reference)
+
+    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
+    n = len(atoms)
+    slip = np.zeros((n, 3))
+
+    for i in range(n):
+        pairs = mapping[i]
+        if len(pairs) == 0:
+            slip[i] = np.nan
+            continue
+
+        deltas = []
+        for j_cur, j_ref in pairs:
+            d_cur = diff_cur[i, j_cur]
+            d_ref = diff_ref[i, j_ref]
+            deltas.append(d_cur - d_ref)
+
+        slip[i] = np.mean(deltas, axis=0)
+
+    atoms.arrays["pyscal_slip_vector"] = slip
+    return slip
+
+
+# ---------------------------------------------------------------------------
 # Solid/Liquid Identification
 # ---------------------------------------------------------------------------
 
