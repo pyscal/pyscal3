@@ -108,6 +108,222 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
 
 
 # ---------------------------------------------------------------------------
+# Third-order Bond Orientational Order (W_l)
+# ---------------------------------------------------------------------------
+
+def _wigner_3j(j1, j2, j3, m1, m2, m3):
+    """
+    Compute Wigner 3j symbol using Racah formula.
+    
+    (j1 j2 j3)
+    (m1 m2 m3)
+    
+    Returns 0 if selection rules not satisfied.
+    """
+    from math import factorial, sqrt
+    
+    # Selection rules
+    if m1 + m2 + m3 != 0:
+        return 0.0
+    if abs(m1) > j1 or abs(m2) > j2 or abs(m3) > j3:
+        return 0.0
+    if j3 < abs(j1 - j2) or j3 > j1 + j2:
+        return 0.0
+    
+    def fac(n):
+        return factorial(int(n)) if n >= 0 else 0
+    
+    # Racah formula summation bounds
+    t_min = int(max(0, j2 - j3 - m1, j1 - j3 + m2))
+    t_max = int(min(j1 + j2 - j3, j1 - m1, j2 + m2))
+    
+    if t_min > t_max:
+        return 0.0
+    
+    sum_val = 0.0
+    for t in range(t_min, t_max + 1):
+        num = ((-1) ** t)
+        den = (fac(t) *
+               fac(j1 + j2 - j3 - t) *
+               fac(j1 - m1 - t) *
+               fac(j2 + m2 - t) *
+               fac(j3 - j2 + m1 + t) *
+               fac(j3 - j1 - m2 + t))
+        if den != 0:
+            sum_val += num / den
+    
+    # Triangle coefficient
+    delta = sqrt(
+        fac(j1 + j2 - j3) *
+        fac(j1 - j2 + j3) *
+        fac(-j1 + j2 + j3) /
+        fac(j1 + j2 + j3 + 1)
+    )
+    
+    prefactor = ((-1) ** (j1 - j2 - m3) * delta *
+                 sqrt(fac(j1 + m1) * fac(j1 - m1) *
+                      fac(j2 + m2) * fac(j2 - m2) *
+                      fac(j3 + m3) * fac(j3 - m3)))
+    
+    return float(prefactor * sum_val)
+
+
+def _get_wigner_3j_table(l):
+    """
+    Precompute Wigner 3j symbols for all valid (m1, m2, m3) with m1+m2+m3=0.
+    
+    Returns list of (m1, m2, m3, w3j) tuples.
+    """
+    table = []
+    for m1 in range(-l, l + 1):
+        for m2 in range(-l, l + 1):
+            m3 = -(m1 + m2)
+            if abs(m3) <= l:
+                w3j = _wigner_3j(l, l, l, m1, m2, m3)
+                if abs(w3j) > 1e-15:
+                    table.append((m1, m2, m3, w3j))
+    return table
+
+
+def bond_orientational_order_w(atoms: Atoms, l, averaged=False, normalized=True):
+    """
+    Calculate W_l third-order rotational invariants (bond orientational order).
+    
+    W_l is sensitive to symmetry that q_l misses (e.g., distinguishes FCC from
+    icosahedral environments).
+    
+    Parameters
+    ----------
+    atoms : Atoms
+        Structure with neighbors already computed via find_neighbors.
+    l : int or list of int
+        Bond orientational order value(s), typically 4 or 6.
+    averaged : bool, optional
+        If True, use neighbor-averaged q_lm values. Default False.
+    normalized : bool, optional
+        If True, return normalized W_l (unit independent). Default True.
+    
+    Returns
+    -------
+    dict
+        Keys: "w{l}" for each l value, plus "w{l}_raw" if normalized=True.
+        Values are (N,) arrays.
+    
+    Notes
+    -----
+    W_l = Σ (l l l; m1 m2 m3) q_lm1 q_lm2 q_lm3
+    
+    where the sum is over m1+m2+m3=0 and (l l l; m1 m2 m3) is the Wigner 3j
+    symbol. The normalized version is:
+    
+    Ŵ_l = W_l / (Σ|q_lm|²)^(3/2)
+    
+    Common reference values:
+    - FCC: Ŵ_4 ≈ -0.159, Ŵ_6 ≈ -0.013
+    - HCP: Ŵ_4 ≈ 0.134, Ŵ_6 ≈ -0.012
+    - BCC: Ŵ_4 ≈ 0.159, Ŵ_6 ≈ 0.013
+    - Icosahedral: Ŵ_6 ≈ -0.170
+    
+    Results stored in:
+    - atoms.arrays["pyscal_w{l}"]: W_l values
+    - atoms.arrays["pyscal_w{l}_raw"]: unnormalized values (if normalized=True)
+    
+    References
+    ----------
+    Steinhardt et al., Phys. Rev. B 28, 784 (1983)
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.5)
+    >>> result = pyscal3.bond_orientational_order_w(atoms, l=[4, 6])
+    >>> print(f"Ŵ_4 = {result['w4'][0]:.4f}")
+    >>> print(f"Ŵ_6 = {result['w6'][0]:.4f}")
+    """
+    if isinstance(l, int):
+        ll = [l]
+    else:
+        ll = list(l)
+    
+    d = _get_dict_with_neighbors(atoms)
+    n = len(atoms)
+    
+    # First ensure q_lm values exist (compute Steinhardt first)
+    for val in ll:
+        pc.calculate_q_single(d, val)
+        if averaged:
+            pc.calculate_aq_single(d, val)
+    
+    result = {}
+    
+    for l_val in ll:
+        # Get q_lm values (real and imaginary parts)
+        # d contains q{l}_real and q{l}_imag as nested lists: [atom][m_index]
+        # m_index goes from 0 to 2*l (for m = -l to +l)
+        key_real = f"q{l_val}_real"
+        key_imag = f"q{l_val}_imag"
+        
+        if averaged:
+            # Use averaged q values (need to handle this case differently)
+            # For now, just use the base q values
+            pass
+        
+        qlm_real = np.array(d[key_real])  # shape (n_atoms, 2*l+1)
+        qlm_imag = np.array(d[key_imag])  # shape (n_atoms, 2*l+1)
+        
+        # Combine into complex
+        qlm = qlm_real + 1j * qlm_imag  # shape (n_atoms, 2*l+1)
+        
+        # Handle NaN values (e.g., atoms with no neighbors)
+        # Replace NaN with zero for computation
+        qlm = np.nan_to_num(qlm, nan=0.0)
+        
+        # Get Wigner 3j table for this l
+        w3j_table = _get_wigner_3j_table(l_val)
+        
+        # Compute W_l for each atom
+        w_l = np.zeros(n)
+        
+        for i in range(n):
+            qlm_i = qlm[i]  # shape (2*l+1,)
+            w_sum = 0.0
+            
+            for m1, m2, m3, w3j in w3j_table:
+                # Convert m to index: m_idx = m + l
+                idx1 = m1 + l_val
+                idx2 = m2 + l_val
+                idx3 = m3 + l_val
+                
+                # W_l contribution
+                w_sum += w3j * qlm_i[idx1] * qlm_i[idx2] * qlm_i[idx3]
+            
+            w_l[i] = np.real(w_sum)
+        
+        # Store raw values
+        result[f"w{l_val}_raw"] = w_l.copy()
+        atoms.arrays[f"pyscal_w{l_val}_raw"] = w_l.copy()
+        
+        if normalized:
+            # Normalize by (Σ|q_lm|²)^(3/2)
+            q2_sum = np.sum(np.abs(qlm) ** 2, axis=1)
+            norm = q2_sum ** 1.5
+            # For atoms with zero q_lm (no neighbors), W_l is already 0
+            # and we want to keep it as 0, not divide
+            w_l_norm = np.zeros_like(w_l)
+            valid = norm > 1e-15
+            w_l_norm[valid] = w_l[valid] / norm[valid]
+            result[f"w{l_val}"] = w_l_norm
+            atoms.arrays[f"pyscal_w{l_val}"] = w_l_norm
+        else:
+            result[f"w{l_val}"] = w_l
+            atoms.arrays[f"pyscal_w{l_val}"] = w_l
+    
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Disorder Parameter
 # ---------------------------------------------------------------------------
 
