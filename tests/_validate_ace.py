@@ -3,6 +3,7 @@
 Uses only numpy/scipy (no external ML libs). Builds an independent
 A-basis and B-basis from scratch and compares value-by-value.
 """
+
 import numpy as np
 from scipy.special import sph_harm_y
 from scipy.spatial import cKDTree
@@ -13,6 +14,7 @@ from pyscal3.descriptors import _ace_a_functions, _ace_cutoff, _ace_radial_basis
 
 
 # ---- Reference implementation ----
+
 
 def ref_cutoff(r, rc):
     r = np.asarray(r, dtype=float)
@@ -30,10 +32,9 @@ def ref_radial(n, r, rc, rmin=0.5):
 def ref_a_basis(positions, cell, nmax, lmax, cutoff):
     """Compute A-basis independently using cKDTree + PBC images."""
     natoms = len(positions)
-    shifts = np.array([[ix, iy, iz]
-                       for ix in [-1, 0, 1]
-                       for iy in [-1, 0, 1]
-                       for iz in [-1, 0, 1]])
+    shifts = np.array(
+        [[ix, iy, iz] for ix in [-1, 0, 1] for iy in [-1, 0, 1] for iz in [-1, 0, 1]]
+    )
 
     all_pos = np.vstack([positions + s @ cell for s in shifts])
     tree = cKDTree(all_pos)
@@ -79,6 +80,7 @@ def ref_b_nu2(A, nmax, lmax):
 
 # ---- Tests ----
 
+
 def run_test(name, ok, detail=""):
     tag = "PASS" if ok else "FAIL"
     print(f"  [{tag}] {name}" + (f" — {detail}" if detail else ""))
@@ -109,12 +111,16 @@ def main():
         p = _ace_radial_basis(n, r_test, cutoff)
         r = ref_radial(n, r_test, cutoff)
         diff = np.max(np.abs(p - r))
-        results[f"radial_n{n}"] = run_test(f"Radial basis n={n}", diff < 1e-14, f"maxdiff={diff:.2e}")
+        results[f"radial_n{n}"] = run_test(
+            f"Radial basis n={n}", diff < 1e-14, f"maxdiff={diff:.2e}"
+        )
 
     c_p = _ace_cutoff(r_test, cutoff)
     c_r = ref_cutoff(r_test, cutoff)
     diff = np.max(np.abs(c_p - c_r))
-    results["cutoff_fn"] = run_test("Cutoff function", diff < 1e-14, f"maxdiff={diff:.2e}")
+    results["cutoff_fn"] = run_test(
+        "Cutoff function", diff < 1e-14, f"maxdiff={diff:.2e}"
+    )
     print()
 
     # ----------------------------------------------------------
@@ -130,7 +136,9 @@ def main():
     )
 
     a_diff = np.max(np.abs(A_pyscal - A_ref))
-    results["a_basis"] = run_test("A-basis values", a_diff < 1e-10, f"maxdiff={a_diff:.2e}")
+    results["a_basis"] = run_test(
+        "A-basis values", a_diff < 1e-10, f"maxdiff={a_diff:.2e}"
+    )
 
     if a_diff > 1e-10:
         # Diagnose: which atoms/channels differ?
@@ -142,16 +150,19 @@ def main():
                         v2 = A_ref[i, n, l, m + lmax]
                         d_ = abs(v1 - v2)
                         if d_ > 1e-8:
-                            print(f"    atom={i} n={n} l={l} m={m}: "
-                                  f"pyscal={v1:.6f} ref={v2:.6f} diff={d_:.2e}")
+                            print(
+                                f"    atom={i} n={n} l={l} m={m}: "
+                                f"pyscal={v1:.6f} ref={v2:.6f} diff={d_:.2e}"
+                            )
     print()
 
     # ----------------------------------------------------------
     # TEST 3: Nu=1 B-basis matches
     # ----------------------------------------------------------
     print("--- Nu=1 descriptors ---")
-    result_ace = pyscal3.ace(fcc, nmax=nmax, lmax=lmax, nu_max=1,
-                             cutoff=cutoff, normalize=False)
+    result_ace = pyscal3.ace(
+        fcc, nmax=nmax, lmax=lmax, nu_max=1, cutoff=cutoff, normalize=False
+    )
     B1_ref = ref_b_nu1(A_ref, lmax)
     b1_diff = np.max(np.abs(result_ace["nu1"] - B1_ref))
     results["nu1"] = run_test("Nu=1 B-basis", b1_diff < 1e-10, f"maxdiff={b1_diff:.2e}")
@@ -163,12 +174,16 @@ def main():
     # TEST 4: Nu=2 B-basis (power spectrum) matches
     # ----------------------------------------------------------
     print("--- Nu=2 descriptors (power spectrum) ---")
-    result_ace2 = pyscal3.ace(fcc, nmax=nmax, lmax=lmax, nu_max=2,
-                              cutoff=cutoff, normalize=False)
+    result_ace2 = pyscal3.ace(
+        fcc, nmax=nmax, lmax=lmax, nu_max=2, cutoff=cutoff, normalize=False
+    )
     B2_ref = ref_b_nu2(A_ref, nmax, lmax)
     b2_diff = np.max(np.abs(result_ace2["nu2"] - B2_ref))
-    results["nu2"] = run_test("Nu=2 B-basis", b2_diff < 1e-10,
-                              f"maxdiff={b2_diff:.2e}, shape={result_ace2['nu2'].shape} vs {B2_ref.shape}")
+    results["nu2"] = run_test(
+        "Nu=2 B-basis",
+        b2_diff < 1e-10,
+        f"maxdiff={b2_diff:.2e}, shape={result_ace2['nu2'].shape} vs {B2_ref.shape}",
+    )
     print(f"    pyscal nu2[0,:5]: {result_ace2['nu2'][0, :5]}")
     print(f"    ref    nu2[0,:5]: {B2_ref[0, :5]}")
     print()
@@ -179,14 +194,16 @@ def main():
     print("--- Crystal symmetry ---")
     fcc3 = bulk("Cu", "fcc", cubic=True).repeat(3)
     pyscal3.find_neighbors(fcc3, method="cutoff", cutoff=cutoff)
-    d_fcc3 = pyscal3.ace(fcc3, nmax=nmax, lmax=lmax, nu_max=2,
-                          cutoff=cutoff, normalize=False)
+    d_fcc3 = pyscal3.ace(
+        fcc3, nmax=nmax, lmax=lmax, nu_max=2, cutoff=cutoff, normalize=False
+    )
     std = np.std(d_fcc3["full"], axis=0)
     mean = np.abs(np.mean(d_fcc3["full"], axis=0))
     mask = mean > 1e-15
     rstd = np.max(std[mask] / mean[mask]) if np.any(mask) else 0
-    results["equiv_atoms"] = run_test("Equivalent atoms identical", rstd < 1e-10,
-                                       f"max relative std={rstd:.2e}")
+    results["equiv_atoms"] = run_test(
+        "Equivalent atoms identical", rstd < 1e-10, f"max relative std={rstd:.2e}"
+    )
     print()
 
     # ----------------------------------------------------------
@@ -197,11 +214,13 @@ def main():
     fcc2.positions += [1.5, 2.3, -0.7]
     fcc2.wrap()
     pyscal3.find_neighbors(fcc2, method="cutoff", cutoff=cutoff)
-    d_t = pyscal3.ace(fcc2, nmax=nmax, lmax=lmax, nu_max=2,
-                       cutoff=cutoff, normalize=False)
+    d_t = pyscal3.ace(
+        fcc2, nmax=nmax, lmax=lmax, nu_max=2, cutoff=cutoff, normalize=False
+    )
     t_diff = np.max(np.abs(result_ace2["full"].mean(axis=0) - d_t["full"].mean(axis=0)))
-    results["translation"] = run_test("Translation invariance", t_diff < 1e-10,
-                                       f"maxdiff={t_diff:.2e}")
+    results["translation"] = run_test(
+        "Translation invariance", t_diff < 1e-10, f"maxdiff={t_diff:.2e}"
+    )
     print()
 
     # ----------------------------------------------------------
@@ -210,26 +229,27 @@ def main():
     print("--- Rotation invariance (cubic symmetry) ---")
     fcc_rot = bulk("Cu", "fcc", cubic=True).repeat(3)
     pyscal3.find_neighbors(fcc_rot, method="cutoff", cutoff=cutoff)
-    d_orig = pyscal3.ace(fcc_rot, nmax=nmax, lmax=lmax, nu_max=2,
-                          cutoff=cutoff, normalize=False)
+    d_orig = pyscal3.ace(
+        fcc_rot, nmax=nmax, lmax=lmax, nu_max=2, cutoff=cutoff, normalize=False
+    )
 
     # 90 deg rotation about z axis (keeps cubic cell orthogonal)
-    rot90 = np.array([[0.0, -1.0, 0.0],
-                      [1.0, 0.0, 0.0],
-                      [0.0, 0.0, 1.0]])
+    rot90 = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
     fcc_r = fcc_rot.copy()
     fcc_r.positions = fcc_rot.positions @ rot90.T
     fcc_r.cell = np.array(fcc_rot.cell) @ rot90.T
     fcc_r.wrap()
     pyscal3.find_neighbors(fcc_r, method="cutoff", cutoff=cutoff)
-    d_rot = pyscal3.ace(fcc_r, nmax=nmax, lmax=lmax, nu_max=2,
-                         cutoff=cutoff, normalize=False)
+    d_rot = pyscal3.ace(
+        fcc_r, nmax=nmax, lmax=lmax, nu_max=2, cutoff=cutoff, normalize=False
+    )
 
-    rot90_diff = np.max(np.abs(d_orig["full"].mean(axis=0) -
-                               d_rot["full"].mean(axis=0)))
+    rot90_diff = np.max(
+        np.abs(d_orig["full"].mean(axis=0) - d_rot["full"].mean(axis=0))
+    )
     results["rotation_90deg"] = run_test(
-        "Rotation inv. (90° z)", rot90_diff < 1e-10,
-        f"maxdiff={rot90_diff:.2e}")
+        "Rotation inv. (90° z)", rot90_diff < 1e-10, f"maxdiff={rot90_diff:.2e}"
+    )
     print()
 
     # ----------------------------------------------------------
@@ -243,12 +263,13 @@ def main():
     cluster_pos = fcc_big.positions[keep] - center  # center at origin
 
     L = 100.0
-    cluster1 = Atoms("Cu" * int(keep.sum()),
-                      positions=cluster_pos + L / 2,
-                      cell=[L, L, L], pbc=True)
+    cluster1 = Atoms(
+        "Cu" * int(keep.sum()), positions=cluster_pos + L / 2, cell=[L, L, L], pbc=True
+    )
     pyscal3.find_neighbors(cluster1, method="cutoff", cutoff=cutoff)
-    desc_c1 = pyscal3.ace(cluster1, nmax=nmax, lmax=lmax, nu_max=2,
-                           cutoff=cutoff, normalize=False)
+    desc_c1 = pyscal3.ace(
+        cluster1, nmax=nmax, lmax=lmax, nu_max=2, cutoff=cutoff, normalize=False
+    )
 
     # 37° around [1,1,1]
     ax = np.array([1.0, 1.0, 1.0])
@@ -257,12 +278,16 @@ def main():
     K = np.array([[0, -ax[2], ax[1]], [ax[2], 0, -ax[0]], [-ax[1], ax[0], 0]])
     rot37 = np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * K @ K
 
-    cluster2 = Atoms("Cu" * int(keep.sum()),
-                      positions=cluster_pos @ rot37.T + L / 2,
-                      cell=[L, L, L], pbc=True)
+    cluster2 = Atoms(
+        "Cu" * int(keep.sum()),
+        positions=cluster_pos @ rot37.T + L / 2,
+        cell=[L, L, L],
+        pbc=True,
+    )
     pyscal3.find_neighbors(cluster2, method="cutoff", cutoff=cutoff)
-    desc_c2 = pyscal3.ace(cluster2, nmax=nmax, lmax=lmax, nu_max=2,
-                           cutoff=cutoff, normalize=False)
+    desc_c2 = pyscal3.ace(
+        cluster2, nmax=nmax, lmax=lmax, nu_max=2, cutoff=cutoff, normalize=False
+    )
 
     # Only compare interior atoms (within 4A of center, all neighbors present)
     interior = np.linalg.norm(cluster1.positions - L / 2, axis=1) < 4.0
@@ -274,17 +299,19 @@ def main():
         f2 = desc_c2["full"][interior_idx]
         mask_c = np.abs(f1.mean(axis=0)) > 1e-10
         if np.any(mask_c):
-            rel = np.abs(f1.mean(axis=0)[mask_c] - f2.mean(axis=0)[mask_c]) / \
-                  np.abs(f1.mean(axis=0)[mask_c])
+            rel = np.abs(f1.mean(axis=0)[mask_c] - f2.mean(axis=0)[mask_c]) / np.abs(
+                f1.mean(axis=0)[mask_c]
+            )
             max_rel = np.max(rel)
         else:
             max_rel = np.max(np.abs(f1.mean(axis=0) - f2.mean(axis=0)))
         results["rotation_37deg"] = run_test(
-            "Rotation inv. (37° [111])", max_rel < 1e-6,
-            f"max_rel_diff={max_rel:.2e}")
+            "Rotation inv. (37° [111])", max_rel < 1e-6, f"max_rel_diff={max_rel:.2e}"
+        )
     else:
         results["rotation_37deg"] = run_test(
-            "Rotation inv. (37° [111])", False, "no interior atoms")
+            "Rotation inv. (37° [111])", False, "no interior atoms"
+        )
     print()
 
     # ----------------------------------------------------------
@@ -292,13 +319,13 @@ def main():
     # ----------------------------------------------------------
     print("--- Structure discrimination ---")
     pyscal3.find_neighbors(bcc, method="cutoff", cutoff=cutoff)
-    d_bcc = pyscal3.ace(bcc, nmax=nmax, lmax=lmax, nu_max=2,
-                         cutoff=cutoff, normalize=False)
+    d_bcc = pyscal3.ace(
+        bcc, nmax=nmax, lmax=lmax, nu_max=2, cutoff=cutoff, normalize=False
+    )
     m_fcc = result_ace2["full"].mean(axis=0)
     m_bcc = d_bcc["full"].mean(axis=0)
     dist = np.linalg.norm(m_fcc - m_bcc) / np.linalg.norm(m_fcc)
-    results["fcc_bcc"] = run_test("FCC ≠ BCC", dist > 0.001,
-                                   f"rel_dist={dist:.6f}")
+    results["fcc_bcc"] = run_test("FCC ≠ BCC", dist > 0.001, f"rel_dist={dist:.6f}")
     print()
 
     # ----------------------------------------------------------

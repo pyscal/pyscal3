@@ -42,21 +42,19 @@ def get_box_params(atoms: Atoms):
     """
     cell = np.array(atoms.cell)
     
-    # Check if triclinic: compute sum of dot products of adjacent cell vector pairs
-    summ = 0.0
-    for i in range(3):
-        box1 = cell[i - 1]
-        box2 = cell[i]
-        n1 = np.linalg.norm(box1)
-        n2 = np.linalg.norm(box2)
-        if n1 > 0 and n2 > 0:
-            summ += np.dot(box1, box2) / (n1 * n2)
+    # Check if the cell is non-orthorhombic (triclinic).
+    # The C++ orthorhombic code path assumes box edges are aligned with
+    # the Cartesian x/y/z axes, so the cell matrix must be diagonal.
+    # A cell with mutually perpendicular but *rotated* vectors (e.g. a
+    # cubic cell after rigid rotation) has zero dot-products between edges
+    # but non-zero off-diagonal elements and must use the triclinic path.
+    off_diag = cell - np.diag(np.diag(cell))
     
     triclinic = 0
     rot = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
     rotinv = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
     
-    if abs(summ) > 1e-6:
+    if np.max(np.abs(off_diag)) > 1e-6:
         triclinic = 1
         rot = cell.T.tolist()
         rotinv = np.linalg.inv(cell.T).tolist()
