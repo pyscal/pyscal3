@@ -12,21 +12,33 @@ Example
 >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)
 >>> atoms.info["pyscal_neighbors"]  # list of lists
 """
+
 import warnings
 import numpy as np
 from ase import Atoms
 
 import pyscal3.csystem as pc
 from pyscal3._bridge import (
-    get_box_params, atoms_to_dict, dict_to_atoms,
+    get_box_params,
+    atoms_to_dict,
+    dict_to_atoms,
     pad_atoms_for_neighbor_finding,
 )
 
 
-def find_neighbors(atoms: Atoms, method='cutoff', cutoff=0, 
-                   shell_thickness=0, threshold=2, voroexp=1,
-                   padding=1.2, nlimit=6, cells=None, nmax=12,
-                   assign_neighbor=True):
+def find_neighbors(
+    atoms: Atoms,
+    method="cutoff",
+    cutoff=0,
+    shell_thickness=0,
+    threshold=2,
+    voroexp=1,
+    padding=1.2,
+    nlimit=6,
+    cells=None,
+    nmax=12,
+    assign_neighbor=True,
+):
     """
     Find neighbors of all atoms.
 
@@ -77,35 +89,51 @@ def find_neighbors(atoms: Atoms, method='cutoff', cutoff=0,
     # Use ghost padding for small cells
     d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(atoms)
     natoms = len(d["positions"])
-    
+
     if cells is None:
-        cells = (natoms > 250)
+        cells = natoms > 250
 
     # Reset existing neighbor data
     _reset_neighbors(d)
-    
-    if method == 'cutoff':
-        if cutoff == 'sann':
+
+    if method == "cutoff":
+        if cutoff == "sann":
             finished = False
             for i in range(1, 10):
                 finished = pc.get_all_neighbors_sann(
-                    d, 0.0, triclinic, rot, rotinv, boxdims, threshold * i, cells)
+                    d, 0.0, triclinic, rot, rotinv, boxdims, threshold * i, cells
+                )
                 if finished:
                     if i > 1:
-                        warnings.warn("Found neighbors with higher threshold than default/user input")
+                        warnings.warn(
+                            "Found neighbors with higher threshold than default/user input"
+                        )
                     break
-                warnings.warn("Could not find sann cutoff. Trying with higher threshold", RuntimeWarning)
+                warnings.warn(
+                    "Could not find sann cutoff. Trying with higher threshold",
+                    RuntimeWarning,
+                )
             else:
                 raise RuntimeError(
-                    "SANN cutoff could not be converged. Try increasing threshold.")
-        
-        elif cutoff == 'adaptive' or (cutoff == 0 and shell_thickness == 0):
+                    "SANN cutoff could not be converged. Try increasing threshold."
+                )
+
+        elif cutoff == "adaptive" or (cutoff == 0 and shell_thickness == 0):
             finished = pc.get_all_neighbors_adaptive(
-                d, 0.0, triclinic, rot, rotinv, boxdims,
-                threshold, nlimit, padding, cells)
+                d,
+                0.0,
+                triclinic,
+                rot,
+                rotinv,
+                boxdims,
+                threshold,
+                nlimit,
+                padding,
+                cells,
+            )
             if not bool(finished):
                 raise RuntimeError("Could not find adaptive cutoff")
-        
+
         else:
             if cutoff == 0 and shell_thickness > 0:
                 cutoff = shell_thickness
@@ -113,39 +141,66 @@ def find_neighbors(atoms: Atoms, method='cutoff', cutoff=0,
             if shell_thickness == 0:
                 if cells:
                     pc.get_all_neighbors_cells(
-                        d, cutoff, triclinic, rot, rotinv, boxdims)
+                        d, cutoff, triclinic, rot, rotinv, boxdims
+                    )
                 else:
                     pc.get_all_neighbors_normal(
-                        d, cutoff, triclinic, rot, rotinv, boxdims)
+                        d, cutoff, triclinic, rot, rotinv, boxdims
+                    )
             else:
                 if cells:
                     pc.get_all_neighbors_shell_cells(
-                        d, cutoff, cutoff + shell_thickness,
-                        triclinic, rot, rotinv, boxdims)
+                        d,
+                        cutoff,
+                        cutoff + shell_thickness,
+                        triclinic,
+                        rot,
+                        rotinv,
+                        boxdims,
+                    )
                 else:
                     pc.get_all_neighbors_shell_normal(
-                        d, cutoff, cutoff + shell_thickness,
-                        triclinic, rot, rotinv, boxdims)
-    
-    elif method == 'number':
+                        d,
+                        cutoff,
+                        cutoff + shell_thickness,
+                        triclinic,
+                        rot,
+                        rotinv,
+                        boxdims,
+                    )
+
+    elif method == "number":
         finished = pc.get_all_neighbors_bynumber(
-            d, 0.0, triclinic, rot, rotinv, boxdims,
-            threshold, nmax, cells, assign_neighbor)
+            d,
+            0.0,
+            triclinic,
+            rot,
+            rotinv,
+            boxdims,
+            threshold,
+            nmax,
+            cells,
+            assign_neighbor,
+        )
         if not finished:
-            raise RuntimeError("Could not find enough neighbors - try increasing threshold")
-    
-    elif method == 'voronoi':
-        pc.get_all_neighbors_voronoi(
-            d, 0.0, triclinic, rot, rotinv, boxdims, voroexp)
-        
+            raise RuntimeError(
+                "Could not find enough neighbors - try increasing threshold"
+            )
+
+    elif method == "voronoi":
+        pc.get_all_neighbors_voronoi(d, 0.0, triclinic, rot, rotinv, boxdims, voroexp)
+
         if cutoff > 0:
             unique_vertices = pc.clean_voronoi_vertices(
-                d, triclinic, rot, rotinv, boxdims, cutoff)
+                d, triclinic, rot, rotinv, boxdims, cutoff
+            )
             atoms.info["pyscal_unique_vertices"] = unique_vertices
-    
+
     else:
-        raise ValueError(f"Unknown method: {method}. Use 'cutoff', 'voronoi', or 'number'.")
-    
+        raise ValueError(
+            f"Unknown method: {method}. Use 'cutoff', 'voronoi', or 'number'."
+        )
+
     # Write results back to ASE atoms
     dict_to_atoms(d, atoms, nreal=nreal)
     atoms.info["pyscal_neighbors_found"] = True
@@ -155,7 +210,7 @@ def find_neighbors(atoms: Atoms, method='cutoff', cutoff=0,
 def get_distance(atoms: Atoms, pos1, pos2, vector=False):
     """
     Get the distance between two positions respecting periodic boundaries.
-    
+
     Parameters
     ----------
     atoms : ase.Atoms
@@ -164,14 +219,16 @@ def get_distance(atoms: Atoms, pos1, pos2, vector=False):
         Positions.
     vector : bool, optional
         If True, also return the displacement vector.
-        
+
     Returns
     -------
     float or (float, list)
         Distance, and optionally the displacement vector.
     """
     triclinic, rot, rotinv, boxdims = get_box_params(atoms)
-    diff = pc.get_distance_vector(list(pos1), list(pos2), triclinic, rot, rotinv, boxdims)
+    diff = pc.get_distance_vector(
+        list(pos1), list(pos2), triclinic, rot, rotinv, boxdims
+    )
     dist = np.linalg.norm(diff)
     if vector:
         return dist, diff

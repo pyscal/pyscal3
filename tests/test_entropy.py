@@ -1,4 +1,5 @@
 """Tests for entropy parameter."""
+
 from pathlib import Path
 import numpy as np
 import pyscal3
@@ -8,6 +9,7 @@ DATA = Path(__file__).resolve().parent / "files"
 
 def test_entropy_fcc():
     from ase.io import read
+
     atoms = read(str(DATA / "conf.fcc.Al.dump"), format="lammps-dump-text")
     box = atoms.cell
     lat = np.linalg.norm(box[0]) / 5

@@ -25,6 +25,7 @@ from pyscal3.neighbors import find_neighbors, get_distance
 from pyscal3.descriptors import (
     steinhardt_parameter,
     minkowski_parameter,
+    wigner_w_parameter,
     disorder,
     common_neighbor_analysis,
     diamond_structure,
@@ -38,6 +39,7 @@ from pyscal3.descriptors import (
     find_solids,
     find_clusters,
     average_over_neighbors,
+    ace,
 )
 
 # Trajectory
@@ -52,6 +54,7 @@ __all__ = [
     # Descriptors
     "steinhardt_parameter",
     "minkowski_parameter",
+    "wigner_w_parameter",
     "disorder",
     "common_neighbor_analysis",
     "diamond_structure",
@@ -65,6 +68,7 @@ __all__ = [
     "find_solids",
     "find_clusters",
     "average_over_neighbors",
+    "ace",
     # Trajectory
     "Trajectory",
 ]
