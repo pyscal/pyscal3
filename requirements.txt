@@ -7,4 +7,4 @@ pybind11
 scipy
 spglib
 pyyaml
-jupyter-book
+jupyter-book<2
