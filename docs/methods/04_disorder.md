@@ -20,16 +20,16 @@ $$
 \bar{D}_j = \frac{1}{n_b^j} \sum_{k \in neighbors } D_j
 $$
 
-In pyscal3, the disorder parameter can be calculated by the following code-block,
+In pyscal, the disorder parameter can be calculated by the following code-block,
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
-pyscal3.steinhardt_parameter(atoms, l=6)
-pyscal3.disorder(atoms, q=6, averaged=True)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=0)
+pyscal.steinhardt_parameter(atoms, l=6)
+pyscal.disorder(atoms, q=6, averaged=True)
 ```
 
 The value of `q` can be set to any integer for which Steinhardt's parameters have been computed. The per-atom disorder is stored as `atoms.arrays['pyscal_disorder']` (and `pyscal_avg_disorder` for the averaged variant).

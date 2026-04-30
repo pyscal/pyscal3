@@ -16,14 +16,14 @@ $$
 
 The first three body orders give two-body ($\nu=1$), three-body ($\nu=2$), and four-body ($\nu=3$) descriptors. Increasing $n_{\max}$, $l_{\max}$, and $\nu_{\max}$ yields a systematically convergent representation.
 
-In pyscal3, the ACE descriptors up to $\nu=3$ can be calculated by,
+In pyscal, the ACE descriptors up to $\nu=3$ can be calculated by,
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-descriptors = pyscal3.ace(atoms, nmax=4, lmax=4, nu_max=2, cutoff=5.0)
+descriptors = pyscal.ace(atoms, nmax=4, lmax=4, nu_max=2, cutoff=5.0)
 ```
 
 The full descriptor matrix is stored as `atoms.arrays['pyscal_ace']` with shape $(N, n_{\mathrm{features}})$. Hyperparameters used in the calculation are recorded in `atoms.info['pyscal_ace_params']`. Setting `normalize=False` disables the per-feature normalisation; choosing `nu_max=1` returns only the radial $\nu=1$ block.

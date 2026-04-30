@@ -11,12 +11,12 @@ $$
 An atom belonging to a diamond structure shows an angular parameter close to 0. It can be calculated in pyscal3 with -
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
-pyscal3.angular_criteria(atoms)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=0)
+pyscal.angular_criteria(atoms)
 ```
 
 The per-atom value is stored as `atoms.arrays['pyscal_angular']`.
@@ -28,9 +28,9 @@ $\chi$ parameters introduced by Ackland and Jones [1] measures all local angles 
 $\chi$ parameters can be calculated in pyscal3 using,
 
 ``` python
-import pyscal3
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
-pyscal3.chi_params(atoms)
+import pyscal
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=0)
+pyscal.chi_params(atoms)
 ```
 
 The per-atom $\chi$ vector is stored as `atoms.arrays['pyscal_chiparams']`. For a direct structural label (FCC/BCC/HCP/ICO/other) built from $\chi$ values, see [Ackland-Jones classification](11_ackland_jones.md).

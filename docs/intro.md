@@ -1,8 +1,12 @@
 
-# pyscal3 - python Structural Environment Calculator
+# pyscal — python Structural Environment Calculator
 
 
-**pyscal3** is a Python library for computing local atomic structural environments from atomistic simulation data. It provides fast C++-backed calculations of [Steinhardt's bond-orientational order parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784), common neighbor analysis, Voronoi tessellation, and many more descriptors — all through a clean functional API built on [ASE](https://wiki.fysik.dtu.dk/ase/) (Atomic Simulation Environment).
+**pyscal** is a Python library for computing local atomic structural environments from atomistic simulation data. It provides fast C++-backed calculations of [Steinhardt's bond-orientational order parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784), common neighbor analysis, Voronoi tessellation, and many more descriptors — all through a clean functional API built on [ASE](https://wiki.fysik.dtu.dk/ase/) (Atomic Simulation Environment).
+
+```{note}
+pyscal is distributed on PyPI as **`pyscal3`** (the name `pyscal` on PyPI refers to an unrelated, now-unmaintained package). After `pip install pyscal3`, both `import pyscal` and `import pyscal3` work and refer to the same library.
+```
 
 ## Key features
 
@@ -31,20 +35,20 @@
 
 ```python
 from ase.build import bulk
-import pyscal3
+import pyscal
 
 # Create a structure
 atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
 
 # Find neighbors
-pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
+pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)
 
 # Calculate descriptors
-q4, q6 = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
+q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
 print(atoms.arrays["pyscal_q6"].mean())   # ≈ 0.57 for fcc
 
 # Common neighbor analysis
-result = pyscal3.common_neighbor_analysis(atoms)
+result = pyscal.common_neighbor_analysis(atoms)
 print(result)  # {'fcc': 108, 'hcp': 0, 'bcc': 0, 'ico': 0, 'others': 0}
 ```
 
@@ -53,7 +57,7 @@ Results are stored directly on the ASE `Atoms` object:
 - **Per-atom data** → `atoms.arrays["pyscal_<name>"]` (NumPy arrays)
 - **System-level or ragged data** → `atoms.info["pyscal_<name>"]`
 
-This makes it easy to combine pyscal3 with ASE's I/O, visualisation, and analysis tools.
+This makes it easy to combine pyscal with ASE's I/O, visualisation, and analysis tools.
 
 
 ## Why version 4?
@@ -69,10 +73,10 @@ pyscal no longer ships its own `System` or `Atoms` class. Every public function 
 Every descriptor is a top-level function. There is no system state to keep in sync, no method-chaining order to remember, no class to subclass when adding a new descriptor. A typical session is
 
 ``` python
-import pyscal3
-pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
-q4, q6 = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
-labels = pyscal3.identify_ackland_jones(atoms)
+import pyscal
+pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)
+q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
+labels = pyscal.identify_ackland_jones(atoms)
 ```
 
 Adding a new descriptor in v4 means writing a single function — not extending a class hierarchy.
@@ -96,43 +100,15 @@ sys.atoms.solid
 now reads
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=3)
-pyscal3.steinhardt_parameter(atoms, l=[4, 6])
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=3)
+pyscal.steinhardt_parameter(atoms, l=[4, 6])
 atoms.arrays['pyscal_solid']
 ```
 
 If you need the v3 API, pin `pyscal3<4`.
-
-
-## Why version 3?
-
-pyscal v3 was a major rewrite of the v2.x line, with breaking changes that required users to update their code. The two main motivations remain visible in v4 and are worth recording here.
-
-### Version 3 is much faster
-
-In the plot below, the time needed to calculate neighbors with the `cutoff` method for systems with varying number of atoms with versions 2.10.15 and 3.0 is shown.
-
-<img src="_static/img_time_neighbor.png"  width="60%">
-
-v3 is faster for all system sizes. At a system size of about 50,000 atoms, v3 is about 4x faster.
-
-### Version 3 uses less memory
-
-A major issue with the v2.x series was that it was not useful for large system sizes due to the large amount of memory needed. In the plot below, the memory usage of both versions for the same calculation above is shown.
-
-<img src="_static/img_time_memory.png"  width="60%">
-
-v3 uses less memory; for a system size of 50,000 atoms, v3 uses 14x less memory. A more interesting feature is the slope of the data, or how much the memory scales with the system size. For v3 it is only 0.008, while for v2 it is 0.12. For a system of 1 million atoms, v2 would use 117 GB of memory while v3 needs only 8 GB, making larger calculations accessible.
-
-### What are the reasons for these benefits?
-
-- The older C++ atoms class was deprecated. Atoms are stored as a Python dictionary instead, so copying between Python and C++ is avoided.
-- The atoms dictionary is exposed to the C++ side by reference, which allows in-place modification.
-
-These design choices carry over into v4, where the dictionary has simply been replaced by an `ase.Atoms` object whose `arrays` and `info` mappings serve the same purpose.
 
 
 ## Citing

@@ -8,15 +8,15 @@ $$
 
 are used as features, and a small set of empirical inequalities then maps the bin counts to a structure label. The classifier is robust at finite temperatures because it relies on relative populations of angular bins rather than on individual bond lengths.
 
-In pyscal3, the classification can be performed with,
+In pyscal, the classification can be performed with,
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
-labels = pyscal3.identify_ackland_jones(atoms)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=0)
+labels = pyscal.identify_ackland_jones(atoms)
 ```
 
 The integer label per atom is stored as `atoms.arrays['pyscal_ackland_label']` and the corresponding string name (`'fcc'`, `'bcc'`, `'hcp'`, `'ico'`, `'unknown'`) as `atoms.arrays['pyscal_structure']`.

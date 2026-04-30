@@ -1,18 +1,18 @@
 # Coordination measures
 
-The coordination number is the simplest and most widely used local descriptor of an atom's environment. pyscal3 exposes three variants that progressively relax the assumption of a sharp cutoff.
+The coordination number is the simplest and most widely used local descriptor of an atom's environment. pyscal exposes three variants that progressively relax the assumption of a sharp cutoff.
 
 ## Coordination number
 
 Given a neighbor list, the coordination number $\mathrm{CN}(i)$ is just the number of neighbors of atom $i$. It is meaningful when neighbors come from a well-defined criterion such as a cutoff at the first $g(r)$ minimum.
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=3.5)
-cn = pyscal3.coordination_number(atoms)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=3.5)
+cn = pyscal.coordination_number(atoms)
 ```
 
 Per-atom values are stored as `atoms.arrays['pyscal_cn']`.
@@ -34,7 +34,7 @@ $$
 iterated to convergence. ECoN reproduces the integer coordination number for ideal lattices and varies smoothly otherwise.
 
 ``` python
-econ = pyscal3.effective_coordination_number(atoms)
+econ = pyscal.effective_coordination_number(atoms)
 ```
 
 Per-atom values are stored as `atoms.arrays['pyscal_econ']`.
@@ -50,7 +50,7 @@ $$
 where $\mathrm{CN}_{\max}$ is the bulk coordination of the underlying lattice (12 for fcc, 8 for bcc, etc.). It is widely used as a descriptor for catalytic activity at metal surfaces.
 
 ``` python
-gcn = pyscal3.generalized_coordination_number(atoms, cn_max=12)
+gcn = pyscal.generalized_coordination_number(atoms, cn_max=12)
 ```
 
 Per-atom values are stored as `atoms.arrays['pyscal_gcn']`.

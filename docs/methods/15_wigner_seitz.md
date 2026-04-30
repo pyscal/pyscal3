@@ -11,12 +11,12 @@ with vacancies at sites where $\mathrm{occ}(s) = 0$ and interstitials where $\ma
 ## Site occupancies
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 ref = read('perfect.dump', format='lammps-dump-text')
 atoms = read('defected.dump', format='lammps-dump-text')
-result = pyscal3.wigner_seitz_analysis(atoms, reference=ref)
+result = pyscal.wigner_seitz_analysis(atoms, reference=ref)
 
 print(result['vacancy_count'], result['interstitial_count'])
 ```
@@ -26,7 +26,7 @@ Per-atom site assignment is stored as `atoms.arrays['pyscal_ws_site_index']` and
 For antisite detection in alloys, request per-type occupancies,
 
 ``` python
-result = pyscal3.wigner_seitz_analysis(atoms, reference=ref,
+result = pyscal.wigner_seitz_analysis(atoms, reference=ref,
                                        per_type_occupancies=True)
 ```
 
@@ -35,7 +35,7 @@ result = pyscal3.wigner_seitz_analysis(atoms, reference=ref,
 A convenience wrapper labels each atom as belonging to a perfect site, an interstitial, or returns the positions of vacancies,
 
 ``` python
-defects = pyscal3.identify_defect_atoms(atoms, reference=ref)
+defects = pyscal.identify_defect_atoms(atoms, reference=ref)
 print(defects['defect_summary'])
 print(defects['vacancy_positions'])
 ```

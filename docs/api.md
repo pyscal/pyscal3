@@ -1,6 +1,6 @@
 # API Reference
 
-All public functions are available directly from `import pyscal3`.
+All public functions are available directly from `import pyscal` (or, equivalently, `import pyscal3`).
 Results are stored on the ASE `Atoms` object with the `pyscal_` prefix.
 
 ## Neighbor Finding

@@ -23,13 +23,13 @@ $$
 Entropy parameters can be calculated in pyscal3 using the following code,
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=0)
 lattice_constant = 4.00
-pyscal3.entropy(atoms, rm=1.4 * lattice_constant, average=True)
+pyscal.entropy(atoms, rm=1.4 * lattice_constant, average=True)
 ```
 
 The value of $r_m$ is provided in the same units as the input coordinates (typically Å). Other parameters such as $\sigma$, the integration step `h`, and the integration starting point `rstart` can be set through keyword arguments. Per-atom values are stored as `atoms.arrays['pyscal_entropy']` and `pyscal_average_entropy`.

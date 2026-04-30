@@ -13,12 +13,12 @@ $$
 The ADF is the histogram of $\theta_{ijk}$ over all atoms and all neighbor pairs.
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=3.5)
-hist, angles = pyscal3.angular_distribution_function(atoms, bins=180)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=3.5)
+hist, angles = pyscal.angular_distribution_function(atoms, bins=180)
 ```
 
 The histogram and bin centers are also stored as `atoms.info['pyscal_adf']` and `atoms.info['pyscal_adf_angles']`.
@@ -28,7 +28,7 @@ The histogram and bin centers are also stored as `atoms.info['pyscal_adf']` and 
 The BLDF is the distribution of pair distances $r_{ij}$ restricted to the bonds in the current neighbor list. It differs from $g(r)$ in that it carries no shell-volume normalisation, so it more directly reflects the geometry of the chosen coordination shell.
 
 ``` python
-hist, r = pyscal3.bond_length_distribution(atoms, bins=100)
+hist, r = pyscal.bond_length_distribution(atoms, bins=100)
 ```
 
 The histogram and bin centers are stored as `atoms.info['pyscal_bldf']` and `atoms.info['pyscal_bldf_r']`.

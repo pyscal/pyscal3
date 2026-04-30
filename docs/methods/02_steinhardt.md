@@ -18,12 +18,12 @@ in which $Y_{lm}$ are the spherical harmonics and $N(i)$ is the number of neighb
 Once the cutoff is chosen and neighbors are calculated, the calculation of Steinhardt's parameters is straightforward.
 
 ``` python
-import pyscal3
+import pyscal
 from ase.build import bulk
 
 atoms = bulk('Cu', 'fcc', cubic=True).repeat(4)
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
-q4, q6 = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=0)
+q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
 ```
 
 Results are also stored on the `Atoms` object as `atoms.arrays['pyscal_q4']` and `atoms.arrays['pyscal_q6']`.
@@ -40,7 +40,7 @@ where the sum from $k=0$ to $\tilde{N}(i)$ is over all the neighbors and the par
 Averaged versions can be calculated by setting the keyword `averaged=True` as follows.
 
 ``` python
-aq4, aq6 = pyscal3.steinhardt_parameter(atoms, l=[4, 6], averaged=True)
+aq4, aq6 = pyscal.steinhardt_parameter(atoms, l=[4, 6], averaged=True)
 ```
 
 ## Voronoi weighted Steinhardt's parameters
@@ -54,8 +54,8 @@ $$
 where $A_{ij}$ is the area of the Voronoi facet between atoms $i$ and $j$ and $A$ is the sum of the face areas of atom $i$. The dedicated function `minkowski_parameter` performs this calculation; see the [Minkowski parameters](09_minkowski.md) page for details.
 
 ``` python
-pyscal3.find_neighbors(atoms, method='voronoi')
-q4, q6 = pyscal3.minkowski_parameter(atoms, l=[4, 6])
+pyscal.find_neighbors(atoms, method='voronoi')
+q4, q6 = pyscal.minkowski_parameter(atoms, l=[4, 6])
 ```
 
 ## References

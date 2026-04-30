@@ -8,22 +8,22 @@ pyscal grew over the years from a small wrapper around a few C++ routines into a
 
 Version 4 is a ground-up rewrite around two ideas:
 
-- **ASE `Atoms` is the data structure.** pyscal3 no longer ships its own atoms class. Any `ase.Atoms` object — read from a LAMMPS dump, a POSCAR, a CIF, an XYZ, built with `ase.build.bulk`, or constructed by hand — can be passed directly to a pyscal3 function. Results are written back as `atoms.arrays["pyscal_*"]` for per-atom quantities and `atoms.info["pyscal_*"]` for global ones, so they travel with the atoms object and remain accessible to the rest of the ASE ecosystem.
+- **ASE `Atoms` is the data structure.** pyscal no longer ships its own atoms class. Any `ase.Atoms` object — read from a LAMMPS dump, a POSCAR, a CIF, an XYZ, built with `ase.build.bulk`, or constructed by hand — can be passed directly to a pyscal function. Results are written back as `atoms.arrays["pyscal_*"]` for per-atom quantities and `atoms.info["pyscal_*"]` for global ones, so they travel with the atoms object and remain accessible to the rest of the ASE ecosystem.
 
-- **Functional API.** Every descriptor is a top-level function in `pyscal3` that takes an `Atoms` object as its first argument. Neighbor lists are computed once with `pyscal3.find_neighbors(atoms, ...)` and reused by every subsequent descriptor. There is no system state to keep in sync, no method-chaining order to remember, and no class to subclass when adding a new descriptor.
+- **Functional API.** Every descriptor is a top-level function in `pyscal` that takes an `Atoms` object as its first argument. Neighbor lists are computed once with `pyscal.find_neighbors(atoms, ...)` and reused by every subsequent descriptor. There is no system state to keep in sync, no method-chaining order to remember, and no class to subclass when adding a new descriptor.
 
 The C++ core is unchanged in spirit — voro++ for tessellation, hand-written kernels for Steinhardt-type invariants, pybind11 bindings — but is now exposed through a much thinner Python layer.
 
 A typical session looks like:
 
 ```python
-import pyscal3
+import pyscal
 from ase.build import bulk
 
 atoms = bulk("Cu", "fcc", cubic=True).repeat(4)
-pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)   # adaptive
-q4, q6 = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
-labels = pyscal3.identify_ackland_jones(atoms)
+pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)   # adaptive
+q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
+labels = pyscal.identify_ackland_jones(atoms)
 
 print(atoms.arrays["pyscal_q6"].mean())   # ≈ 0.57 for fcc
 ```
@@ -54,7 +54,9 @@ A complete list with mathematical definitions and example notebooks is available
 
 ## Installation
 
-pyscal3 can be installed from conda-forge:
+pyscal is distributed on PyPI and conda-forge as `pyscal3` (the name `pyscal` on PyPI refers to a separate, unrelated package). After installation, both `import pyscal` and `import pyscal3` work.
+
+From conda-forge:
 
 ```
 conda install -c conda-forge pyscal3
@@ -78,7 +80,7 @@ A C++ compiler with C++17 support is required when building from source.
 
 ## Citing the work
 
-If you use pyscal3 in your work, please cite the [following article](https://joss.theoj.org/papers/10.21105/joss.01824):
+If you use pyscal in your work, please cite the [following article](https://joss.theoj.org/papers/10.21105/joss.01824):
 
 Sarath Menon, Grisell Díaz Leines and Jutta Rogal (2019). pyscal: A python module for structural analysis of atomic environments. *Journal of Open Source Software* 4(43), 1824. https://doi.org/10.21105/joss.01824
 

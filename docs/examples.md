@@ -1,6 +1,6 @@
 # Examples
 
-The tutorials below cover the full pyscal3 API — from loading structures to computing structural descriptors.
+The tutorials below cover the full pyscal API — from loading structures to computing structural descriptors.
 
 ::::{grid} 1 1 2 3
 :class-container: text-center
@@ -12,7 +12,7 @@ The tutorials below cover the full pyscal3 API — from loading structures to co
 :class-header: bg-light
 Getting started
 ^^^
-Loading structures with ASE, the pyscal3 workflow, and where results are stored.
+Loading structures with ASE, the pyscal workflow, and where results are stored.
 :::
 
 :::{grid-item-card}

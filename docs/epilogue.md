@@ -8,7 +8,7 @@ are also welcome to fix a bug or implement a feature.
 Any other questions or suggestions are welcome, please contact
 [us](mailto:sarath.menon@pyscal.org).
 
-`pyscal3` welcomes and appreciates contribution and extension to the
+`pyscal` welcomes and appreciates contribution and extension to the
 module. Rather than local modifications, we request that the
 modifications be submitted through a pull request, so that the module
 can be continuously improved.
@@ -32,7 +32,7 @@ with local feature development.
 
 ### Setting up local environment
 
-1.  The first step is to fork `pyscal3`. A detailed tutorial on forking can
+1.  The first step is to fork `pyscal`. A detailed tutorial on forking can
     be found [here](https://help.github.com/en/articles/fork-a-repo).
     After forking, clone the repository to your local machine.
 2.  We recommend creating a virtual environment to test new features or
@@ -42,16 +42,16 @@ with local feature development.
 3.  Once the environment is set up, you can create a new branch for your
     feature by `git checkout -b new_feauture`.
 4.  Now implement the necessary feature.
-5.  Once done, you can reinstall `pyscal3` by `pip install .`.
+5.  Once done, you can reinstall `pyscal` by `pip install .`.
     After that please make sure that the existing tests work by running
     `pytest tests/` from the main module folder.
 6.  If the tests work, you are almost done! If the new feature is not
     covered in existing tests, you can to write a new test in the tests
-    folder. `pyscal3` uses pytest for tests. [This
+    folder. `pyscal` uses pytest for tests. [This
     link](http://doc.pytest.org/en/latest/getting-started.html) will
     help you get started.
 7.  Add the necessary docstrings for the new functions implemented.
-    `pyscal3` uses the [numpy docstring
+    `pyscal` uses the [numpy docstring
     format](https://numpydoc.readthedocs.io/en/latest/format.html) for
     documentation.
 8.  Bonus task: Set up few examples that document how the feature works
@@ -82,7 +82,7 @@ Please see the complete list of contributers [here](https://github.com/pyscal/py
 ## Acknowledgements
 
 - [Bond order analysis](https://github.com/WolfgangLechner/StructureAnalysis) code for the inspiration and the base for what later grew to be `pyscal`. 
-- [Voro++](math.lbl.gov/voro++/) and [pybind11](https://pybind11.readthedocs.io/en/stable/) for developing the great tools that we could use in `pyscal3`.  
+- [Voro++](math.lbl.gov/voro++/) and [pybind11](https://pybind11.readthedocs.io/en/stable/) for developing the great tools that we could use in `pyscal`.  
 - [E-CAM High Throughput Computing ESDW](https://www.e-cam2020.eu/event/4424/?instance_id=71) held in [Turin](https://www.polito.it/?lang=en) in 2018 and 2019 for programming help, especially David W.H. Swenson and Alan O'Cais. 
 - Scholarship from the International Max Planck Research School for Interface Controlled Materials for Energy Conversion for funding the initial stages of this work.
 - [Interdisciplinary Centre for Advanced Materials Simulation](http://www.icams.de/content), at the [Ruhr University Bochum](https://www.ruhr-uni-bochum.de/en), Germany for the resources.

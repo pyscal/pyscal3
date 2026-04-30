@@ -19,17 +19,17 @@ If a particle has $n$ number of bonds with $s_{ij} \geq \mathrm{threshold}$ and 
 Finding solid atoms in liquid starts with reading in a file and calculating neighbors.
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=4)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=4)
 ```
 
 Once again, there are various methods for finding neighbors. Once the neighbors are calculated, solid atoms can be found directly by,
 
 ``` python
-largest = pyscal3.find_solids(atoms, bonds=6, threshold=0.5,
+largest = pyscal.find_solids(atoms, bonds=6, threshold=0.5,
                               avgthreshold=0.6, cluster=True)
 ```
 

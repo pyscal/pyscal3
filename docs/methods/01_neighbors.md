@@ -1,6 +1,6 @@
 # Methods to calculate neighbors of a particle
 
-pyscal3 includes different methods to explore the local environment of a particle that rely on the calculation of nearest neighbors. Various approaches to compute the neighbors of particles are discussed here.
+pyscal includes different methods to explore the local environment of a particle that rely on the calculation of nearest neighbors. Various approaches to compute the neighbors of particles are discussed here.
 
 ## Fixed cutoff method
 
@@ -8,11 +8,11 @@ The most common method to calculate the nearest neighbors of an atom is using a 
 be the input configuration of the system. A cutoff radius of 3 is assumed for calculation of neighbors.
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=3)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=3)
 ```
 
 ## Adaptive cutoff methods
@@ -35,7 +35,7 @@ $$
 where $i$ is the host atom, $j$ are its neighbors with $r_{ij}$ is the distance between atoms $i$ and $j$. $R_i$ is the cutoff radius for each particle $i$ which is found by increasing the neighbor of neighbors $m$ iteratively. For a description of the algorithm and more details, please check the reference [1]. SANN algorithm can be used to find the neighbors by,
 
 ``` python
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff='sann')
+pyscal.find_neighbors(atoms, method='cutoff', cutoff='sann')
 ```
 
 Since SANN algorithm involves sorting, a sufficiently large cutoff is used in the beginning to reduce the number entries to be sorted. This parameter is calculated by,
@@ -58,7 +58,7 @@ $$
 This method can be chosen by,
 
 ``` python
-pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=0)
 ```
 
 The keyword `cutoff=0` selects the adaptive method. The `padding` and `nlimit` parameters in the above equation can be tuned using the respective keywords.
@@ -70,7 +70,7 @@ Either of the adaptive method can be used to find neighbors, which can then be u
 [Voronoi tessellation](https://en.wikipedia.org/wiki/Voronoi_diagram) provides a completely parameter free geometric approach for calculation of neighbors. [Voro++](http://math.lbl.gov/voro++/) code is used for Voronoi tessellation. Neighbors can be calculated using this method by,
 
 ``` python
-pyscal3.find_neighbors(atoms, method='voronoi')
+pyscal.find_neighbors(atoms, method='voronoi')
 ```
 
 Finding neighbors using Voronoi tessellation also calculates a weight for each neighbor. The weight of a neighbor $j$ towards a host atom $i$ is given by,
@@ -87,7 +87,7 @@ W_{ij} = \frac{A_{ij}^2}{\sum_{j=1}^N A_{ij}^2}
 $$
 
 ``` python
-pyscal3.find_neighbors(atoms, method='voronoi', voroexp=2)
+pyscal.find_neighbors(atoms, method='voronoi', voroexp=2)
 ```
 
 ## References

@@ -1,6 +1,6 @@
 # Descriptors
 
-pyscal3 can calculate the following descriptors:
+pyscal can calculate the following descriptors:
 
 |   |   |   |
 | -------- | ------- | ------- |

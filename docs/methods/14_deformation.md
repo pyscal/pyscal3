@@ -13,12 +13,12 @@ where $\pmb{R}_{ij}$ are reference bond vectors and $\pmb{r}_{ij}$ are the corre
 All deformation descriptors require both `atoms` and a `reference` Atoms object with the same number of atoms in matching order. Neighbors are taken from the reference configuration.
 
 ``` python
-import pyscal3
+import pyscal
 from ase.io import read
 
 ref = read('conf0.dump', format='lammps-dump-text')
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal3.find_neighbors(ref, method='cutoff', cutoff=0)
+pyscal.find_neighbors(ref, method='cutoff', cutoff=0)
 ```
 
 ## Atomic strain
@@ -30,7 +30,7 @@ $$
 $$
 
 ``` python
-strain = pyscal3.atomic_strain(atoms, reference=ref)
+strain = pyscal.atomic_strain(atoms, reference=ref)
 ```
 
 Stored as `atoms.arrays['pyscal_strain']` with shape $(N, 3, 3)$.
@@ -46,7 +46,7 @@ $$
 is a convenient single number per atom for visualising shear localisation.
 
 ``` python
-vm = pyscal3.von_mises_strain(atoms, reference=ref)
+vm = pyscal.von_mises_strain(atoms, reference=ref)
 ```
 
 Stored as `atoms.arrays['pyscal_von_mises']`.
@@ -62,7 +62,7 @@ $$
 as a measure of *non-affine* displacement. Atoms participating in shear transformations show large $D^2_{\min}$ values that highlight the carriers of plastic deformation in amorphous solids.
 
 ``` python
-d2 = pyscal3.d2min(atoms, reference=ref)
+d2 = pyscal.d2min(atoms, reference=ref)
 ```
 
 Stored as `atoms.arrays['pyscal_d2min']`.
@@ -78,7 +78,7 @@ $$
 where the sum runs over the $n_s$ neighbors that have slipped (whose displacement exceeds a small threshold). The magnitude $|\pmb{s}|$ identifies dislocation cores and stacking faults; the direction gives the local Burgers vector.
 
 ``` python
-slip = pyscal3.slip_vector(atoms, reference=ref)
+slip = pyscal.slip_vector(atoms, reference=ref)
 ```
 
 Stored as `atoms.arrays['pyscal_slip_vector']`.
