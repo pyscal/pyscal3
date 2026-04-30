@@ -51,6 +51,8 @@ from pyscal3.descriptors import (
     coordination_number,
     generalized_coordination_number,
     local_density,
+    wigner_seitz_analysis,
+    identify_defect_atoms,
 )
 
 # Trajectory
@@ -91,6 +93,8 @@ __all__ = [
     "coordination_number",
     "generalized_coordination_number",
     "local_density",
+    "wigner_seitz_analysis",
+    "identify_defect_atoms",
     # Trajectory
     "Trajectory",
 ]
