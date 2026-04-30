@@ -235,6 +235,12 @@ void calculate_q_single(py::dict& atoms,
 void calculate_aq_single(py::dict& atoms,
     const int lm);
 
+void calculate_w_single(py::dict& atoms,
+    const int lm);
+
+void calculate_aw_single(py::dict& atoms,
+    const int lm);
+
 void calculate_disorder(py::dict& atoms,
     const int lm);
 
