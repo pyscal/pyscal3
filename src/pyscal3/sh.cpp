@@ -430,6 +430,242 @@ void calculate_aq_single(py::dict& atoms,
 }
 
 
+/*-----------------------------------------------------
+    Wigner 3j symbol and W_l parameter
+    Ref: Steinhardt, Nelson & Ronchetti, Phys. Rev. B 28, 784 (1983)
+    Averaged: Lechner & Dellago, J. Chem. Phys. 129, 114707 (2008)
+-----------------------------------------------------*/
+
+// Factorial for integers up to ~25 (sufficient for l <= 12)
+static double factorial_int(int n) {
+    if (n <= 1) return 1.0;
+    double result = 1.0;
+    for (int i = 2; i <= n; i++) result *= i;
+    return result;
+}
+
+// Wigner 3j symbol via the Racah formula (j1 = j2 = j3 = l)
+//
+//   ( l   l   l  )
+//   ( m1  m2  m3 )
+//
+// = (-1)^{l - m3} * sqrt( Delta(l,l,l) * (l+m1)!(l-m1)!...(l-m3)! )
+//   * sum_t (-1)^t / [t! (l-t)! (l-m1-t)! (l+m2-t)! (m1+t)! (-m2+t)!]
+//
+// where Delta(l,l,l) = (l!)^3 / (3l+1)!
+static double wigner3j(int l, int m1, int m2, int m3) {
+    // Selection rules
+    if (m1 + m2 + m3 != 0) return 0.0;
+    if (abs(m1) > l || abs(m2) > l || abs(m3) > l) return 0.0;
+
+    int J = 3 * l;
+    if (J % 2 != 0) return 0.0;  // 3j vanishes when 3l is odd (j1=j2=j3=l)
+
+    // Phase: (-1)^{j1 - j2 - m3} = (-1)^{-m3} = (-1)^{|m3|}
+    double phase = (abs(m3) % 2 == 0) ? 1.0 : -1.0;
+
+    // Triangle coefficient  Delta(l,l,l) = (l!)^3 / (3l+1)!
+    double delta = factorial_int(l) * factorial_int(l) * factorial_int(l)
+                   / factorial_int(J + 1);
+
+    // m-dependent factor: product of (l +/- mi)! for i = 1,2,3
+    double mfact = factorial_int(l + m1) * factorial_int(l - m1)
+                 * factorial_int(l + m2) * factorial_int(l - m2)
+                 * factorial_int(l + m3) * factorial_int(l - m3);
+
+    // Racah sum bounds (all factorial arguments must be >= 0)
+    // Denominator factorials: t!, (l-t)!, (l-m1-t)!, (l+m2-t)!, (m1+t)!, (-m2+t)!
+    int t_min = 0;
+    t_min = max(t_min, -m1);    // m1 + t >= 0
+    t_min = max(t_min, m2);     // -m2 + t >= 0
+
+    int t_max = l;               // l - t >= 0
+    t_max = min(t_max, l - m1);  // l - m1 - t >= 0
+    t_max = min(t_max, l + m2);  // l + m2 - t >= 0
+
+    if (t_min > t_max) return 0.0;
+
+    double sum = 0.0;
+    for (int t = t_min; t <= t_max; t++) {
+        double sign = (t % 2 == 0) ? 1.0 : -1.0;
+        double denom = factorial_int(t) * factorial_int(l - t)
+                     * factorial_int(l - m1 - t) * factorial_int(l + m2 - t)
+                     * factorial_int(m1 + t) * factorial_int(-m2 + t);
+        sum += sign / denom;
+    }
+
+    return phase * sqrt(delta * mfact) * sum;
+}
+
+
+void calculate_w_single(py::dict& atoms,
+    const int lm) {
+
+    string key_real = "q" + to_string(lm) + "_real";
+    string key_imag = "q" + to_string(lm) + "_imag";
+
+    vector<vector<double>> q_real = atoms[py::str(key_real)].cast<vector<vector<double>>>();
+    vector<vector<double>> q_imag = atoms[py::str(key_imag)].cast<vector<vector<double>>>();
+
+    int nop = q_real.size();
+    vector<double> w_values(nop, 0.0);
+    vector<double> wbar_values(nop, 0.0);
+
+    // For odd l, W_l = 0 (3j symbol vanishes when 3l is odd)
+    if ((3 * lm) % 2 != 0) {
+        atoms[py::str("w" + to_string(lm))] = w_values;
+        atoms[py::str("what" + to_string(lm))] = wbar_values;
+        return;
+    }
+
+    // Precompute all needed Wigner 3j symbols
+    // m1 runs from -l to l, m2 from -l to l, m3 = -(m1+m2)
+    vector<vector<double>> w3j_table((2 * lm + 1), vector<double>(2 * lm + 1, 0.0));
+    for (int m1 = -lm; m1 <= lm; m1++) {
+        for (int m2 = -lm; m2 <= lm; m2++) {
+            int m3 = -(m1 + m2);
+            if (abs(m3) <= lm) {
+                w3j_table[m1 + lm][m2 + lm] = wigner3j(lm, m1, m2, m3);
+            }
+        }
+    }
+
+    for (int ti = 0; ti < nop; ti++) {
+        double w_val = 0.0;
+        double norm_sq = 0.0;
+
+        // Compute |q_lm|^2 sum for normalization
+        for (int mi = 0; mi < 2 * lm + 1; mi++) {
+            norm_sq += q_real[ti][mi] * q_real[ti][mi] + q_imag[ti][mi] * q_imag[ti][mi];
+        }
+
+        // W_l = sum_{m1+m2+m3=0} (l l l / m1 m2 m3) * q_lm1 * q_lm2 * q_lm3
+        // where q_lm is complex: q_real + i*q_imag
+        for (int m1 = -lm; m1 <= lm; m1++) {
+            int idx1 = m1 + lm;  // index into q arrays
+            for (int m2 = -lm; m2 <= lm; m2++) {
+                int m3 = -(m1 + m2);
+                if (abs(m3) > lm) continue;
+                int idx2 = m2 + lm;
+                int idx3 = m3 + lm;
+
+                double w3j = w3j_table[m1 + lm][m2 + lm];
+                if (w3j == 0.0) continue;
+
+                // Complex product: q1 * q2 * q3
+                // (a1+ib1)(a2+ib2) = (a1a2-b1b2) + i(a1b2+a2b1)
+                double r1 = q_real[ti][idx1], i1 = q_imag[ti][idx1];
+                double r2 = q_real[ti][idx2], i2 = q_imag[ti][idx2];
+                double r3 = q_real[ti][idx3], i3 = q_imag[ti][idx3];
+
+                double r12 = r1 * r2 - i1 * i2;
+                double i12 = r1 * i2 + i1 * r2;
+                double r123 = r12 * r3 - i12 * i3;
+                // imaginary part of triple product should be ~0 for real W_l
+                // double i123 = r12 * i3 + i12 * r3;
+
+                w_val += w3j * r123;
+            }
+        }
+
+        w_values[ti] = w_val;
+        // Normalized: W-hat_l = W_l / (sum |q_lm|^2)^(3/2)
+        double norm_cubed = pow(norm_sq, 1.5);
+        wbar_values[ti] = (norm_cubed > 1e-30) ? w_val / norm_cubed : 0.0;
+    }
+
+    atoms[py::str("w" + to_string(lm))] = w_values;
+    atoms[py::str("what" + to_string(lm))] = wbar_values;
+}
+
+
+void calculate_aw_single(py::dict& atoms,
+    const int lm) {
+
+    // Compute averaged W_l using neighbor-averaged q_lm values
+    // First, compute neighbor-averaged q_lm (same as calculate_aq_single but
+    // we keep the full complex components, then compute W_l from those)
+
+    string key_real = "q" + to_string(lm) + "_real";
+    string key_imag = "q" + to_string(lm) + "_imag";
+
+    vector<vector<double>> q_real = atoms[py::str(key_real)].cast<vector<vector<double>>>();
+    vector<vector<double>> q_imag = atoms[py::str(key_imag)].cast<vector<vector<double>>>();
+    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
+
+    int nop = q_real.size();
+
+    // For odd l, W_l = 0
+    if ((3 * lm) % 2 != 0) {
+        vector<double> zeros(nop, 0.0);
+        atoms[py::str("avg_w" + to_string(lm))] = zeros;
+        atoms[py::str("avg_what" + to_string(lm))] = zeros;
+        return;
+    }
+
+    // Precompute 3j table
+    vector<vector<double>> w3j_table((2 * lm + 1), vector<double>(2 * lm + 1, 0.0));
+    for (int m1 = -lm; m1 <= lm; m1++) {
+        for (int m2 = -lm; m2 <= lm; m2++) {
+            int m3 = -(m1 + m2);
+            if (abs(m3) <= lm) {
+                w3j_table[m1 + lm][m2 + lm] = wigner3j(lm, m1, m2, m3);
+            }
+        }
+    }
+
+    vector<double> w_values(nop, 0.0);
+    vector<double> wbar_values(nop, 0.0);
+
+    for (int ti = 0; ti < nop; ti++) {
+        // First compute averaged q_lm for this atom
+        int nns = neighbors[ti].size();
+        vector<double> avg_real(2 * lm + 1, 0.0);
+        vector<double> avg_imag(2 * lm + 1, 0.0);
+
+        for (int mi = 0; mi < 2 * lm + 1; mi++) {
+            avg_real[mi] = q_real[ti][mi];
+            avg_imag[mi] = q_imag[ti][mi];
+            for (int ci = 0; ci < nns; ci++) {
+                avg_real[mi] += q_real[neighbors[ti][ci]][mi];
+                avg_imag[mi] += q_imag[neighbors[ti][ci]][mi];
+            }
+            avg_real[mi] /= double(nns + 1);
+            avg_imag[mi] /= double(nns + 1);
+        }
+
+        // Compute W_l from averaged q_lm
+        double w_val = 0.0;
+        double norm_sq = 0.0;
+        for (int mi = 0; mi < 2 * lm + 1; mi++) {
+            norm_sq += avg_real[mi] * avg_real[mi] + avg_imag[mi] * avg_imag[mi];
+        }
+
+        for (int m1 = -lm; m1 <= lm; m1++) {
+            for (int m2 = -lm; m2 <= lm; m2++) {
+                int m3 = -(m1 + m2);
+                if (abs(m3) > lm) continue;
+                int idx1 = m1 + lm, idx2 = m2 + lm, idx3 = m3 + lm;
+                double w3j = w3j_table[m1 + lm][m2 + lm];
+                if (w3j == 0.0) continue;
+
+                double r12 = avg_real[idx1] * avg_real[idx2] - avg_imag[idx1] * avg_imag[idx2];
+                double i12 = avg_real[idx1] * avg_imag[idx2] + avg_imag[idx1] * avg_real[idx2];
+                double r123 = r12 * avg_real[idx3] - i12 * avg_imag[idx3];
+                w_val += w3j * r123;
+            }
+        }
+
+        w_values[ti] = w_val;
+        double norm_cubed = pow(norm_sq, 1.5);
+        wbar_values[ti] = (norm_cubed > 1e-30) ? w_val / norm_cubed : 0.0;
+    }
+
+    atoms[py::str("avg_w" + to_string(lm))] = w_values;
+    atoms[py::str("avg_what" + to_string(lm))] = wbar_values;
+}
+
+
 void calculate_disorder(py::dict& atoms,
 	const int lm){
     

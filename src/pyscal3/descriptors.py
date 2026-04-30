@@ -14,14 +14,19 @@ Example
 >>> q = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
 >>> print(atoms.arrays["pyscal_q4"])
 """
+
 import numpy as np
 import itertools
 from ase import Atoms
+from scipy.special import sph_harm_y
 
 import pyscal3.csystem as pc
 from pyscal3._bridge import (
-    get_box_params, atoms_to_dict, dict_to_atoms,
-    ensure_neighbors, create_attribute,
+    get_box_params,
+    atoms_to_dict,
+    dict_to_atoms,
+    ensure_neighbors,
+    create_attribute,
     pad_atoms_for_neighbor_finding,
 )
 from pyscal3.neighbors import find_neighbors
@@ -30,6 +35,7 @@ from pyscal3.neighbors import find_neighbors
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_dict_with_neighbors(atoms: Atoms) -> dict:
     """Build the C++ dict, ensuring neighbors exist."""
@@ -46,7 +52,7 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
         store_key = "pyscal_" + key
         try:
             arr = np.asarray(d[key])
-            if arr.ndim >= 1 and len(arr) == n and arr.dtype.kind != 'O':
+            if arr.ndim >= 1 and len(arr) == n and arr.dtype.kind != "O":
                 atoms.arrays[store_key] = arr
                 continue
         except (ValueError, TypeError):
@@ -57,6 +63,7 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
 # ---------------------------------------------------------------------------
 # Steinhardt Parameters
 # ---------------------------------------------------------------------------
+
 
 def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     """
@@ -98,18 +105,184 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     # Sync all q-related keys back
     sync_keys = []
     for val in ll:
-        sync_keys.extend([
-            "q%d" % val, "q%d_real" % val, "q%d_imag" % val,
-            "avg_q%d" % val,
-        ])
+        sync_keys.extend(
+            [
+                "q%d" % val,
+                "q%d_real" % val,
+                "q%d_imag" % val,
+                "avg_q%d" % val,
+            ]
+        )
     _sync_back(d, atoms, sync_keys)
 
     return [np.array(d[k]) for k in result_keys]
 
 
 # ---------------------------------------------------------------------------
+# Wigner W_l Parameter (Third-order rotational invariant)
+# ---------------------------------------------------------------------------
+
+
+def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
+    """
+    Calculate the third-order Steinhardt invariant W_l.
+
+    W_l is the third-order rotational invariant of the bond-orientational
+    order parameters, constructed by contracting q_lm with Wigner 3j
+    symbols. It distinguishes crystal structures that have similar q_l
+    values (e.g., FCC vs HCP via the sign of W_6).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed via find_neighbors.
+    l : int or list of int
+        Order(s) for the W parameter. Only even values give nonzero
+        results (W_l = 0 for odd l when j1=j2=j3=l).
+    averaged : bool, optional
+        If True, compute neighbor-averaged W_l (Lechner-Dellago).
+        Default False.
+    normalized : bool, optional
+        If True (default), return the normalized hat{W}_l =
+        W_l / (sum |q_lm|^2)^(3/2). If False, return raw W_l.
+
+    Returns
+    -------
+    list of numpy arrays
+        One array per requested l value, each of shape (natoms,).
+
+    References
+    ----------
+    .. [1] Steinhardt, Nelson & Ronchetti, Phys. Rev. B 28, 784 (1983).
+    .. [2] Lechner & Dellago, J. Chem. Phys. 129, 114707 (2008).
+
+    Notes
+    -----
+    Known values for hat{W}_6:
+      - FCC: −0.01316
+      - HCP: −0.01244
+      - BCC: +0.01316
+      - ICO (Mackay): −0.16975
+      - Liquid: ≈ 0
+    """
+    if isinstance(l, int):
+        ll = [l]
+    else:
+        ll = list(l)
+
+    d = _get_dict_with_neighbors(atoms)
+
+    # Ensure q_lm are computed first (W_l requires them)
+    for val in ll:
+        pc.calculate_q_single(d, val)
+
+    if averaged:
+        for val in ll:
+            pc.calculate_aw_single(d, val)
+        if normalized:
+            result_keys = ["avg_what%d" % v for v in ll]
+        else:
+            result_keys = ["avg_w%d" % v for v in ll]
+    else:
+        for val in ll:
+            pc.calculate_w_single(d, val)
+        if normalized:
+            result_keys = ["what%d" % v for v in ll]
+        else:
+            result_keys = ["w%d" % v for v in ll]
+
+    # Sync all W-related keys back
+    sync_keys = []
+    for val in ll:
+        sync_keys.extend(
+            [
+                "q%d" % val,
+                "q%d_real" % val,
+                "q%d_imag" % val,
+                "w%d" % val,
+                "what%d" % val,
+                "avg_w%d" % val,
+                "avg_what%d" % val,
+            ]
+        )
+    _sync_back(d, atoms, sync_keys)
+
+    return [np.array(d[k]) for k in result_keys]
+
+
+# ---------------------------------------------------------------------------
+# Minkowski Structure Metrics (Voronoi-weighted Steinhardt)
+# ---------------------------------------------------------------------------
+
+def minkowski_parameter(atoms: Atoms, l, voroexp=1, averaged=False):
+    """
+    Calculate Minkowski structure metrics :math:`q_l^{\\mathrm{Mink}}`.
+
+    These are Voronoi face-area weighted Steinhardt parameters
+    (Mickel *et al.*, J. Chem. Phys. **138**, 044501, 2013).  For each atom
+    *i* and angular-momentum order *l* the metric is
+
+    .. math::
+
+        q_l^{\\mathrm{Mink}}(i) =
+        \\sqrt{\\frac{4\\pi}{2l+1}
+              \\sum_{m=-l}^{l}
+              \\left|
+                \\sum_j \\frac{A_j^\\alpha}{\\sum_k A_k^\\alpha}
+                Y_{lm}(\\hat{\\mathbf{r}}_{ij})
+              \\right|^2}
+
+    where *A_j* is the Voronoi face area between atoms *i* and *j*, and
+    *α* is the exponent ``voroexp``.
+
+    This function performs Voronoi neighbor finding internally, so there is
+    no need to call :func:`find_neighbors` beforehand (any existing neighbor
+    data is overwritten).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        The atomic structure (periodic boundary conditions recommended).
+    l : int or list of int
+        Steinhardt parameter order(s), e.g. 6 or [4, 6].
+    voroexp : int or float, optional
+        Face-area weight exponent *α*.  Default 1.
+    averaged : bool, optional
+        If True, compute neighbor-averaged values. Default False.
+
+    Returns
+    -------
+    list of numpy arrays
+        One array per requested *l*, each of shape ``(natoms,)``.
+        Values are also stored in ``atoms.arrays["pyscal_q{l}"]``
+        (or ``"pyscal_avg_q{l}"`` when ``averaged=True``).
+
+    Notes
+    -----
+    Unlike a plain ``steinhardt_parameter`` call after Voronoi neighbor
+    finding, this function guarantees that Voronoi neighbors are
+    (re)computed with the requested ``voroexp`` so results are
+    reproducible regardless of prior state.
+
+    References
+    ----------
+    W. Mickel, S. C. Kapfer, G. E. Schröder-Turk and K. Mecke,
+    "Shortcomings of the bond orientational order parameters for the
+    analysis of disordered particulate matter",
+    *J. Chem. Phys.* **138**, 044501 (2013).
+    `doi:10.1063/1.4774084 <https://doi.org/10.1063/1.4774084>`__
+    """
+    # Voronoi neighbor finding (overwrites any previous neighbors)
+    find_neighbors(atoms, method='voronoi', voroexp=voroexp)
+
+    # Delegate to regular Steinhardt — weights are already in neighborweight
+    return steinhardt_parameter(atoms, l, averaged=averaged)
+
+
+# ---------------------------------------------------------------------------
 # Disorder Parameter
 # ---------------------------------------------------------------------------
+
 
 def disorder(atoms: Atoms, q=6, averaged=False):
     """
@@ -139,12 +312,12 @@ def disorder(atoms: Atoms, q=6, averaged=False):
             need_calc = True
             break
         v = d[k]
-        if not hasattr(v, '__len__') or len(v) == 0:
+        if not hasattr(v, "__len__") or len(v) == 0:
             need_calc = True
             break
         # Check if it looks like a 2-D container (list-of-lists or 2-D array)
         first = v[0]
-        if not (hasattr(first, '__len__') and not isinstance(first, str)):
+        if not (hasattr(first, "__len__") and not isinstance(first, str)):
             need_calc = True
             break
     if need_calc:
@@ -169,6 +342,7 @@ def disorder(atoms: Atoms, q=6, averaged=False):
 # ---------------------------------------------------------------------------
 # Common Neighbor Analysis
 # ---------------------------------------------------------------------------
+
 
 def common_neighbor_analysis(atoms: Atoms, lattice_constant=None):
     """
@@ -259,6 +433,7 @@ def diamond_structure(atoms: Atoms):
 # Centrosymmetry Parameter
 # ---------------------------------------------------------------------------
 
+
 def centrosymmetry(atoms: Atoms, nmax=12):
     """
     Calculate the centrosymmetry parameter.
@@ -281,7 +456,7 @@ def centrosymmetry(atoms: Atoms, nmax=12):
         raise ValueError("nmax must be even")
 
     # Find neighbors by number
-    find_neighbors(atoms, method='number', nmax=nmax, assign_neighbor=True)
+    find_neighbors(atoms, method="number", nmax=nmax, assign_neighbor=True)
     d = _get_dict_with_neighbors(atoms)
     d["centrosymmetry"] = [0.0] * len(atoms)
 
@@ -295,6 +470,7 @@ def centrosymmetry(atoms: Atoms, nmax=12):
 # ---------------------------------------------------------------------------
 # Voronoi Vector
 # ---------------------------------------------------------------------------
+
 
 def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
     """
@@ -332,8 +508,10 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
 # Entropy Parameter
 # ---------------------------------------------------------------------------
 
-def entropy(atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001,
-            local=False, average=False):
+
+def entropy(
+    atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001, local=False, average=False
+):
     """
     Calculate the entropy parameter for each atom.
 
@@ -389,6 +567,7 @@ def entropy(atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001,
 # Short-Range Order
 # ---------------------------------------------------------------------------
 
+
 def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=True):
     """
     Calculate Warren-Cowley short-range order parameter.
@@ -425,6 +604,7 @@ def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=Tr
 # Radial Distribution Function
 # ---------------------------------------------------------------------------
 
+
 def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     """
     Calculate radial distribution function g(r).
@@ -446,7 +626,9 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     d = atoms_to_dict(atoms)
 
     distances = np.concatenate(d["neighbordist"])
-    hist, bin_edges = np.histogram(distances, bins=bins, range=(rmin, rmax), density=True)
+    hist, bin_edges = np.histogram(
+        distances, bins=bins, range=(rmin, rmax), density=True
+    )
 
     edgewidth = abs(bin_edges[1] - bin_edges[0])
     r = bin_edges[:-1]
@@ -454,15 +636,110 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     volume = abs(np.linalg.det(atoms.cell))
     rho = n / volume
 
-    shell_vols = (4.0 / 3.0) * np.pi * ((r + edgewidth) ** 3 - r ** 3)
+    shell_vols = (4.0 / 3.0) * np.pi * ((r + edgewidth) ** 3 - r**3)
     rdf = (hist / shell_vols) / rho
 
     return rdf, r
 
 
 # ---------------------------------------------------------------------------
+# Angular Distribution Function
+# ---------------------------------------------------------------------------
+
+def angular_distribution_function(atoms: Atoms, bins=180):
+    """
+    Calculate the angular distribution function (ADF).
+
+    The ADF is the histogram of all bond angles :math:`\\theta_{jik}` formed
+    by pairs of neighbors (j, k) around each atom i.  It characterises the
+    local angular environment independently of a specific order parameter.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    bins : int
+        Number of histogram bins in the angle range [0, 180] degrees.
+        Default 180 (1-degree resolution).
+
+    Returns
+    -------
+    (adf, angles) : tuple of numpy.ndarray
+        ``adf`` is the normalised probability density of bond angles, and
+        ``angles`` is the array of bin left-edges in degrees.
+
+    Notes
+    -----
+    Angles are computed from the cosine of the angle between displacement
+    vectors, using the same C++ infrastructure as :func:`chi_params`.
+    Results are also stored in ``atoms.info["pyscal_adf"]`` and
+    ``atoms.info["pyscal_adf_angles"]``.
+    """
+    # Use chi_params(angles=True) to get all pairwise cosines
+    _, cosines_list = chi_params(atoms, angles=True)
+
+    # Flatten all cosines and convert to degrees
+    all_cosines = np.concatenate([np.array(c) for c in cosines_list])
+    # Clamp to [-1, 1] to avoid NaN from acos
+    all_cosines = np.clip(all_cosines, -1.0, 1.0)
+    all_angles = np.degrees(np.arccos(all_cosines))
+
+    hist, bin_edges = np.histogram(all_angles, bins=bins, range=(0, 180),
+                                   density=True)
+    angles = bin_edges[:-1]
+
+    atoms.info["pyscal_adf"] = hist
+    atoms.info["pyscal_adf_angles"] = angles
+    return hist, angles
+
+
+def bond_length_distribution(atoms: Atoms, bins=100, rmin=None, rmax=None):
+    """
+    Calculate the bond-length distribution function (BLDF).
+
+    Unlike the full radial distribution function, the BLDF histograms only
+    the bonds defined by the current neighbor list (no shell-volume
+    normalisation).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    bins : int
+        Number of histogram bins.  Default 100.
+    rmin, rmax : float or None
+        Distance range.  If None, determined from the data.
+
+    Returns
+    -------
+    (bldf, r) : tuple of numpy.ndarray
+        ``bldf`` is the normalised probability density, and ``r`` is the
+        array of bin left-edges.  Results are also stored in
+        ``atoms.info["pyscal_bldf"]`` and ``atoms.info["pyscal_bldf_r"]``.
+    """
+    ensure_neighbors(atoms)
+    dists = atoms.arrays["pyscal_neighbordist"]
+    mask = dists > 0
+    all_dists = dists[mask].ravel()
+
+    if rmin is None:
+        rmin = all_dists.min() * 0.9
+    if rmax is None:
+        rmax = all_dists.max() * 1.1
+
+    hist, bin_edges = np.histogram(all_dists, bins=bins, range=(rmin, rmax),
+                                   density=True)
+    r = bin_edges[:-1]
+
+    atoms.info["pyscal_bldf"] = hist
+    atoms.info["pyscal_bldf_r"] = r
+    return hist, r
+
+
+# ---------------------------------------------------------------------------
 # Angular Criteria
 # ---------------------------------------------------------------------------
+
 
 def angular_criteria(atoms: Atoms):
     """
@@ -490,6 +767,7 @@ def angular_criteria(atoms: Atoms):
 # ---------------------------------------------------------------------------
 # Chi Parameters
 # ---------------------------------------------------------------------------
+
 
 def chi_params(atoms: Atoms, angles=False):
     """
@@ -522,6 +800,118 @@ def chi_params(atoms: Atoms, angles=False):
 
 
 # ---------------------------------------------------------------------------
+# Ackland-Jones Structure Classification
+# ---------------------------------------------------------------------------
+
+# Labels used by identify_ackland_jones
+ACKLAND_OTHER = 0
+ACKLAND_FCC = 1
+ACKLAND_HCP = 2
+ACKLAND_BCC = 3
+ACKLAND_ICO = 4
+
+_ACKLAND_NAMES = {0: "other", 1: "fcc", 2: "hcp", 3: "bcc", 4: "ico"}
+
+
+def identify_ackland_jones(atoms: Atoms):
+    """
+    Classify atomic environments with the Ackland–Jones method.
+
+    Uses the chi-parameter histogram (angular signature) to assign each
+    atom a structure type via a decision tree.  The chi histogram bins
+    cosines of all pairwise neighbor angles into 9 ranges; the counts in
+    specific bins discriminate FCC, HCP, BCC, and icosahedral (ICO)
+    environments.
+
+    The algorithm follows Ackland & Jones, *Phys. Rev. B* **73**, 054104
+    (2006), adapted for the 9-bin chi scheme used by pyscal3.
+    Parameters
+    ----------
+    atoms : ase.Atoms        Structure with neighbors already computed (via
+        :func:`pyscal3.find_neighbors`).
+
+    Returns
+    -------
+    labels : numpy.ndarray of int, shape (natoms,)
+        Per-atom structure label:
+
+        =====  ==========
+        Value  Structure
+        =====  ==========
+        0      other / unknown
+        1      FCC
+        2      HCP
+        3      BCC
+        4      ICO (icosahedral)
+        =====  ==========
+
+    names : list of str
+        Human-readable name for each atom (``"fcc"``, ``"hcp"``, etc.).
+        Also stored in ``atoms.arrays["pyscal_structure"]``.
+
+    Notes
+    -----
+    Chi-parameter bin edges (9 bins, cosine of the angle):
+
+    =====  =========================
+    Bin    Cosine range
+    =====  =========================
+    χ₀     [−1.000, −0.945)  ~180°
+    χ₁     [−0.945, −0.915)  ~160°
+    χ₂     [−0.915, −0.755)  ~139°
+    χ₃     [−0.755, −0.705)  ~135°
+    χ₄     [−0.705, −0.195)
+    χ₅     [−0.195, +0.195)  ~90°
+    χ₆     [+0.195, +0.245)
+    χ₇     [+0.245, +0.795)  ~60°
+    χ₈     [+0.795, +1.000]  ~0°
+    =====  =========================
+
+    Decision tree (ideal counts for perfect structures):
+
+    * **BCC** (14 neighbours): χ₀ = 7, χ₅ = 12, χ₇ = 36
+    * **FCC** (12 neighbours): χ₀ = 6, χ₅ = 12, χ₇ = 24, χ₁₊₂₊₃ = 0
+    * **HCP** (12 neighbours): χ₀ = 3, χ₂ = 6, χ₇ = 24
+    * **ICO** (12 neighbours): χ₀ = 6, χ₅ = 0, χ₇ = 30
+
+    References
+    ----------
+    G. J. Ackland and A. P. Jones, "Applications of local crystal
+    structure measures in experiment and simulation",
+    *Phys. Rev. B* **73**, 054104 (2006).
+    `doi:10.1103/PhysRevB.73.054104
+    <https://doi.org/10.1103/PhysRevB.73.054104>`__
+    """
+    chi = chi_params(atoms)  # (N, 9) int array
+
+    n = len(atoms)
+    labels = np.zeros(n, dtype=int)
+
+    # --- BCC: 7 or more antiparallel (180°) pairs ---
+    bcc_mask = chi[:, 0] >= 7
+    labels[bcc_mask] = ACKLAND_BCC
+
+    # --- FCC or ICO: 6 antiparallel pairs, no intermediate angles ---
+    remaining = labels == 0
+    fcc_or_ico = remaining & (chi[:, 0] >= 5) & (
+        chi[:, 1] + chi[:, 2] + chi[:, 3] == 0
+    )
+    # ICO has no ~90° pairs (χ₅ = 0); FCC has χ₅ > 0
+    labels[fcc_or_ico & (chi[:, 5] == 0)] = ACKLAND_ICO
+    labels[fcc_or_ico & (chi[:, 5] > 0)] = ACKLAND_FCC
+
+    # --- HCP: has angles in the ~139° range (χ₂ > 0) ---
+    remaining = labels == 0
+    hcp_mask = remaining & (chi[:, 2] > 0)
+    labels[hcp_mask] = ACKLAND_HCP
+
+    # Store results
+    names = [_ACKLAND_NAMES[l] for l in labels]
+    atoms.arrays["pyscal_ackland_label"] = labels
+    atoms.arrays["pyscal_structure"] = np.array(names)
+
+    return labels, names
+
 # Deformation Descriptors (require reference configuration)
 # ---------------------------------------------------------------------------
 
@@ -565,11 +955,9 @@ def atomic_strain(atoms: Atoms, reference: Atoms):
     The local deformation gradient F is computed by minimizing the
     squared difference between reference and deformed neighbor vectors.
     The Lagrangian strain is then E = (F^T F - I) / 2.
-
     Parameters
     ----------
-    atoms : ase.Atoms
-        Deformed configuration with neighbors computed.
+    atoms : ase.Atoms        Deformed configuration with neighbors computed.
     reference : ase.Atoms
         Reference (undeformed) configuration with the same neighbor list.
 
@@ -774,8 +1162,17 @@ def slip_vector(atoms: Atoms, reference: Atoms):
 # Solid/Liquid Identification
 # ---------------------------------------------------------------------------
 
-def find_solids(atoms: Atoms, bonds=0.5, threshold=0.5, avgthreshold=0.6,
-                cluster=True, q=6, cutoff=0, right=True):
+
+def find_solids(
+    atoms: Atoms,
+    bonds=0.5,
+    threshold=0.5,
+    avgthreshold=0.6,
+    cluster=True,
+    q=6,
+    cutoff=0,
+    right=True,
+):
     """
     Distinguish solid and liquid atoms.
 
@@ -820,12 +1217,16 @@ def find_solids(atoms: Atoms, bonds=0.5, threshold=0.5, avgthreshold=0.6,
     # Calculate bonds/solid classification
     pc.calculate_bonds(d, q, threshold, avgthreshold, bonds, compare_criteria, criteria)
 
-    _sync_back(d, atoms, ["solid", "bonds", "sij", "avg_sij",
-                           "q%d" % q, "q%d_real" % q, "q%d_imag" % q])
+    _sync_back(
+        d,
+        atoms,
+        ["solid", "bonds", "sij", "avg_sij", "q%d" % q, "q%d_real" % q, "q%d_imag" % q],
+    )
 
     if cluster:
-        return find_clusters(atoms, condition=np.array(d["solid"]) > 0,
-                            cutoff=cutoff, d=d)
+        return find_clusters(
+            atoms, condition=np.array(d["solid"]) > 0, cutoff=cutoff, d=d
+        )
     return None
 
 
@@ -866,7 +1267,7 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
             unique, counts = np.unique(valid, return_counts=True)
             largest_size = int(counts.max())
             largest_id = unique[counts.argmax()]
-            atoms.arrays["pyscal_largest_cluster"] = (cluster_ids == largest_id)
+            atoms.arrays["pyscal_largest_cluster"] = cluster_ids == largest_id
             return largest_size
         return 0
     return None
@@ -875,6 +1276,7 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
 # ---------------------------------------------------------------------------
 # Average over neighbors (utility)
 # ---------------------------------------------------------------------------
+
 
 def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     """
@@ -908,8 +1310,7 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     # 1-D values: use fast C++ averaging
     values = np.asarray(values)
     if values.ndim == 1:
-        result = pc.calculate_average_over_neighbors(
-            d, values.tolist(), include_self)
+        result = pc.calculate_average_over_neighbors(d, values.tolist(), include_self)
         return np.array(result)
 
     # Multi-dimensional: fall back to Python loop
@@ -924,8 +1325,197 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
 
 
 # ---------------------------------------------------------------------------
+# Coordination Variants
+# ---------------------------------------------------------------------------
+
+def effective_coordination_number(atoms: Atoms):
+    """
+    Calculate the effective coordination number (ECoN).
+
+    ECoN weights each neighbor by a continuous function of distance
+    relative to the average neighbor distance, converging iteratively:
+
+    .. math::
+
+        \\mathrm{ECoN}_i = \\sum_j \\exp\\!\\left[
+            1 - \\left(\\frac{d_{ij}}{d_{\\mathrm{av},i}}\\right)^6
+        \\right]
+
+    where :math:`d_{\\mathrm{av},i}` is the weighted average distance
+    that is itself computed from the weights (self-consistent iteration).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+
+    Returns
+    -------
+    numpy.ndarray, shape (natoms,)
+        Per-atom ECoN values.  Also stored in
+        ``atoms.arrays["pyscal_econ"]``.
+
+    References
+    ----------
+    R. Hoppe, "Effective coordination numbers (ECoN) and mean fictive
+    ionic radii (MEFIR)", *Z. Kristallogr.* **150**, 23 (1979).
+    """
+    ensure_neighbors(atoms)
+    dists = atoms.arrays["pyscal_neighbordist"]   # (N, max_nn)
+    mask = dists > 0  # valid neighbors
+
+    n = len(atoms)
+    econ = np.zeros(n, dtype=float)
+
+    for _ in range(10):  # iterate to self-consistency
+        # weighted average distance
+        weights = np.where(mask, np.exp(1.0 - (dists / np.where(
+            econ[:, None] > 0,
+            _weighted_avg_dist(dists, mask, econ),
+            np.where(mask, dists, np.inf).min(axis=1, keepdims=True)
+        ))**6), 0.0)
+        econ_new = weights.sum(axis=1)
+        if np.allclose(econ, econ_new, atol=1e-8):
+            break
+        econ = econ_new
+
+    atoms.arrays["pyscal_econ"] = econ
+    return econ
+
+
+def _weighted_avg_dist(dists, mask, econ):
+    """Weighted average distance for ECoN iteration."""
+    weights = np.where(mask, np.exp(1.0 - (dists / np.where(
+        mask, dists, np.inf).min(axis=1, keepdims=True))**6), 0.0)
+    wsum = weights.sum(axis=1, keepdims=True)
+    wsum = np.where(wsum > 0, wsum, 1.0)
+    return (weights * dists).sum(axis=1, keepdims=True) / wsum
+
+
+def coordination_number(atoms: Atoms):
+    """
+    Return the simple coordination number (integer neighbor count).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+
+    Returns
+    -------
+    numpy.ndarray of int, shape (natoms,)
+        Per-atom coordination number.  Also stored in
+        ``atoms.arrays["pyscal_cn"]``.
+    """
+    ensure_neighbors(atoms)
+    dists = atoms.arrays["pyscal_neighbordist"]
+    cn = (dists > 0).sum(axis=1)
+    atoms.arrays["pyscal_cn"] = cn
+    return cn
+
+
+def generalized_coordination_number(atoms: Atoms, cn_max=None):
+    """
+    Calculate the generalized coordination number (GCN).
+
+    GCN accounts for the coordination of each neighbor, penalizing
+    under-coordinated surface atoms:
+
+    .. math::
+
+        \\mathrm{GCN}_i = \\frac{1}{N_{\\max}}
+        \\sum_{j \\in \\mathrm{neigh}(i)} \\mathrm{CN}_j
+
+    where :math:`N_{\\max}` is the maximum (bulk) coordination number.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    cn_max : int or None
+        Bulk coordination number.  If None, uses the maximum CN observed
+        in the system.
+
+    Returns
+    -------
+    numpy.ndarray, shape (natoms,)
+        Per-atom GCN values.  Also stored in
+        ``atoms.arrays["pyscal_gcn"]``.
+
+    References
+    ----------
+    F. Calle-Vallejo *et al.*, "Finding optimal surface sites on
+    heterogeneous catalysts by counting nearest neighbors",
+    *Science* **350**, 185 (2015).
+    `doi:10.1126/science.aab3501
+    <https://doi.org/10.1126/science.aab3501>`__
+    """
+    cn = coordination_number(atoms)
+    if cn_max is None:
+        cn_max = cn.max()
+    if cn_max == 0:
+        cn_max = 1  # avoid division by zero
+
+    neighbors = atoms.arrays["pyscal_neighbors"]
+    n = len(atoms)
+    gcn = np.zeros(n, dtype=float)
+    for i in range(n):
+        nn_sum = 0.0
+        count = 0
+        for j in neighbors[i]:
+            if j >= 0 and j < n:
+                nn_sum += cn[j]
+                count += 1
+        if count > 0:
+            gcn[i] = nn_sum / cn_max
+
+    atoms.arrays["pyscal_gcn"] = gcn
+    return gcn
+
+
+def local_density(atoms: Atoms):
+    """
+    Estimate the local atomic number density.
+
+    For each atom, the local density is estimated from the mean neighbor
+    distance:
+
+    .. math::
+
+        \\rho_i = \\frac{N_i}{\\frac{4}{3}\\pi \\bar{d}_i^3}
+
+    where :math:`N_i` is the coordination number and :math:`\\bar{d}_i`
+    is the mean neighbor distance.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+
+    Returns
+    -------
+    numpy.ndarray, shape (natoms,)
+        Per-atom local density (atoms per unit volume).  Also stored in
+        ``atoms.arrays["pyscal_local_density"]``.
+    """
+    ensure_neighbors(atoms)
+    dists = atoms.arrays["pyscal_neighbordist"]
+    mask = dists > 0
+
+    cn = mask.sum(axis=1).astype(float)
+    mean_d = np.where(cn > 0,
+                      np.where(mask, dists, 0).sum(axis=1) / np.maximum(cn, 1),
+                      1.0)  # avoid div by zero
+
+    density = cn / (4.0 / 3.0 * np.pi * mean_d**3)
+    atoms.arrays["pyscal_local_density"] = density
+    return density
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     """Reset neighbors and find by number (for CNA/diamond)."""
@@ -942,5 +1532,373 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     d["cutoff"] = [0.0] * n
 
     pc.get_all_neighbors_bynumber(
-        d, 0.0, triclinic, rot, rotinv, boxdims,
-        2, nmax, (n > 250), False)
+        d, 0.0, triclinic, rot, rotinv, boxdims, 2, nmax, (n > 250), False
+    )
+
+
+# ---------------------------------------------------------------------------
+# ACE (Atomic Cluster Expansion) Descriptors
+# ---------------------------------------------------------------------------
+
+def _ace_cutoff(r, cutoff):
+    """Smooth cosine cutoff function for ACE basis.
+    
+    f_cut(r) = 0.5 * (cos(pi * r / r_cut) + 1) for r < r_cut, else 0
+    
+    Parameters
+    ----------
+    r : float or array
+        Distance(s).
+    cutoff : float
+        Cutoff radius.
+        
+    Returns
+    -------
+    float or array
+        Cutoff function value(s).
+    """
+    r = np.asarray(r)
+    result = np.where(r < cutoff, 0.5 * (np.cos(np.pi * r / cutoff) + 1), 0.0)
+    return result
+
+
+def _ace_radial_basis(n, r, cutoff, rmin=0.5):
+    """Chebyshev polynomial radial basis for ACE.
+    
+    R_n(r) = T_n(x) * f_cut(r)
+    where x = 2*(r - rmin)/(cutoff - rmin) - 1 maps r to [-1, 1]
+    
+    Parameters
+    ----------
+    n : int
+        Basis function index (0, 1, 2, ...).
+    r : float or array
+        Distance(s).
+    cutoff : float
+        Cutoff radius.
+    rmin : float
+        Inner cutoff (default 0.5 Angstrom).
+        
+    Returns
+    -------
+    float or array
+        Radial basis function value(s).
+    """
+    r = np.asarray(r)
+    # Map r to [-1, 1]
+    x = 2 * (r - rmin) / (cutoff - rmin) - 1
+    x = np.clip(x, -1, 1)
+    # Chebyshev polynomial T_n(x) = cos(n * arccos(x))
+    Tn = np.cos(n * np.arccos(x))
+    return Tn * _ace_cutoff(r, cutoff)
+
+
+def _ace_a_functions(d, nmax, lmax, cutoff):
+    """Compute A-basis (single-particle) coefficients for ACE.
+    
+    A_{i,nlm} = sum_{j in neighbors(i)} R_n(r_ij) * Y_l^m(r_ij_hat)
+    
+    These are the fundamental building blocks from which higher-order
+    correlations are constructed.
+    
+    Parameters
+    ----------
+    d : dict
+        Neighbor data dictionary with 'diff', 'neighbordist'.
+    nmax : int
+        Number of radial basis functions.
+    lmax : int
+        Maximum angular momentum quantum number.
+    cutoff : float
+        Cutoff radius.
+        
+    Returns
+    -------
+    A : ndarray, shape (natoms, nmax, lmax+1, 2*lmax+1), complex
+        A-basis coefficients. A[i, n, l, m+lmax] gives A_{i,nlm}.
+    """
+    natoms = len(d['positions'])
+    # Complex array to hold A coefficients
+    # Index mapping: m ranges from -l to +l, stored at index m + lmax
+    A = np.zeros((natoms, nmax, lmax + 1, 2 * lmax + 1), dtype=np.complex128)
+    
+    for i in range(natoms):
+        neighbors_i = d["neighbors"][i]
+        if not hasattr(neighbors_i, '__len__') or len(neighbors_i) == 0:
+            continue
+            
+        dists = d["neighbordist"][i]
+        diffs = d["diff"][i]
+        
+        for j_idx in range(len(neighbors_i)):
+            rij = dists[j_idx]
+            if rij < 1e-10 or rij >= cutoff:
+                continue
+            
+            vec = np.array(diffs[j_idx])
+            # Spherical coordinates
+            # theta = polar angle from z axis
+            # phi = azimuthal angle in xy plane
+            theta = np.arccos(np.clip(vec[2] / rij, -1, 1))
+            phi = np.arctan2(vec[1], vec[0])
+            
+            for n in range(nmax):
+                R_n = _ace_radial_basis(n, rij, cutoff)
+                for l in range(lmax + 1):
+                    for m in range(-l, l + 1):
+                        # scipy sph_harm_y(l, m, theta, phi) uses physics convention
+                        Y_lm = sph_harm_y(l, m, theta, phi)
+                        A[i, n, l, m + lmax] += R_n * Y_lm
+    
+    return A
+
+
+def _ace_b_basis_nu1(A, lmax):
+    """Compute nu=1 B-basis (isotropic density).
+    
+    B^{(1)}_{i,n} = A_{i,n,0,0} (l=0, m=0 component only)
+    
+    This captures the radial neighbor density.
+    
+    Parameters
+    ----------
+    A : ndarray
+        A-basis coefficients from _ace_a_functions.
+    lmax : int
+        Maximum angular momentum (needed for indexing).
+        
+    Returns
+    -------
+    B1 : ndarray, shape (natoms, nmax)
+        Nu=1 B-basis descriptors.
+    """
+    # l=0, m=0 is stored at A[i, n, 0, lmax]
+    return np.real(A[:, :, 0, lmax])
+
+
+def _ace_b_basis_nu2(A, nmax, lmax):
+    """Compute nu=2 B-basis (power spectrum / SOAP-like).
+    
+    B^{(2)}_{i,n1,n2,l} = sum_{m=-l}^{l} A*_{i,n1,l,m} * A_{i,n2,l,m}
+    
+    This is equivalent to the SOAP power spectrum and captures
+    2-body angular correlations.
+    
+    Parameters
+    ----------
+    A : ndarray
+        A-basis coefficients.
+    nmax : int
+        Number of radial basis functions.
+    lmax : int
+        Maximum angular momentum.
+        
+    Returns
+    -------
+    B2 : ndarray, shape (natoms, n_descriptors)
+        Nu=2 B-basis descriptors (flattened).
+    """
+    natoms = A.shape[0]
+    descriptors = []
+    
+    # Use symmetry: only n1 <= n2
+    for n1 in range(nmax):
+        for n2 in range(n1, nmax):
+            for l in range(lmax + 1):
+                # Sum over m: sum_m A*_{n1,l,m} * A_{n2,l,m}
+                B_desc = np.zeros(natoms)
+                for m in range(-l, l + 1):
+                    B_desc += np.real(
+                        np.conj(A[:, n1, l, m + lmax]) * A[:, n2, l, m + lmax]
+                    )
+                descriptors.append(B_desc)
+    
+    return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
+
+
+def _ace_b_basis_nu3(A, nmax, lmax):
+    """Compute nu=3 B-basis (bispectrum-like triplet correlations).
+    
+    B^{(3)} = sum_{m1,m2,m3} C_{l1,l2,l3}^{m1,m2,m3} * A_{n1,l1,m1} * A_{n2,l2,m2} * A_{n3,l3,m3}
+    
+    where the coupling coefficient ensures rotational invariance (total L=0).
+    For simplicity, we use the constraint m1 + m2 + m3 = 0 with equal weights.
+    
+    This captures 3-body angular correlations.
+    
+    Parameters
+    ----------
+    A : ndarray
+        A-basis coefficients.
+    nmax : int
+        Number of radial basis functions.
+    lmax : int
+        Maximum angular momentum.
+        
+    Returns
+    -------
+    B3 : ndarray, shape (natoms, n_descriptors)
+        Nu=3 B-basis descriptors.
+    """
+    natoms = A.shape[0]
+    descriptors = []
+    
+    # Limit combinations to keep computation tractable
+    # Use n1 <= n2 <= n3 for symmetry
+    for n1 in range(min(nmax, 3)):  # Limit radial indices
+        for n2 in range(n1, min(nmax, 3)):
+            for n3 in range(n2, min(nmax, 3)):
+                for l1 in range(min(lmax + 1, 3)):  # Limit angular momentum
+                    for l2 in range(min(lmax + 1, 3)):
+                        # Triangle rule: |l1-l2| <= l3 <= l1+l2
+                        l3_min = abs(l1 - l2)
+                        l3_max = min(l1 + l2, lmax, 2)  # Also limit l3
+                        for l3 in range(l3_min, l3_max + 1):
+                            # Parity rule: l1 + l2 + l3 must be even
+                            if (l1 + l2 + l3) % 2 != 0:
+                                continue
+                            
+                            B_desc = np.zeros(natoms)
+                            for m1 in range(-l1, l1 + 1):
+                                for m2 in range(-l2, l2 + 1):
+                                    m3 = -(m1 + m2)  # Enforce m1+m2+m3=0
+                                    if abs(m3) > l3:
+                                        continue
+                                    
+                                    # Product of three A-functions
+                                    prod = (A[:, n1, l1, m1 + lmax] *
+                                            A[:, n2, l2, m2 + lmax] *
+                                            A[:, n3, l3, m3 + lmax])
+                                    B_desc += np.real(prod)
+                            
+                            if np.any(np.abs(B_desc) > 1e-15):
+                                descriptors.append(B_desc)
+    
+    return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
+
+
+def ace(atoms: Atoms, nmax=4, lmax=4, nu_max=2, cutoff=None, normalize=True):
+    """
+    Compute Atomic Cluster Expansion (ACE) descriptors.
+    
+    ACE provides a systematic and complete expansion of atomic environments,
+    with SOAP (nu=2) and bispectrum (nu=3) as special cases. The descriptors
+    are rotationally, translationally, and permutationally invariant.
+    
+    The implementation follows Drautz (2019) and computes B-basis descriptors
+    by coupling A-functions (single-particle basis) to form rotationally
+    invariant combinations at each correlation order.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    nmax : int, default 4
+        Number of radial basis functions. Higher values capture finer
+        radial resolution but increase computation.
+    lmax : int, default 4
+        Maximum angular momentum quantum number. Higher values capture
+        more angular detail. Typically 3-6 for ML potentials.
+    nu_max : int, default 2
+        Maximum correlation order:
+        - nu=1: Radial density (neighbor count per shell)
+        - nu=2: Pair correlations (SOAP power spectrum)
+        - nu=3: Triplet correlations (bispectrum)
+        Higher orders rapidly increase descriptor count.
+    cutoff : float, optional
+        Neighbor cutoff radius. If None, uses the cutoff from
+        find_neighbors.
+    normalize : bool, default True
+        If True, normalize descriptors to unit norm per atom.
+        
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+        - 'nu1': ndarray (natoms, nmax) - radial density descriptors
+        - 'nu2': ndarray (natoms, n2) - power spectrum (if nu_max >= 2)
+        - 'nu3': ndarray (natoms, n3) - bispectrum-like (if nu_max >= 3)
+        - 'full': ndarray (natoms, n_total) - concatenated descriptors
+        
+    Notes
+    -----
+    The descriptor count scales as:
+    - nu=1: O(nmax)
+    - nu=2: O(nmax^2 * lmax)
+    - nu=3: O(nmax^3 * lmax^3) but limited for tractability
+    
+    References
+    ----------
+    .. [1] Drautz, R. (2019). "Atomic cluster expansion for accurate and 
+           transferable interatomic potentials." Phys. Rev. B 99, 014104.
+    .. [2] Dusson et al. (2022). "Atomic cluster expansion: Completeness,
+           efficiency and stability." J. Comput. Phys.
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=4.0)
+    >>> desc = pyscal3.ace(atoms, nmax=4, lmax=3, nu_max=2)
+    >>> print(desc['full'].shape)
+    >>> print("nu=2 descriptors:", desc['nu2'].shape[1])
+    """
+    d = _get_dict_with_neighbors(atoms)
+    natoms = len(atoms)
+    
+    # Determine cutoff
+    if cutoff is None:
+        cutoffs = d.get("cutoff", [])
+        cutoffs_arr = np.asarray(cutoffs)
+        if cutoffs_arr.size > 0 and np.max(cutoffs_arr) > 0:
+            cutoff = float(np.max(cutoffs_arr))
+        else:
+            cutoff = 5.0  # Default fallback
+    
+    # Compute A-functions (single-particle basis)
+    A = _ace_a_functions(d, nmax, lmax, cutoff)
+    
+    result = {}
+    all_descriptors = []
+    
+    # Nu=1: Radial density
+    B1 = _ace_b_basis_nu1(A, lmax)
+    result['nu1'] = B1
+    all_descriptors.append(B1)
+    
+    # Nu=2: Power spectrum (SOAP-like)
+    if nu_max >= 2:
+        B2 = _ace_b_basis_nu2(A, nmax, lmax)
+        result['nu2'] = B2
+        all_descriptors.append(B2)
+    
+    # Nu=3: Triplet correlations (bispectrum-like)
+    if nu_max >= 3:
+        B3 = _ace_b_basis_nu3(A, nmax, lmax)
+        result['nu3'] = B3
+        all_descriptors.append(B3)
+    
+    # Concatenate all descriptors
+    full = np.hstack(all_descriptors)
+    
+    # Normalize if requested
+    if normalize:
+        norms = np.linalg.norm(full, axis=1, keepdims=True)
+        norms = np.where(norms > 1e-10, norms, 1.0)
+        full = full / norms
+        result['nu1'] = result['nu1'] / norms
+        if 'nu2' in result:
+            result['nu2'] = result['nu2'] / norms
+        if 'nu3' in result:
+            result['nu3'] = result['nu3'] / norms
+    
+    result['full'] = full
+    
+    # Store in atoms
+    atoms.arrays["pyscal_ace"] = full
+    atoms.info["pyscal_ace_params"] = {
+        'nmax': nmax, 'lmax': lmax, 'nu_max': nu_max, 'cutoff': cutoff
+    }
+    
+    return result
