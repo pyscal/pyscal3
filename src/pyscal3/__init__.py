@@ -24,6 +24,7 @@ from pyscal3.neighbors import find_neighbors, get_distance
 # Descriptors (the core value)
 from pyscal3.descriptors import (
     steinhardt_parameter,
+    minkowski_parameter,
     wigner_w_parameter,
     disorder,
     common_neighbor_analysis,
@@ -52,6 +53,7 @@ __all__ = [
     "get_distance",
     # Descriptors
     "steinhardt_parameter",
+    "minkowski_parameter",
     "wigner_w_parameter",
     "disorder",
     "common_neighbor_analysis",

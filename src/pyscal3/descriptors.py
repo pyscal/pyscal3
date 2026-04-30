@@ -211,6 +211,75 @@ def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
 
 
 # ---------------------------------------------------------------------------
+# Minkowski Structure Metrics (Voronoi-weighted Steinhardt)
+# ---------------------------------------------------------------------------
+
+def minkowski_parameter(atoms: Atoms, l, voroexp=1, averaged=False):
+    """
+    Calculate Minkowski structure metrics :math:`q_l^{\\mathrm{Mink}}`.
+
+    These are Voronoi face-area weighted Steinhardt parameters
+    (Mickel *et al.*, J. Chem. Phys. **138**, 044501, 2013).  For each atom
+    *i* and angular-momentum order *l* the metric is
+
+    .. math::
+
+        q_l^{\\mathrm{Mink}}(i) =
+        \\sqrt{\\frac{4\\pi}{2l+1}
+              \\sum_{m=-l}^{l}
+              \\left|
+                \\sum_j \\frac{A_j^\\alpha}{\\sum_k A_k^\\alpha}
+                Y_{lm}(\\hat{\\mathbf{r}}_{ij})
+              \\right|^2}
+
+    where *A_j* is the Voronoi face area between atoms *i* and *j*, and
+    *α* is the exponent ``voroexp``.
+
+    This function performs Voronoi neighbor finding internally, so there is
+    no need to call :func:`find_neighbors` beforehand (any existing neighbor
+    data is overwritten).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        The atomic structure (periodic boundary conditions recommended).
+    l : int or list of int
+        Steinhardt parameter order(s), e.g. 6 or [4, 6].
+    voroexp : int or float, optional
+        Face-area weight exponent *α*.  Default 1.
+    averaged : bool, optional
+        If True, compute neighbor-averaged values. Default False.
+
+    Returns
+    -------
+    list of numpy arrays
+        One array per requested *l*, each of shape ``(natoms,)``.
+        Values are also stored in ``atoms.arrays["pyscal_q{l}"]``
+        (or ``"pyscal_avg_q{l}"`` when ``averaged=True``).
+
+    Notes
+    -----
+    Unlike a plain ``steinhardt_parameter`` call after Voronoi neighbor
+    finding, this function guarantees that Voronoi neighbors are
+    (re)computed with the requested ``voroexp`` so results are
+    reproducible regardless of prior state.
+
+    References
+    ----------
+    W. Mickel, S. C. Kapfer, G. E. Schröder-Turk and K. Mecke,
+    "Shortcomings of the bond orientational order parameters for the
+    analysis of disordered particulate matter",
+    *J. Chem. Phys.* **138**, 044501 (2013).
+    `doi:10.1063/1.4774084 <https://doi.org/10.1063/1.4774084>`__
+    """
+    # Voronoi neighbor finding (overwrites any previous neighbors)
+    find_neighbors(atoms, method='voronoi', voroexp=voroexp)
+
+    # Delegate to regular Steinhardt — weights are already in neighborweight
+    return steinhardt_parameter(atoms, l, averaged=averaged)
+
+
+# ---------------------------------------------------------------------------
 # Disorder Parameter
 # ---------------------------------------------------------------------------
 
