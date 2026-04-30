@@ -32,6 +32,8 @@ PYBIND11_MODULE(csystem, m) {
     m.def("calculate_q_atom", &calculate_q_atom);
     m.def("calculate_q_single", &calculate_q_single);
     m.def("calculate_aq_single", &calculate_aq_single);
+    m.def("calculate_w_single", &calculate_w_single);
+    m.def("calculate_aw_single", &calculate_aw_single);
     m.def("calculate_disorder", &calculate_disorder);
     m.def("calculate_bonds", &calculate_bonds);
     m.def("find_clusters", &find_clusters);
