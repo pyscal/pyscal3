@@ -18,8 +18,15 @@ in which $Y_{lm}$ are the spherical harmonics and $N(i)$ is the number of neighb
 Once the cutoff is chosen and neighbors are calculated, the calculation of Steinhardt's parameters is straightforward.
 
 ``` python
-q = sys.calculate.steinhardt_parameter([4,6])
+import pyscal3
+from ase.build import bulk
+
+atoms = bulk('Cu', 'fcc', cubic=True).repeat(4)
+pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
+q4, q6 = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
 ```
+
+Results are also stored on the `Atoms` object as `atoms.arrays['pyscal_q4']` and `atoms.arrays['pyscal_q6']`.
 
 ## Averaged Steinhardt's parameters
 
@@ -33,7 +40,7 @@ where the sum from $k=0$ to $\tilde{N}(i)$ is over all the neighbors and the par
 Averaged versions can be calculated by setting the keyword `averaged=True` as follows.
 
 ``` python
-aq = sys.calculate.steinhardt_parameter([4,6], averaged=True)
+aq4, aq6 = pyscal3.steinhardt_parameter(atoms, l=[4, 6], averaged=True)
 ```
 
 ## Voronoi weighted Steinhardt's parameters
@@ -44,27 +51,12 @@ $$
 q_{lm} (i) =  \frac{1}{N(i)} \sum_{j=1}^{N(i)} \frac{A_{ij}}{A} Y_{lm}(\pmb{r}_{ij})
 $$
 
-where $A_{ij}$ is the area of the Voronoi facet between atoms $i$ and $j$ and $A$ is the sum of the face areas of atom $i$. In pyscal, the area weights are already assigned during the neighbor calculation phase when the Voronoi method is used to calculate neighbors. The Voronoi weighted Steinhardt's parameters can be calculated as follows,
+where $A_{ij}$ is the area of the Voronoi facet between atoms $i$ and $j$ and $A$ is the sum of the face areas of atom $i$. The dedicated function `minkowski_parameter` performs this calculation; see the [Minkowski parameters](09_minkowski.md) page for details.
 
 ``` python
-sys.find.neighbors(method='voronoi')
-q = sys.calculate.steinhardt_parameter([4,6])
+pyscal3.find_neighbors(atoms, method='voronoi')
+q4, q6 = pyscal3.minkowski_parameter(atoms, l=[4, 6])
 ```
-
-The weighted Steinhardt's parameters can also be averaged as described above. Once again, the keyword `averaged=True` can be used for this purpose.
-
-``` python
-sys.find_neighbors(method='voronoi')
-q = sys.calculate.steinhardt_parameter([4,6], averaged=True)
-```
-
-It was also proposed that higher powers of the weight [4] $\frac{A_{ij}^{\alpha}}{A(\alpha)}$ where $\alpha = 2, 3$ can also be used, where $A(\alpha) = \sum_{j=1}^{N(i)} A_{ij}^{\alpha}$ The value of this can be set using the keyword `voroexp` during the neighbor calculation phase.
-
-``` python
-sys.find.neighbors(method='voronoi', voroexp=2)
-```
-
-If the value of `voroexp` is set to 0, the neighbors would be found using Voronoi method, but the calculated Steinhardt's parameters will not be weighted.
 
 ## References
 

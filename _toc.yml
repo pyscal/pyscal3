@@ -15,6 +15,14 @@ chapters:
     - file: docs/methods/06_voronoi.md
     - file: docs/methods/07_centrosymmetry.md
     - file: docs/methods/08_entropy.md
+    - file: docs/methods/09_minkowski.md
+    - file: docs/methods/10_wigner_w.md
+    - file: docs/methods/11_ackland_jones.md
+    - file: docs/methods/12_coordination.md
+    - file: docs/methods/13_distributions.md
+    - file: docs/methods/14_deformation.md
+    - file: docs/methods/15_wigner_seitz.md
+    - file: docs/methods/16_ace.md
   - file: docs/examples.md
     sections:
     - file: examples/01_getting_started
@@ -30,7 +38,13 @@ chapters:
     - file: examples/11_short_range_order
     - file: examples/12_solid_liquid_clustering
     - file: examples/13_trajectory_module
+    - file: examples/14_wigner_w_parameters
+    - file: examples/15_minkowski_structure_metrics
+    - file: examples/16_ackland_jones_classification
+    - file: examples/17_coordination_variants
+    - file: examples/18_angular_bond_distributions
+    - file: examples/21_deformation_descriptors
+    - file: examples/22_wigner_seitz_defects
+    - file: examples/28_ace_descriptors
   - file: docs/api.md
   - file: docs/epilogue.md
-
-

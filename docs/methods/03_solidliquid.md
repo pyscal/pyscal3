@@ -16,25 +16,24 @@ $$
 
 If a particle has $n$ number of bonds with $s_{ij} \geq \mathrm{threshold}$ and the above condition is also satisfied, it is considered as a solid. The solid atoms can be clustered to find the largest solid cluster of atoms. 
 
-Finding solid atoms in liquid start with reading in a file and calculation of neighbors.
+Finding solid atoms in liquid starts with reading in a file and calculating neighbors.
 
 ``` python
-from pyscal3 import System
-sys = System('conf.dump')
-sys.find.neighbors(method='cutoff', cutoff=4)
+import pyscal3
+from ase.io import read
+
+atoms = read('conf.dump', format='lammps-dump-text')
+pyscal3.find_neighbors(atoms, method='cutoff', cutoff=4)
 ```
 
 Once again, there are various methods for finding neighbors. Once the neighbors are calculated, solid atoms can be found directly by,
 
 ``` python
-sys.find.solids(bonds=6, threshold=0.5, avgthreshold=0.6, cluster=True)
+largest = pyscal3.find_solids(atoms, bonds=6, threshold=0.5,
+                              avgthreshold=0.6, cluster=True)
 ```
 
-`bonds` set the number of minimum bonds a particle should have (as defined above), `threshold` and `avgthreshold` are the same quantities that appear in the equations above. Setting the keyword `cluster` to True returns the size of the largest solid cluster. It is also possible to check if each atom is solid or not.
-
-``` python
-sys.atoms.solid
-```
+`bonds` sets the number of minimum bonds a particle should have (as defined above), `threshold` and `avgthreshold` are the same quantities that appear in the equations above. Setting the keyword `cluster` to `True` returns the size of the largest solid cluster. The per-atom solid/liquid label is stored as `atoms.arrays['pyscal_solid']`.
 
 ## References
 

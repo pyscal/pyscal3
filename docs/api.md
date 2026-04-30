@@ -21,6 +21,18 @@ Results are stored on the ASE `Atoms` object with the `pyscal_` prefix.
 .. autofunction:: pyscal3.steinhardt_parameter
 ```
 
+### Wigner $W_l$ Parameters
+
+```{eval-rst}
+.. autofunction:: pyscal3.wigner_w_parameter
+```
+
+### Minkowski Structure Metrics
+
+```{eval-rst}
+.. autofunction:: pyscal3.minkowski_parameter
+```
+
 ### Disorder Parameter
 
 ```{eval-rst}
@@ -79,6 +91,74 @@ Results are stored on the ASE `Atoms` object with the `pyscal_` prefix.
 
 ```{eval-rst}
 .. autofunction:: pyscal3.chi_params
+```
+
+### Ackland-Jones Classification
+
+```{eval-rst}
+.. autofunction:: pyscal3.identify_ackland_jones
+```
+
+### Coordination Numbers
+
+```{eval-rst}
+.. autofunction:: pyscal3.coordination_number
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.effective_coordination_number
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.generalized_coordination_number
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.local_density
+```
+
+### Angular and Bond Length Distributions
+
+```{eval-rst}
+.. autofunction:: pyscal3.angular_distribution_function
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.bond_length_distribution
+```
+
+### Atomic Deformation
+
+```{eval-rst}
+.. autofunction:: pyscal3.atomic_strain
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.von_mises_strain
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.d2min
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.slip_vector
+```
+
+### Wigner-Seitz Defect Analysis
+
+```{eval-rst}
+.. autofunction:: pyscal3.wigner_seitz_analysis
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.identify_defect_atoms
+```
+
+### ACE Descriptors
+
+```{eval-rst}
+.. autofunction:: pyscal3.ace
 ```
 
 ## Solid/Liquid Classification
