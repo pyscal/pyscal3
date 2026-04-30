@@ -27,7 +27,7 @@ pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
 w4, w6 = pyscal3.wigner_w_parameter(atoms, l=[4, 6])
 ```
 
-By default the normalised $\hat{W}_l$ is returned; pass `normalized=False` for the raw $W_l$. Setting `averaged=True` returns the Lechner-Dellago-style neighbor average. Per-atom values are stored as `atoms.arrays['pyscal_w4']`, `atoms.arrays['pyscal_w6']`, etc.
+By default the normalised $\hat{W}_l$ is returned; pass `normalized=False` for the raw $W_l$. Setting `averaged=True` returns the Lechner-Dellago-style neighbor average. Both raw and normalised values are stored on the atoms object as `atoms.arrays['pyscal_w4']`, `atoms.arrays['pyscal_what4']`, etc. (and `pyscal_avg_w4`, `pyscal_avg_what4` for the averaged variants).
 
 ## References
 
