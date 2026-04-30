@@ -4,6 +4,7 @@ Trajectory module for lazy reading of LAMMPS dump files.
 Provides efficient block-level access to large trajectory files
 with support for slicing, lazy loading, and conversion to ASE Atoms.
 """
+
 import os
 import numpy as np
 from ase import Atoms as ASEAtoms
@@ -66,7 +67,7 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
     positions = np.empty((natoms, 3), dtype=float)
     custom_data = {k: [] for k in customkeys}
 
-    for i, line in enumerate(lines[9:9 + natoms]):
+    for i, line in enumerate(lines[9 : 9 + natoms]):
         raw = line.strip().split()
         ids[i] = int(raw[headerdict["id"]])
         types[i] = int(raw[headerdict["type"]])
@@ -106,7 +107,9 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
     # handle scaled coordinates
     if scaled:
         frac = positions.copy()
-        positions = frac[:, 0:1] * cell[0] + frac[:, 1:2] * cell[1] + frac[:, 2:3] * cell[2]
+        positions = (
+            frac[:, 0:1] * cell[0] + frac[:, 1:2] * cell[1] + frac[:, 2:3] * cell[2]
+        )
 
     # --- determine species ---
     if species is not None:
@@ -147,6 +150,7 @@ class Timeslice:
     blocklist : range or list of int
         Indices of the blocks in this slice.
     """
+
     def __init__(self, trajectory, blocklist):
         """
         Parameters
@@ -165,10 +169,13 @@ class Timeslice:
         """
         String of the class
         """
-        blockstring = ["%d-%d"%(x[0], x[-1]) for x in self.blocklists]
+        blockstring = ["%d-%d" % (x[0], x[-1]) for x in self.blocklists]
         blockstring = "/".join(blockstring)
 
-        data = "Trajectory slice\n %s\n natoms=%d\n"%(blockstring, self.trajectory.natoms)
+        data = "Trajectory slice\n %s\n natoms=%d\n" % (
+            blockstring,
+            self.trajectory.natoms,
+        )
         return data
 
     def __add__(self, ntraj):
@@ -183,7 +190,6 @@ class Timeslice:
 
         return self
 
-
     def __radd__(self, ntraj):
         """
         Reverse add method
@@ -192,7 +198,6 @@ class Timeslice:
             return self
         else:
             return self.__add__(ntraj)
-
 
     def to_atoms(self, species=None, customkeys=None):
         """
@@ -258,7 +263,7 @@ class Timeslice:
             write mode to be used, optional
             default "w" write
             also can be "a" to append.
-        
+
         Returns
         -------
         None
@@ -268,7 +273,6 @@ class Timeslice:
         for count, traj in enumerate(self.trajectories):
             self.trajectories[count]._get_blocks_to_file(fout, self.blocklists[count])
         fout.close()
-
 
 
 class Trajectory:
@@ -297,6 +301,7 @@ class Trajectory:
     >>> atoms_list = ts.to_atoms(species=["Cu"])
     >>> atoms_list = traj[0:10].to_atoms(species=["Cu"])  # slice
     """
+
     def __init__(self, filename):
         """
         Parameters
@@ -307,7 +312,7 @@ class Trajectory:
         if os.path.exists(filename):
             self.filename = filename
         else:
-            raise FileNotFoundError("%s file not found"%filename)
+            raise FileNotFoundError("%s file not found" % filename)
         self.natoms = 0
         self.blocksize = 0
         self.nblocks = 0
@@ -316,12 +321,12 @@ class Trajectory:
 
         self._get_natoms()
         self._get_nblocks()
-        
+
     def __repr__(self):
         """
         String of the class
         """
-        return "Trajectory of %d slices with %d atoms"%(self.nblocks, self.natoms)
+        return "Trajectory of %d slices with %d atoms" % (self.nblocks, self.natoms)
 
     def __getitem__(self, blockno):
         """
@@ -350,7 +355,7 @@ class Trajectory:
         """
         with open(self.filename, "rb") as fout:
             data = [next(fout) for x in range(0, 4)]
-        self.natoms = (int(data[-1]))
+        self.natoms = int(data[-1])
 
     def _get_nlines(self):
         """
@@ -368,15 +373,15 @@ class Trajectory:
         line_offset = []
         offset = 0
         nlines = 0
-        for line in open(self.filename, 'rb'):
+        for line in open(self.filename, "rb"):
             line_offset.append(offset)
             offset += len(line)
             nlines += 1
-        
+
         self.nlines = nlines
         self.line_offset = line_offset
         return nlines
-    
+
     def _get_nblocks(self):
         """
         Get number of blocks in the trajectory file
@@ -391,10 +396,10 @@ class Trajectory:
         """
         self._get_natoms()
         nlines = self._get_nlines()
-        self.blocksize = self.natoms+9
-        self.nblocks = nlines//self.blocksize
-        self.straylines = nlines - self.nblocks*self.blocksize
-        #set load list to False
+        self.blocksize = self.natoms + 9
+        self.nblocks = nlines // self.blocksize
+        self.straylines = nlines - self.nblocks * self.blocksize
+        # set load list to False
         self.loadlist = [False for x in range(self.nblocks)]
         self.data = [None for x in range(self.nblocks)]
 
@@ -412,8 +417,8 @@ class Trajectory:
         data : list
             list of strings containing data
         """
-        start = blockno*self.blocksize
-        stop = (blockno+1)*self.blocksize
+        start = blockno * self.blocksize
+        stop = (blockno + 1) * self.blocksize
 
         fin = open(self.filename, "rb")
         fin.seek(0)
@@ -449,14 +454,14 @@ class Trajectory:
         method.
         """
         data = self.get_block(blockno)
-        box =  np.loadtxt(data[5:8])
+        box = np.loadtxt(data[5:8])
         columns = np.loadtxt(data[9:])
         header = np.loadtxt(data[8:9], dtype=str)[2:]
         outdict = {}
         outdict["box"] = box
         outdict["atoms"] = {}
         for count, h in enumerate(header):
-            outdict["atoms"][h] = columns[:,count]        
+            outdict["atoms"][h] = columns[:, count]
 
         self.data[blockno] = outdict
         self.loadlist[blockno] = True
@@ -473,20 +478,20 @@ class Trajectory:
 
         Returns
         -------
-        None        
+        None
         """
         self.data[blockno] = None
-        self.loadlist[blockno] = False        
+        self.loadlist[blockno] = False
 
     def _convert_data_to_lines(self, blockno):
         """
         Create lines from loaded data
-        
+
         Parameters
         ----------
         blockno : int
             number of the block to be read, starts from 0
-        
+
         Returns
         -------
         data : list of strs
@@ -518,11 +523,11 @@ class Trajectory:
                 xfkeys.append(key)
 
         xdstrs = []
-        if len(xd)>0:
+        if len(xd) > 0:
             for i in range(len(xd[0])):
                 substr = []
                 for j in range(len(xdkeys)):
-                    substr.append("%d"%xd[j][i])
+                    substr.append("%d" % xd[j][i])
                 xdstrs.append(" ".join(substr))
 
         xdheader = " ".join(xdkeys)
@@ -530,9 +535,9 @@ class Trajectory:
 
         xfstrs = []
         xf = np.array(xf)
-        if len(xf)>0:
+        if len(xf) > 0:
             for i in range(len(xf[0])):
-                dstr = " ".join((xf[:,i]).astype(str))
+                dstr = " ".join((xf[:, i]).astype(str))
                 xfstrs.append("".join([dstr, os.linesep]))
 
         xfheader = " ".join(xfkeys)
@@ -543,10 +548,10 @@ class Trajectory:
 
         for i in range(len(xfstrs)):
             valstr = " ".join([xdstrs[i], xfstrs[i]])
-            #valstr = "".join([valstr, os.linesep])
+            # valstr = "".join([valstr, os.linesep])
             data.append(valstr)
 
-        return data        
+        return data
 
     def _get_block_as_atoms(self, blockno, species=None, customkeys=None):
         """
@@ -566,8 +571,9 @@ class Trajectory:
         ase.Atoms
         """
         data = self.get_block(blockno)
-        return _parse_lammps_lines_to_atoms(data, species=species,
-                                            customkeys=customkeys)
+        return _parse_lammps_lines_to_atoms(
+            data, species=species, customkeys=customkeys
+        )
 
     def _get_blocks_to_file(self, fout, blocklist):
         """
@@ -585,9 +591,9 @@ class Trajectory:
         """
         xl = [x for x in blocklist]
         xl = np.array(xl)
-                
-        #open file
-        #convert lines to start from end
+
+        # open file
+        # convert lines to start from end
         for x in xl:
             if self.loadlist[x]:
                 data = self._convert_data_to_lines(x)

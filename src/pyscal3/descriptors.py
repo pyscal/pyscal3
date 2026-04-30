@@ -14,6 +14,7 @@ Example
 >>> q = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
 >>> print(atoms.arrays["pyscal_q4"])
 """
+
 import numpy as np
 import itertools
 from ase import Atoms
@@ -21,8 +22,11 @@ from scipy.special import sph_harm_y
 
 import pyscal3.csystem as pc
 from pyscal3._bridge import (
-    get_box_params, atoms_to_dict, dict_to_atoms,
-    ensure_neighbors, create_attribute,
+    get_box_params,
+    atoms_to_dict,
+    dict_to_atoms,
+    ensure_neighbors,
+    create_attribute,
     pad_atoms_for_neighbor_finding,
 )
 from pyscal3.neighbors import find_neighbors
@@ -31,6 +35,7 @@ from pyscal3.neighbors import find_neighbors
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_dict_with_neighbors(atoms: Atoms) -> dict:
     """Build the C++ dict, ensuring neighbors exist."""
@@ -47,7 +52,7 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
         store_key = "pyscal_" + key
         try:
             arr = np.asarray(d[key])
-            if arr.ndim >= 1 and len(arr) == n and arr.dtype.kind != 'O':
+            if arr.ndim >= 1 and len(arr) == n and arr.dtype.kind != "O":
                 atoms.arrays[store_key] = arr
                 continue
         except (ValueError, TypeError):
@@ -58,6 +63,7 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
 # ---------------------------------------------------------------------------
 # Steinhardt Parameters
 # ---------------------------------------------------------------------------
+
 
 def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     """
@@ -99,10 +105,106 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     # Sync all q-related keys back
     sync_keys = []
     for val in ll:
-        sync_keys.extend([
-            "q%d" % val, "q%d_real" % val, "q%d_imag" % val,
-            "avg_q%d" % val,
-        ])
+        sync_keys.extend(
+            [
+                "q%d" % val,
+                "q%d_real" % val,
+                "q%d_imag" % val,
+                "avg_q%d" % val,
+            ]
+        )
+    _sync_back(d, atoms, sync_keys)
+
+    return [np.array(d[k]) for k in result_keys]
+
+
+# ---------------------------------------------------------------------------
+# Wigner W_l Parameter (Third-order rotational invariant)
+# ---------------------------------------------------------------------------
+
+
+def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
+    """
+    Calculate the third-order Steinhardt invariant W_l.
+
+    W_l is the third-order rotational invariant of the bond-orientational
+    order parameters, constructed by contracting q_lm with Wigner 3j
+    symbols. It distinguishes crystal structures that have similar q_l
+    values (e.g., FCC vs HCP via the sign of W_6).
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed via find_neighbors.
+    l : int or list of int
+        Order(s) for the W parameter. Only even values give nonzero
+        results (W_l = 0 for odd l when j1=j2=j3=l).
+    averaged : bool, optional
+        If True, compute neighbor-averaged W_l (Lechner-Dellago).
+        Default False.
+    normalized : bool, optional
+        If True (default), return the normalized hat{W}_l =
+        W_l / (sum |q_lm|^2)^(3/2). If False, return raw W_l.
+
+    Returns
+    -------
+    list of numpy arrays
+        One array per requested l value, each of shape (natoms,).
+
+    References
+    ----------
+    .. [1] Steinhardt, Nelson & Ronchetti, Phys. Rev. B 28, 784 (1983).
+    .. [2] Lechner & Dellago, J. Chem. Phys. 129, 114707 (2008).
+
+    Notes
+    -----
+    Known values for hat{W}_6:
+      - FCC: −0.01316
+      - HCP: −0.01244
+      - BCC: +0.01316
+      - ICO (Mackay): −0.16975
+      - Liquid: ≈ 0
+    """
+    if isinstance(l, int):
+        ll = [l]
+    else:
+        ll = list(l)
+
+    d = _get_dict_with_neighbors(atoms)
+
+    # Ensure q_lm are computed first (W_l requires them)
+    for val in ll:
+        pc.calculate_q_single(d, val)
+
+    if averaged:
+        for val in ll:
+            pc.calculate_aw_single(d, val)
+        if normalized:
+            result_keys = ["avg_what%d" % v for v in ll]
+        else:
+            result_keys = ["avg_w%d" % v for v in ll]
+    else:
+        for val in ll:
+            pc.calculate_w_single(d, val)
+        if normalized:
+            result_keys = ["what%d" % v for v in ll]
+        else:
+            result_keys = ["w%d" % v for v in ll]
+
+    # Sync all W-related keys back
+    sync_keys = []
+    for val in ll:
+        sync_keys.extend(
+            [
+                "q%d" % val,
+                "q%d_real" % val,
+                "q%d_imag" % val,
+                "w%d" % val,
+                "what%d" % val,
+                "avg_w%d" % val,
+                "avg_what%d" % val,
+            ]
+        )
     _sync_back(d, atoms, sync_keys)
 
     return [np.array(d[k]) for k in result_keys]
@@ -111,6 +213,7 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
 # ---------------------------------------------------------------------------
 # Disorder Parameter
 # ---------------------------------------------------------------------------
+
 
 def disorder(atoms: Atoms, q=6, averaged=False):
     """
@@ -140,12 +243,12 @@ def disorder(atoms: Atoms, q=6, averaged=False):
             need_calc = True
             break
         v = d[k]
-        if not hasattr(v, '__len__') or len(v) == 0:
+        if not hasattr(v, "__len__") or len(v) == 0:
             need_calc = True
             break
         # Check if it looks like a 2-D container (list-of-lists or 2-D array)
         first = v[0]
-        if not (hasattr(first, '__len__') and not isinstance(first, str)):
+        if not (hasattr(first, "__len__") and not isinstance(first, str)):
             need_calc = True
             break
     if need_calc:
@@ -170,6 +273,7 @@ def disorder(atoms: Atoms, q=6, averaged=False):
 # ---------------------------------------------------------------------------
 # Common Neighbor Analysis
 # ---------------------------------------------------------------------------
+
 
 def common_neighbor_analysis(atoms: Atoms, lattice_constant=None):
     """
@@ -260,6 +364,7 @@ def diamond_structure(atoms: Atoms):
 # Centrosymmetry Parameter
 # ---------------------------------------------------------------------------
 
+
 def centrosymmetry(atoms: Atoms, nmax=12):
     """
     Calculate the centrosymmetry parameter.
@@ -282,7 +387,7 @@ def centrosymmetry(atoms: Atoms, nmax=12):
         raise ValueError("nmax must be even")
 
     # Find neighbors by number
-    find_neighbors(atoms, method='number', nmax=nmax, assign_neighbor=True)
+    find_neighbors(atoms, method="number", nmax=nmax, assign_neighbor=True)
     d = _get_dict_with_neighbors(atoms)
     d["centrosymmetry"] = [0.0] * len(atoms)
 
@@ -296,6 +401,7 @@ def centrosymmetry(atoms: Atoms, nmax=12):
 # ---------------------------------------------------------------------------
 # Voronoi Vector
 # ---------------------------------------------------------------------------
+
 
 def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
     """
@@ -333,8 +439,10 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
 # Entropy Parameter
 # ---------------------------------------------------------------------------
 
-def entropy(atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001,
-            local=False, average=False):
+
+def entropy(
+    atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001, local=False, average=False
+):
     """
     Calculate the entropy parameter for each atom.
 
@@ -390,6 +498,7 @@ def entropy(atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001,
 # Short-Range Order
 # ---------------------------------------------------------------------------
 
+
 def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=True):
     """
     Calculate Warren-Cowley short-range order parameter.
@@ -426,6 +535,7 @@ def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=Tr
 # Radial Distribution Function
 # ---------------------------------------------------------------------------
 
+
 def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     """
     Calculate radial distribution function g(r).
@@ -447,7 +557,9 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     d = atoms_to_dict(atoms)
 
     distances = np.concatenate(d["neighbordist"])
-    hist, bin_edges = np.histogram(distances, bins=bins, range=(rmin, rmax), density=True)
+    hist, bin_edges = np.histogram(
+        distances, bins=bins, range=(rmin, rmax), density=True
+    )
 
     edgewidth = abs(bin_edges[1] - bin_edges[0])
     r = bin_edges[:-1]
@@ -455,7 +567,7 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     volume = abs(np.linalg.det(atoms.cell))
     rho = n / volume
 
-    shell_vols = (4.0 / 3.0) * np.pi * ((r + edgewidth) ** 3 - r ** 3)
+    shell_vols = (4.0 / 3.0) * np.pi * ((r + edgewidth) ** 3 - r**3)
     rdf = (hist / shell_vols) / rho
 
     return rdf, r
@@ -464,6 +576,7 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
 # ---------------------------------------------------------------------------
 # Angular Criteria
 # ---------------------------------------------------------------------------
+
 
 def angular_criteria(atoms: Atoms):
     """
@@ -491,6 +604,7 @@ def angular_criteria(atoms: Atoms):
 # ---------------------------------------------------------------------------
 # Chi Parameters
 # ---------------------------------------------------------------------------
+
 
 def chi_params(atoms: Atoms, angles=False):
     """
@@ -526,8 +640,17 @@ def chi_params(atoms: Atoms, angles=False):
 # Solid/Liquid Identification
 # ---------------------------------------------------------------------------
 
-def find_solids(atoms: Atoms, bonds=0.5, threshold=0.5, avgthreshold=0.6,
-                cluster=True, q=6, cutoff=0, right=True):
+
+def find_solids(
+    atoms: Atoms,
+    bonds=0.5,
+    threshold=0.5,
+    avgthreshold=0.6,
+    cluster=True,
+    q=6,
+    cutoff=0,
+    right=True,
+):
     """
     Distinguish solid and liquid atoms.
 
@@ -572,12 +695,16 @@ def find_solids(atoms: Atoms, bonds=0.5, threshold=0.5, avgthreshold=0.6,
     # Calculate bonds/solid classification
     pc.calculate_bonds(d, q, threshold, avgthreshold, bonds, compare_criteria, criteria)
 
-    _sync_back(d, atoms, ["solid", "bonds", "sij", "avg_sij",
-                           "q%d" % q, "q%d_real" % q, "q%d_imag" % q])
+    _sync_back(
+        d,
+        atoms,
+        ["solid", "bonds", "sij", "avg_sij", "q%d" % q, "q%d_real" % q, "q%d_imag" % q],
+    )
 
     if cluster:
-        return find_clusters(atoms, condition=np.array(d["solid"]) > 0,
-                            cutoff=cutoff, d=d)
+        return find_clusters(
+            atoms, condition=np.array(d["solid"]) > 0, cutoff=cutoff, d=d
+        )
     return None
 
 
@@ -618,7 +745,7 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
             unique, counts = np.unique(valid, return_counts=True)
             largest_size = int(counts.max())
             largest_id = unique[counts.argmax()]
-            atoms.arrays["pyscal_largest_cluster"] = (cluster_ids == largest_id)
+            atoms.arrays["pyscal_largest_cluster"] = cluster_ids == largest_id
             return largest_size
         return 0
     return None
@@ -627,6 +754,7 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
 # ---------------------------------------------------------------------------
 # Average over neighbors (utility)
 # ---------------------------------------------------------------------------
+
 
 def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     """
@@ -660,8 +788,7 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     # 1-D values: use fast C++ averaging
     values = np.asarray(values)
     if values.ndim == 1:
-        result = pc.calculate_average_over_neighbors(
-            d, values.tolist(), include_self)
+        result = pc.calculate_average_over_neighbors(d, values.tolist(), include_self)
         return np.array(result)
 
     # Multi-dimensional: fall back to Python loop
@@ -679,6 +806,7 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     """Reset neighbors and find by number (for CNA/diamond)."""
     n = len(d["positions"])
@@ -694,8 +822,8 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     d["cutoff"] = [0.0] * n
 
     pc.get_all_neighbors_bynumber(
-        d, 0.0, triclinic, rot, rotinv, boxdims,
-        2, nmax, (n > 250), False)
+        d, 0.0, triclinic, rot, rotinv, boxdims, 2, nmax, (n > 250), False
+    )
 
 
 # ---------------------------------------------------------------------------

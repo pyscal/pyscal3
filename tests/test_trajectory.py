@@ -1,4 +1,5 @@
 """Tests for trajectory module."""
+
 from pathlib import Path
 import numpy as np
 from pyscal3.trajectory import Trajectory
@@ -43,6 +44,7 @@ def test_timeslice_to_dict():
 
 def test_timeslice_to_file():
     import os
+
     traj = Trajectory(TRAJ)
     traj[0].to_file("test_traj_output.dump")
     assert os.path.exists("test_traj_output.dump")

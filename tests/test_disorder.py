@@ -1,4 +1,5 @@
 """Tests for disorder parameter."""
+
 from pathlib import Path
 import numpy as np
 import pyscal3
@@ -9,6 +10,7 @@ DATA = Path(__file__).resolve().parent / "files"
 def test_ordered_disorder():
     """FCC should have low disorder."""
     from ase.io import read
+
     atoms = read(str(DATA / "conf.fcc.dump"), format="lammps-dump-text")
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
 
@@ -24,6 +26,7 @@ def test_ordered_disorder():
 def test_disordered_disorder():
     """Liquid should have high disorder."""
     from ase.io import read
+
     atoms = read(str(DATA / "conf.lqd.dump"), format="lammps-dump-text")
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
     pyscal3.steinhardt_parameter(atoms, l=6)
