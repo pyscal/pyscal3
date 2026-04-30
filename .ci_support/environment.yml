@@ -10,8 +10,6 @@ dependencies:
   - pytest
   - pytest-cov
   - pybind11
-  - setuptools
-  - wheel
   - scipy
   - spglib
   - pyyaml

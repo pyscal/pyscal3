@@ -2,55 +2,54 @@
 # pyscal3 - python Structural Environment Calculator
 
 
-**pyscal3** is a completely new version of [pyscal](https://docs.pyscal.org/en/latest/), a python module for the calculation of local atomic structural environments including [Steinhardt's bond orientational order parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784) during post-processing of atomistic simulation data. `pyscal3` is faster and can handle a large number of atoms, with a much more user-friendly and intuitive interface.  
+**pyscal3** is a Python library for computing local atomic structural environments from atomistic simulation data. It provides fast C++-backed calculations of [Steinhardt's bond-orientational order parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784), common neighbor analysis, Voronoi tessellation, and many more descriptors — all through a clean functional API built on [ASE](https://wiki.fysik.dtu.dk/ase/) (Atomic Simulation Environment).
 
-Features of `pyscal3` includes:  
+## Key features
 
-- fast and efficient calculations using C++ and expansion using python.
-- more structure creation routines, including defects such as grain boundaries.
-- calculation of [Steinhardt's order parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784) and their [averaged version](https://aip.scitation.org/doi/full/10.1063/1.2977970) and [disorder parameters](https://doi.org/10.1063/1.3656762).
-- links with [Voro++](http://math.lbl.gov/voro++/)> code, for calculation of [Steinhardt parameters weighted using face area of Voronoi polyhedra](https://aip.scitation.org/doi/full/10.1063/1.4774084).
-- classification of atoms as [solid or liquid](https://link.springer.com/chapter/10.1007/b99429).
-- clustering of particles based on a user defined property.
-- methods for calculating radial distribution function, voronoi volumeof particles, number of vertices and face area of voronoi polyhedra and coordination number.
-- calculation of angular parameters such as [for identification of diamond structure](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.47.15717) and [Ackland-Jones](https://doi.org/10.1103/PhysRevB.73.054104) angular parameters.
-- [Centrosymmetry parameter](https://doi.org/10.1103/PhysRevB.58.11085) for identification of defects.
-- [Adaptive common neighbor analysis](https://iopscience.iop.org/article/10.1088/0965-0393/20/4/045021) for identification of crystal structures.
-- [Cowley short-range](https://doi.org/10.1103/PhysRev.120.1648) order parameters.
+- **ASE-first API** — all functions take and return standard `ase.Atoms` objects. Results are stored in `atoms.arrays` and `atoms.info` with the `pyscal_` prefix.
+- **Fast C++ core** — neighbor finding, Steinhardt parameters, CNA, and other descriptors run in compiled C++ via pybind11.
+- **Comprehensive descriptor suite:**
+  - [Steinhardt bond-orientational order parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784) and their [averaged](https://aip.scitation.org/doi/full/10.1063/1.2977970) and [disorder](https://doi.org/10.1063/1.3656762) variants
+  - [Voronoi tessellation](http://math.lbl.gov/voro++) with face-area-weighted Steinhardt parameters
+  - [Common neighbor analysis](https://iopscience.iop.org/article/10.1088/0965-0393/20/4/045021) (CNA, adaptive CNA, diamond CNA)
+  - [Solid/liquid classification](https://link.springer.com/chapter/10.1007/b99429) with clustering
+  - [Centrosymmetry parameter](https://doi.org/10.1103/PhysRevB.58.11085)
+  - [Angular parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.47.15717) and [Ackland-Jones](https://doi.org/10.1103/PhysRevB.73.054104) chi parameters
+  - [Cowley short-range order](https://doi.org/10.1103/PhysRev.120.1648)
+  - [Entropy parameter](https://doi.org/10.1063/1.4998408) for structure distinction
+  - Radial distribution function
+- **Structure creation** — built-in routines for common crystals, elements, general lattices, and grain boundaries.
+- **Trajectory support** — memory-efficient analysis of large LAMMPS dump trajectories.
 
+## Quick start
 
-## Why version 3?
+```python
+from ase.build import bulk
+import pyscal3
 
-pyscal v3 is a new version with mostly updated codebase and breaking changes. Anybody who has working pyscal code will need to update it to get it working with this new version. Therefore, it is necessary to discuss why this new version was needed and the benefits of updating.
+# Create a structure
+atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
 
-### Version 3 is much faster
+# Find neighbors
+pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
 
-In the plot below, the time needed to calculate neighbors with the 'cutoff' method for systems with varying number of atoms with versions 2.10.15 and 3.0 is shown.
+# Calculate descriptors
+q = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
+print(atoms.arrays["pyscal_q6"])
 
-<img src="_static/img_time_neighbor.png"  width="60%">
+# Common neighbor analysis
+result = pyscal3.common_neighbor_analysis(atoms)
+print(result)  # {'fcc': 108, 'hcp': 0, 'bcc': 0, 'ico': 0, 'others': 0}
+```
 
-v3 is faster for all system sizes. At a system size of about 50,000 atoms, v3 is about 4x faster.
+Results are stored directly on the ASE Atoms object:
+- **Per-atom data** → `atoms.arrays["pyscal_<name>"]` (NumPy arrays)
+- **System-level or ragged data** → `atoms.info["pyscal_<name>"]`
 
-### Version 3 uses less memory
+This makes it easy to combine pyscal3 with ASE's I/O, visualization, and analysis tools.
 
-A major issue with pyscal v2.x series was that it not useful for large system sizes due to the large amount of memory needed. In the plot below, the memory usage of both versions for the same calculation above is shown.
+## Citing
 
-<img src="_static/img_time_memory.png"  width="60%">
+If you use pyscal in your work, please cite:
 
-v3 uses less memory, for a system size of 50,000 atoms, v3 uses 14x less memory. A more interesting feature is the slope of the data, or how much the memory scales with the system size. For v3 it is only 0.008, while for v2 it is .12! For a system of 1 million atoms, v2 would use 117 GB of memory while v3 would need only 8 GB, making larger calculations accessible (these numbers will be updated after real use-case tests).
-
-### What are reasons for these benefits?
-
-- The older C++ atoms class is deprecated. Instead, it is store as python dictionary. Therefore the copying between python and C++ sides is avoided.
-- The atoms python dictionary is directly exposed to the C++ side. The dictionary is passed by reference, which allows in-place modification directly.
-
-### What are the other feature updates?
-
-The new version includes a number of new features and quality of life improvements. Please check the examples for details.
-
-
-## Citing the work
-
-If you use pyscal in your work, the citation of the [following article](https://joss.theoj.org/papers/10.21105/joss.01824) will be greatly appreciated:
-
-Sarath Menon, Grisell Díaz Leines and Jutta Rogal (2019). pyscal: A python module for structural analysis of atomic environments. Journal of Open Source Software, 4(43), 1824, https://doi.org/10.21105/joss.01824
+> Sarath Menon, Grisell Díaz Leines and Jutta Rogal (2019). pyscal: A python module for structural analysis of atomic environments. *Journal of Open Source Software*, 4(43), 1824, https://doi.org/10.21105/joss.01824

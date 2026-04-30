@@ -235,6 +235,12 @@ void calculate_q_single(py::dict& atoms,
 void calculate_aq_single(py::dict& atoms,
     const int lm);
 
+void calculate_w_single(py::dict& atoms,
+    const int lm);
+
+void calculate_aw_single(py::dict& atoms,
+    const int lm);
+
 void calculate_disorder(py::dict& atoms,
     const int lm);
 
@@ -337,29 +343,23 @@ void calculate_centrosymmetry(py::dict& atoms,
     const int nmax);
 
 /*-----------------------------------------------------
+    Pure-math descriptors (chi, angular, voronoi-vec, SRO)
+-----------------------------------------------------*/
+void calculate_chi_params(py::dict& atoms);
+
+void calculate_angular_criteria(py::dict& atoms);
+
+void calculate_voronoi_vector(py::dict& atoms,
+    double edge_cutoff,
+    double area_cutoff);
+
+void calculate_short_range_order(py::dict& atoms,
+    int reference_type,
+    int compare_type);
+
+/*-----------------------------------------------------
     Entropy Methods
 -----------------------------------------------------*/
-double gmr(double r, 
-    double sigma,
-    double rho, 
-    int n_neighbors,
-    vector<double> &neighbordist);
-
-double entropy_integrand(double r,
-    double sigma,
-    double rho,
-    int n_neighbors,
-    vector<double> &neighbordist);
-
-double trapezoid_integration(const double rstart,
-    const double rstop,
-    const double h,
-    double sigma,
-    double rho,
-    int n_neighbors,
-    vector<double> &neighbordist,
-    double kb);
-
 void calculate_entropy(py::dict& atoms, 
     double sigma, 
     double rho, 
@@ -369,3 +369,12 @@ void calculate_entropy(py::dict& atoms,
     double kb);
 
 void calculate_average_entropy(py::dict& atoms);
+
+/*-----------------------------------------------------
+    Neighbor-averaging helpers (puremath.cpp)
+-----------------------------------------------------*/
+void calculate_average_disorder(py::dict& atoms);
+
+py::list calculate_average_over_neighbors(py::dict& atoms,
+    const vector<double>& values,
+    bool include_self);

@@ -1,11 +1,11 @@
-import pytest
-import os,sys,inspect
+"""Tests for angular criteria."""
 import numpy as np
-import pyscal3.core as pc
+import pyscal3
+from pyscal3.structures import make_crystal
 
-def test_angular():
-    sys = pc.System.create.lattice.diamond(repetitions = [4, 4, 4])
-    sys.find.neighbors(method = 'cutoff', cutoff=0)
-    sys.calculate.angular_criteria()
 
-    assert np.round(np.mean(np.array(sys.atoms.angular_parameters.diamond_angle)), decimals=2) == 0.00
+def test_angular_diamond():
+    atoms = make_crystal("diamond", lattice_constant=1.0, repetitions=(4, 4, 4))
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
+    ang = pyscal3.angular_criteria(atoms)
+    assert round(np.mean(ang), 2) == 0.00

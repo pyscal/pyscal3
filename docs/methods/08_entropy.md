@@ -20,17 +20,19 @@ $$
 \bar{s}_s^i = \frac{\sum_j s_s^j + s_s^i}{N + 1}
 $$
 
-Entropy parameters can be calculated in pyscal using the following code,
+Entropy parameters can be calculated in pyscal3 using the following code,
 
 ``` python
-from pyscal3 import System
-sys = System('conf.dump')
-sys.find.neighbors(method="cutoff", cutoff=0)
-lattice_constant=4.00
-avg_entropy = sys.calculate.entropy(1.4*lattice_constant, averaged=True)
+import pyscal3
+from ase.io import read
+
+atoms = read('conf.dump', format='lammps-dump-text')
+pyscal3.find_neighbors(atoms, method='cutoff', cutoff=0)
+lattice_constant = 4.00
+pyscal3.entropy(atoms, rm=1.4 * lattice_constant, average=True)
 ```
 
-The value of $r_m$ is provided in units of lattice constant. Further parameters shown above, such as $\sigma$ can be specified using the various keyword arguments. 
+The value of $r_m$ is provided in the same units as the input coordinates (typically Å). Other parameters such as $\sigma$, the integration step `h`, and the integration starting point `rstart` can be set through keyword arguments. Per-atom values are stored as `atoms.arrays['pyscal_entropy']` and `pyscal_average_entropy`.
 
 In pyscal, a slightly different version of $s_s^i$ is calculated. This is given by,
 

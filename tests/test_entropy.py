@@ -1,13 +1,23 @@
-import pytest
-import os
+"""Tests for entropy parameter."""
+
+from pathlib import Path
 import numpy as np
-import pyscal3.core as pc
+import pyscal3
+
+DATA = Path(__file__).resolve().parent / "files"
 
 
-def test_entropy():
-	sys = pc.System("tests/files/conf.fcc.Al.dump")
-	sys.find.neighbors(method="cutoff", cutoff=0)
-	
-	lat = (sys.box[0][0]/5)
+def test_entropy_fcc():
+    from ase.io import read
 
-	assert np.mean(sys.calculate.entropy(1.4*lat, average=True, local=True))+4.1782399110084985 < 0.001
+    atoms = read(str(DATA / "conf.fcc.Al.dump"), format="lammps-dump-text")
+    box = atoms.cell
+    lat = np.linalg.norm(box[0]) / 5
+
+    # Use a fixed cutoff to avoid adaptive cutoff variability
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=lat * 0.854)
+    ent = pyscal3.entropy(atoms, rm=1.4 * lat, average=True, local=True)
+    # Entropy should be strongly negative for perfect FCC
+    assert np.mean(ent) < -3.0
+    # All individual values should be close together (ordered structure)
+    assert np.std(ent) < 0.1

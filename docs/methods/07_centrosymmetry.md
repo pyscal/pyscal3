@@ -12,12 +12,14 @@ and is implemented in [LAMMPS](https://lammps.sandia.gov/) and [Ovito](https://w
 A centrosymmetry parameter calculation using GES algorithm can be carried out as follows-
 
 ``` python
-from pyscal3 import System
-sys = System('conf.dump')
-csm = sys.calculate.centrosymmetry(nmax = 12)
+import pyscal3
+from ase.io import read
+
+atoms = read('conf.dump', format='lammps-dump-text')
+csm = pyscal3.centrosymmetry(atoms, nmax=12)
 ```
 
-`nmax` parameter specifies the number of nearest neighbors to be considered for the calculation of CSP. 
+`nmax` specifies the number of nearest neighbors used in the calculation. The per-atom value is also stored as `atoms.arrays['pyscal_centrosymmetry']`. Neighbor finding is handled internally; an external call to `find_neighbors` is not required.
 
 ## References
 

@@ -32,6 +32,8 @@ PYBIND11_MODULE(csystem, m) {
     m.def("calculate_q_atom", &calculate_q_atom);
     m.def("calculate_q_single", &calculate_q_single);
     m.def("calculate_aq_single", &calculate_aq_single);
+    m.def("calculate_w_single", &calculate_w_single);
+    m.def("calculate_aw_single", &calculate_aw_single);
     m.def("calculate_disorder", &calculate_disorder);
     m.def("calculate_bonds", &calculate_bonds);
     m.def("find_clusters", &find_clusters);
@@ -48,6 +50,12 @@ PYBIND11_MODULE(csystem, m) {
     m.def("calculate_centrosymmetry", &calculate_centrosymmetry);
     m.def("calculate_entropy", &calculate_entropy);
     m.def("calculate_average_entropy", &calculate_average_entropy);
+    m.def("calculate_chi_params", &calculate_chi_params);
+    m.def("calculate_angular_criteria", &calculate_angular_criteria);
+    m.def("calculate_voronoi_vector", &calculate_voronoi_vector);
+    m.def("calculate_short_range_order", &calculate_short_range_order);
+    m.def("calculate_average_disorder", &calculate_average_disorder);
+    m.def("calculate_average_over_neighbors", &calculate_average_over_neighbors);
 
 #ifdef VERSION_INFO
     m.attr("__version__") = VERSION_INFO;

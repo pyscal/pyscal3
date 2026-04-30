@@ -12,3 +12,21 @@ docs/doctrees/*
 docs/source/examples
 .ipynb_check*
 *.dump
+
+# C++ extension build artifacts
+*.so
+*.pyd
+*.dylib
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Test artifacts
+test.out
+*.xml
+.coverage
+htmlcov/
+
+# Local scratch commit message drafts
+.commit_msg
