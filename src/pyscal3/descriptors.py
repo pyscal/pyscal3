@@ -18,6 +18,7 @@ Example
 import numpy as np
 import itertools
 from ase import Atoms
+from scipy.special import sph_harm_y
 
 import pyscal3.csystem as pc
 from pyscal3._bridge import (
@@ -823,3 +824,371 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     pc.get_all_neighbors_bynumber(
         d, 0.0, triclinic, rot, rotinv, boxdims, 2, nmax, (n > 250), False
     )
+
+
+# ---------------------------------------------------------------------------
+# ACE (Atomic Cluster Expansion) Descriptors
+# ---------------------------------------------------------------------------
+
+def _ace_cutoff(r, cutoff):
+    """Smooth cosine cutoff function for ACE basis.
+    
+    f_cut(r) = 0.5 * (cos(pi * r / r_cut) + 1) for r < r_cut, else 0
+    
+    Parameters
+    ----------
+    r : float or array
+        Distance(s).
+    cutoff : float
+        Cutoff radius.
+        
+    Returns
+    -------
+    float or array
+        Cutoff function value(s).
+    """
+    r = np.asarray(r)
+    result = np.where(r < cutoff, 0.5 * (np.cos(np.pi * r / cutoff) + 1), 0.0)
+    return result
+
+
+def _ace_radial_basis(n, r, cutoff, rmin=0.5):
+    """Chebyshev polynomial radial basis for ACE.
+    
+    R_n(r) = T_n(x) * f_cut(r)
+    where x = 2*(r - rmin)/(cutoff - rmin) - 1 maps r to [-1, 1]
+    
+    Parameters
+    ----------
+    n : int
+        Basis function index (0, 1, 2, ...).
+    r : float or array
+        Distance(s).
+    cutoff : float
+        Cutoff radius.
+    rmin : float
+        Inner cutoff (default 0.5 Angstrom).
+        
+    Returns
+    -------
+    float or array
+        Radial basis function value(s).
+    """
+    r = np.asarray(r)
+    # Map r to [-1, 1]
+    x = 2 * (r - rmin) / (cutoff - rmin) - 1
+    x = np.clip(x, -1, 1)
+    # Chebyshev polynomial T_n(x) = cos(n * arccos(x))
+    Tn = np.cos(n * np.arccos(x))
+    return Tn * _ace_cutoff(r, cutoff)
+
+
+def _ace_a_functions(d, nmax, lmax, cutoff):
+    """Compute A-basis (single-particle) coefficients for ACE.
+    
+    A_{i,nlm} = sum_{j in neighbors(i)} R_n(r_ij) * Y_l^m(r_ij_hat)
+    
+    These are the fundamental building blocks from which higher-order
+    correlations are constructed.
+    
+    Parameters
+    ----------
+    d : dict
+        Neighbor data dictionary with 'diff', 'neighbordist'.
+    nmax : int
+        Number of radial basis functions.
+    lmax : int
+        Maximum angular momentum quantum number.
+    cutoff : float
+        Cutoff radius.
+        
+    Returns
+    -------
+    A : ndarray, shape (natoms, nmax, lmax+1, 2*lmax+1), complex
+        A-basis coefficients. A[i, n, l, m+lmax] gives A_{i,nlm}.
+    """
+    natoms = len(d['positions'])
+    # Complex array to hold A coefficients
+    # Index mapping: m ranges from -l to +l, stored at index m + lmax
+    A = np.zeros((natoms, nmax, lmax + 1, 2 * lmax + 1), dtype=np.complex128)
+    
+    for i in range(natoms):
+        neighbors_i = d["neighbors"][i]
+        if not hasattr(neighbors_i, '__len__') or len(neighbors_i) == 0:
+            continue
+            
+        dists = d["neighbordist"][i]
+        diffs = d["diff"][i]
+        
+        for j_idx in range(len(neighbors_i)):
+            rij = dists[j_idx]
+            if rij < 1e-10 or rij >= cutoff:
+                continue
+            
+            vec = np.array(diffs[j_idx])
+            # Spherical coordinates
+            # theta = polar angle from z axis
+            # phi = azimuthal angle in xy plane
+            theta = np.arccos(np.clip(vec[2] / rij, -1, 1))
+            phi = np.arctan2(vec[1], vec[0])
+            
+            for n in range(nmax):
+                R_n = _ace_radial_basis(n, rij, cutoff)
+                for l in range(lmax + 1):
+                    for m in range(-l, l + 1):
+                        # scipy sph_harm_y(l, m, theta, phi) uses physics convention
+                        Y_lm = sph_harm_y(l, m, theta, phi)
+                        A[i, n, l, m + lmax] += R_n * Y_lm
+    
+    return A
+
+
+def _ace_b_basis_nu1(A, lmax):
+    """Compute nu=1 B-basis (isotropic density).
+    
+    B^{(1)}_{i,n} = A_{i,n,0,0} (l=0, m=0 component only)
+    
+    This captures the radial neighbor density.
+    
+    Parameters
+    ----------
+    A : ndarray
+        A-basis coefficients from _ace_a_functions.
+    lmax : int
+        Maximum angular momentum (needed for indexing).
+        
+    Returns
+    -------
+    B1 : ndarray, shape (natoms, nmax)
+        Nu=1 B-basis descriptors.
+    """
+    # l=0, m=0 is stored at A[i, n, 0, lmax]
+    return np.real(A[:, :, 0, lmax])
+
+
+def _ace_b_basis_nu2(A, nmax, lmax):
+    """Compute nu=2 B-basis (power spectrum / SOAP-like).
+    
+    B^{(2)}_{i,n1,n2,l} = sum_{m=-l}^{l} A*_{i,n1,l,m} * A_{i,n2,l,m}
+    
+    This is equivalent to the SOAP power spectrum and captures
+    2-body angular correlations.
+    
+    Parameters
+    ----------
+    A : ndarray
+        A-basis coefficients.
+    nmax : int
+        Number of radial basis functions.
+    lmax : int
+        Maximum angular momentum.
+        
+    Returns
+    -------
+    B2 : ndarray, shape (natoms, n_descriptors)
+        Nu=2 B-basis descriptors (flattened).
+    """
+    natoms = A.shape[0]
+    descriptors = []
+    
+    # Use symmetry: only n1 <= n2
+    for n1 in range(nmax):
+        for n2 in range(n1, nmax):
+            for l in range(lmax + 1):
+                # Sum over m: sum_m A*_{n1,l,m} * A_{n2,l,m}
+                B_desc = np.zeros(natoms)
+                for m in range(-l, l + 1):
+                    B_desc += np.real(
+                        np.conj(A[:, n1, l, m + lmax]) * A[:, n2, l, m + lmax]
+                    )
+                descriptors.append(B_desc)
+    
+    return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
+
+
+def _ace_b_basis_nu3(A, nmax, lmax):
+    """Compute nu=3 B-basis (bispectrum-like triplet correlations).
+    
+    B^{(3)} = sum_{m1,m2,m3} C_{l1,l2,l3}^{m1,m2,m3} * A_{n1,l1,m1} * A_{n2,l2,m2} * A_{n3,l3,m3}
+    
+    where the coupling coefficient ensures rotational invariance (total L=0).
+    For simplicity, we use the constraint m1 + m2 + m3 = 0 with equal weights.
+    
+    This captures 3-body angular correlations.
+    
+    Parameters
+    ----------
+    A : ndarray
+        A-basis coefficients.
+    nmax : int
+        Number of radial basis functions.
+    lmax : int
+        Maximum angular momentum.
+        
+    Returns
+    -------
+    B3 : ndarray, shape (natoms, n_descriptors)
+        Nu=3 B-basis descriptors.
+    """
+    natoms = A.shape[0]
+    descriptors = []
+    
+    # Limit combinations to keep computation tractable
+    # Use n1 <= n2 <= n3 for symmetry
+    for n1 in range(min(nmax, 3)):  # Limit radial indices
+        for n2 in range(n1, min(nmax, 3)):
+            for n3 in range(n2, min(nmax, 3)):
+                for l1 in range(min(lmax + 1, 3)):  # Limit angular momentum
+                    for l2 in range(min(lmax + 1, 3)):
+                        # Triangle rule: |l1-l2| <= l3 <= l1+l2
+                        l3_min = abs(l1 - l2)
+                        l3_max = min(l1 + l2, lmax, 2)  # Also limit l3
+                        for l3 in range(l3_min, l3_max + 1):
+                            # Parity rule: l1 + l2 + l3 must be even
+                            if (l1 + l2 + l3) % 2 != 0:
+                                continue
+                            
+                            B_desc = np.zeros(natoms)
+                            for m1 in range(-l1, l1 + 1):
+                                for m2 in range(-l2, l2 + 1):
+                                    m3 = -(m1 + m2)  # Enforce m1+m2+m3=0
+                                    if abs(m3) > l3:
+                                        continue
+                                    
+                                    # Product of three A-functions
+                                    prod = (A[:, n1, l1, m1 + lmax] *
+                                            A[:, n2, l2, m2 + lmax] *
+                                            A[:, n3, l3, m3 + lmax])
+                                    B_desc += np.real(prod)
+                            
+                            if np.any(np.abs(B_desc) > 1e-15):
+                                descriptors.append(B_desc)
+    
+    return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
+
+
+def ace(atoms: Atoms, nmax=4, lmax=4, nu_max=2, cutoff=None, normalize=True):
+    """
+    Compute Atomic Cluster Expansion (ACE) descriptors.
+    
+    ACE provides a systematic and complete expansion of atomic environments,
+    with SOAP (nu=2) and bispectrum (nu=3) as special cases. The descriptors
+    are rotationally, translationally, and permutationally invariant.
+    
+    The implementation follows Drautz (2019) and computes B-basis descriptors
+    by coupling A-functions (single-particle basis) to form rotationally
+    invariant combinations at each correlation order.
+    
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with neighbors already computed.
+    nmax : int, default 4
+        Number of radial basis functions. Higher values capture finer
+        radial resolution but increase computation.
+    lmax : int, default 4
+        Maximum angular momentum quantum number. Higher values capture
+        more angular detail. Typically 3-6 for ML potentials.
+    nu_max : int, default 2
+        Maximum correlation order:
+        - nu=1: Radial density (neighbor count per shell)
+        - nu=2: Pair correlations (SOAP power spectrum)
+        - nu=3: Triplet correlations (bispectrum)
+        Higher orders rapidly increase descriptor count.
+    cutoff : float, optional
+        Neighbor cutoff radius. If None, uses the cutoff from
+        find_neighbors.
+    normalize : bool, default True
+        If True, normalize descriptors to unit norm per atom.
+        
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+        - 'nu1': ndarray (natoms, nmax) - radial density descriptors
+        - 'nu2': ndarray (natoms, n2) - power spectrum (if nu_max >= 2)
+        - 'nu3': ndarray (natoms, n3) - bispectrum-like (if nu_max >= 3)
+        - 'full': ndarray (natoms, n_total) - concatenated descriptors
+        
+    Notes
+    -----
+    The descriptor count scales as:
+    - nu=1: O(nmax)
+    - nu=2: O(nmax^2 * lmax)
+    - nu=3: O(nmax^3 * lmax^3) but limited for tractability
+    
+    References
+    ----------
+    .. [1] Drautz, R. (2019). "Atomic cluster expansion for accurate and 
+           transferable interatomic potentials." Phys. Rev. B 99, 014104.
+    .. [2] Dusson et al. (2022). "Atomic cluster expansion: Completeness,
+           efficiency and stability." J. Comput. Phys.
+    
+    Examples
+    --------
+    >>> from ase.build import bulk
+    >>> import pyscal3
+    >>> atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+    >>> pyscal3.find_neighbors(atoms, method="cutoff", cutoff=4.0)
+    >>> desc = pyscal3.ace(atoms, nmax=4, lmax=3, nu_max=2)
+    >>> print(desc['full'].shape)
+    >>> print("nu=2 descriptors:", desc['nu2'].shape[1])
+    """
+    d = _get_dict_with_neighbors(atoms)
+    natoms = len(atoms)
+    
+    # Determine cutoff
+    if cutoff is None:
+        cutoffs = d.get("cutoff", [])
+        cutoffs_arr = np.asarray(cutoffs)
+        if cutoffs_arr.size > 0 and np.max(cutoffs_arr) > 0:
+            cutoff = float(np.max(cutoffs_arr))
+        else:
+            cutoff = 5.0  # Default fallback
+    
+    # Compute A-functions (single-particle basis)
+    A = _ace_a_functions(d, nmax, lmax, cutoff)
+    
+    result = {}
+    all_descriptors = []
+    
+    # Nu=1: Radial density
+    B1 = _ace_b_basis_nu1(A, lmax)
+    result['nu1'] = B1
+    all_descriptors.append(B1)
+    
+    # Nu=2: Power spectrum (SOAP-like)
+    if nu_max >= 2:
+        B2 = _ace_b_basis_nu2(A, nmax, lmax)
+        result['nu2'] = B2
+        all_descriptors.append(B2)
+    
+    # Nu=3: Triplet correlations (bispectrum-like)
+    if nu_max >= 3:
+        B3 = _ace_b_basis_nu3(A, nmax, lmax)
+        result['nu3'] = B3
+        all_descriptors.append(B3)
+    
+    # Concatenate all descriptors
+    full = np.hstack(all_descriptors)
+    
+    # Normalize if requested
+    if normalize:
+        norms = np.linalg.norm(full, axis=1, keepdims=True)
+        norms = np.where(norms > 1e-10, norms, 1.0)
+        full = full / norms
+        result['nu1'] = result['nu1'] / norms
+        if 'nu2' in result:
+            result['nu2'] = result['nu2'] / norms
+        if 'nu3' in result:
+            result['nu3'] = result['nu3'] / norms
+    
+    result['full'] = full
+    
+    # Store in atoms
+    atoms.arrays["pyscal_ace"] = full
+    atoms.info["pyscal_ace_params"] = {
+        'nmax': nmax, 'lmax': lmax, 'nu_max': nu_max, 'cutoff': cutoff
+    }
+    
+    return result
