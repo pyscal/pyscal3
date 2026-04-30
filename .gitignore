@@ -27,3 +27,6 @@ test.out
 *.xml
 .coverage
 htmlcov/
+
+# Local scratch commit message drafts
+.commit_msg
