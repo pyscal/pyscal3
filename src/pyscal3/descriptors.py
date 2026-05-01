@@ -33,6 +33,43 @@ from pyscal3._bridge import (
 from pyscal3.neighbors import find_neighbors
 
 
+def _get_neighbor_dists_padded(atoms):
+    """Return per-atom neighbor distances as a 2-D (N, max_nn) array.
+
+    Falls back to ``atoms.info["pyscal_neighbordist"]`` (ragged list)
+    when neighbor data is not stored as a uniform 2-D array in
+    ``atoms.arrays``.  Padded entries are zero.
+    """
+    if "pyscal_neighbordist" in atoms.arrays:
+        return atoms.arrays["pyscal_neighbordist"]
+    rows = atoms.info["pyscal_neighbordist"]
+    n = len(atoms)
+    max_nn = max((len(r) for r in rows), default=0)
+    out = np.zeros((n, max_nn), dtype=float)
+    for i, r in enumerate(rows):
+        if len(r) > 0:
+            out[i, : len(r)] = r
+    return out
+
+
+def _get_neighbor_indices_padded(atoms):
+    """Return per-atom neighbor indices as a 2-D (N, max_nn) array.
+
+    Falls back to ``atoms.info["pyscal_neighbors"]`` for ragged data.
+    Padded entries are -1.
+    """
+    if "pyscal_neighbors" in atoms.arrays:
+        return atoms.arrays["pyscal_neighbors"]
+    rows = atoms.info["pyscal_neighbors"]
+    n = len(atoms)
+    max_nn = max((len(r) for r in rows), default=0)
+    out = np.full((n, max_nn), -1, dtype=int)
+    for i, r in enumerate(rows):
+        if len(r) > 0:
+            out[i, : len(r)] = r
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -719,7 +756,7 @@ def bond_length_distribution(atoms: Atoms, bins=100, rmin=None, rmax=None):
         ``atoms.info["pyscal_bldf"]`` and ``atoms.info["pyscal_bldf_r"]``.
     """
     ensure_neighbors(atoms)
-    dists = atoms.arrays["pyscal_neighbordist"]
+    dists = _get_neighbor_dists_padded(atoms)
     mask = dists > 0
     all_dists = dists[mask].ravel()
 
@@ -916,6 +953,24 @@ def identify_ackland_jones(atoms: Atoms):
 # Deformation Descriptors (require reference configuration)
 # ---------------------------------------------------------------------------
 
+def _get_neighbor_diff_padded(atoms):
+    """Return per-atom neighbor displacement vectors as (N, max_nn, 3).
+
+    Falls back to ragged ``atoms.info["pyscal_diff"]`` if necessary.
+    Padded entries are zero.
+    """
+    if "pyscal_diff" in atoms.arrays:
+        return atoms.arrays["pyscal_diff"]
+    rows = atoms.info["pyscal_diff"]
+    n = len(atoms)
+    max_nn = max((len(r) for r in rows), default=0)
+    out = np.zeros((n, max_nn, 3), dtype=float)
+    for i, r in enumerate(rows):
+        if len(r) > 0:
+            out[i, : len(r)] = np.asarray(r)
+    return out
+
+
 def _match_neighbor_indices(atoms_cur, atoms_ref):
     """
     Match atoms across deformed/reference configs and return neighbor mapping.
@@ -924,10 +979,10 @@ def _match_neighbor_indices(atoms_cur, atoms_ref):
     for atoms that appear in both neighbor lists.
     """
     # Get current neighbor data
-    neighbors_cur = atoms_cur.arrays["pyscal_neighbors"]
-    neighbors_ref = atoms_ref.arrays["pyscal_neighbors"]
-    diff_cur = atoms_cur.arrays["pyscal_diff"]
-    diff_ref = atoms_ref.arrays["pyscal_diff"]
+    neighbors_cur = _get_neighbor_indices_padded(atoms_cur)
+    neighbors_ref = _get_neighbor_indices_padded(atoms_ref)
+    diff_cur = _get_neighbor_diff_padded(atoms_cur)
+    diff_ref = _get_neighbor_diff_padded(atoms_ref)
 
     n = len(atoms_cur)
     mapping = {}
@@ -1362,7 +1417,7 @@ def effective_coordination_number(atoms: Atoms):
     ionic radii (MEFIR)", *Z. Kristallogr.* **150**, 23 (1979).
     """
     ensure_neighbors(atoms)
-    dists = atoms.arrays["pyscal_neighbordist"]   # (N, max_nn)
+    dists = _get_neighbor_dists_padded(atoms)   # (N, max_nn)
     mask = dists > 0  # valid neighbors
 
     n = len(atoms)
@@ -1409,7 +1464,7 @@ def coordination_number(atoms: Atoms):
         ``atoms.arrays["pyscal_cn"]``.
     """
     ensure_neighbors(atoms)
-    dists = atoms.arrays["pyscal_neighbordist"]
+    dists = _get_neighbor_dists_padded(atoms)
     cn = (dists > 0).sum(axis=1)
     atoms.arrays["pyscal_cn"] = cn
     return cn
@@ -1457,7 +1512,7 @@ def generalized_coordination_number(atoms: Atoms, cn_max=None):
     if cn_max == 0:
         cn_max = 1  # avoid division by zero
 
-    neighbors = atoms.arrays["pyscal_neighbors"]
+    neighbors = _get_neighbor_indices_padded(atoms)
     n = len(atoms)
     gcn = np.zeros(n, dtype=float)
     for i in range(n):
@@ -1500,7 +1555,7 @@ def local_density(atoms: Atoms):
         ``atoms.arrays["pyscal_local_density"]``.
     """
     ensure_neighbors(atoms)
-    dists = atoms.arrays["pyscal_neighbordist"]
+    dists = _get_neighbor_dists_padded(atoms)
     mask = dists > 0
 
     cn = mask.sum(axis=1).astype(float)
@@ -1772,8 +1827,10 @@ def _ace_b_basis_nu3(A, nmax, lmax):
                                             A[:, n3, l3, m3 + lmax])
                                     B_desc += np.real(prod)
                             
-                            if np.any(np.abs(B_desc) > 1e-15):
-                                descriptors.append(B_desc)
+                            # Always append so the descriptor count is a
+                            # deterministic function of (nmax, lmax) — needed
+                            # to compare descriptors across different structures.
+                            descriptors.append(B_desc)
     
     return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
 
