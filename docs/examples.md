@@ -122,6 +122,78 @@ Trajectory module
 ^^^
 Efficient analysis of multi-frame LAMMPS dump trajectories.
 :::
+
+:::{grid-item-card}
+:link: ../examples/14_wigner_w_parameters
+:link-type: doc
+:class-header: bg-light
+Wigner W parameters
+^^^
+Third-order bond-orientational invariants w_l and their averaged variants.
+:::
+
+:::{grid-item-card}
+:link: ../examples/15_minkowski_structure_metrics
+:link-type: doc
+:class-header: bg-light
+Minkowski structure metrics
+^^^
+Voronoi face-area weighted Steinhardt parameters for robust structure identification.
+:::
+
+:::{grid-item-card}
+:link: ../examples/16_ackland_jones_classification
+:link-type: doc
+:class-header: bg-light
+Ackland-Jones classification
+^^^
+Angular-distribution-based structure classification for FCC, BCC, HCP, and icosahedral.
+:::
+
+:::{grid-item-card}
+:link: ../examples/17_coordination_variants
+:link-type: doc
+:class-header: bg-light
+Coordination variants
+^^^
+Coordination number computed via cutoff, Voronoi, and SANN neighbor methods.
+:::
+
+:::{grid-item-card}
+:link: ../examples/18_angular_bond_distributions
+:link-type: doc
+:class-header: bg-light
+Angular bond distributions
+^^^
+Bond-angle distribution functions for characterizing local environments.
+:::
+
+:::{grid-item-card}
+:link: ../examples/21_deformation_descriptors
+:link-type: doc
+:class-header: bg-light
+Deformation descriptors
+^^^
+Per-atom deformation gradient, strain, and slip-vector descriptors.
+:::
+
+:::{grid-item-card}
+:link: ../examples/22_wigner_seitz_defects
+:link-type: doc
+:class-header: bg-light
+Wigner-Seitz defects
+^^^
+Vacancy and interstitial detection via Wigner-Seitz cell analysis.
+:::
+
+:::{grid-item-card}
+:link: ../examples/28_ace_descriptors
+:link-type: doc
+:class-header: bg-light
+ACE descriptors
+^^^
+Atomic Cluster Expansion descriptors for machine-learning interatomic potentials.
+:::
 ::::
 
 
