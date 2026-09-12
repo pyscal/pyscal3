@@ -55,6 +55,7 @@ void get_cna_neighbors(py::dict& atoms,
 
     for (int ti=0; ti<nop; ti++){
         cutoff[ti] = factor*lattice_constant;
+        if (int(atom_temp_neighbors[ti].size()) < ncount) continue;
         for(int i=0 ; i<ncount; i++){
             int tj = atom_temp_neighbors[ti][i];
             d = get_abs_distance(positions[ti], positions[tj],
@@ -182,7 +183,7 @@ void get_acna_neighbors_cn14(py::dict& atoms,
     vector<double> cutoff(nop);
 
     for (int ti=0; ti<nop; ti++){
-        if (atom_temp_neighbors[ti].size() > 11){
+        if (atom_temp_neighbors[ti].size() >= 14){
             double ssum = 0;
             for(int i=0 ; i<8; i++){
                 ssum += 1.1547*atom_temp_neighbordist[ti][i];
@@ -252,7 +253,7 @@ void get_common_neighbors(const int& triclinic,
         }
     }
     
-    for(int i=0; i<neighbors[ti].size()-1; i++){
+    for(int i=0; i+1<int(neighbors[ti].size()); i++){
         m = neighbors[ti][i];
         for(int j=i+1; j<neighbors[ti].size(); j++){
             n = neighbors[ti][j];

@@ -96,6 +96,9 @@ int cell_index(int, int, int, int, int, int);
 vector<int> cell_periodic(int, int, int, int, int, int);
 
 vector<cell> set_up_cells(const vector<vector<double>>&,
+    const int,
+    const vector<vector<double>>&,
+    const vector<vector<double>>&,
     const vector<double>&,
     const double);
 

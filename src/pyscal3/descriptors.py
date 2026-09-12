@@ -1587,9 +1587,14 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     d["phi"] = [[] for _ in range(n)]
     d["cutoff"] = [0.0] * n
 
-    pc.get_all_neighbors_bynumber(
+    finished = pc.get_all_neighbors_bynumber(
         d, 0.0, triclinic, rot, rotinv, boxdims, 2, nmax, (n > 250), False
     )
+    if not finished:
+        raise RuntimeError(
+            "Could not find %d neighbor candidates for every atom; "
+            "the structure may be too sparse or contain isolated atoms." % nmax
+        )
 
 
 # ---------------------------------------------------------------------------
