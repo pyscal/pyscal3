@@ -23,10 +23,11 @@ import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=5.0)
 descriptors = pyscal.ace(atoms, nmax=4, lmax=4, nu_max=2, cutoff=5.0)
 ```
 
-The full descriptor matrix is stored as `atoms.arrays['pyscal_ace']` with shape $(N, n_{\mathrm{features}})$. Hyperparameters used in the calculation are recorded in `atoms.info['pyscal_ace_params']`. Setting `normalize=False` disables the per-feature normalisation; choosing `nu_max=1` returns only the radial $\nu=1$ block.
+The neighbor list must be computed first; the radial basis is truncated at `cutoff` (by default the cutoff used for the neighbor list). The $\nu=3$ block couples three atomic basis functions with Wigner $3j$ symbols, so all blocks are rotationally invariant. The full descriptor matrix is stored as `atoms.arrays['pyscal_ace']` with shape $(N, n_{\mathrm{features}})$ and the individual blocks are returned in a dictionary (`'nu1'`, `'nu2'`, `'nu3'`, `'full'`). Hyperparameters used in the calculation are recorded in `atoms.info['pyscal_ace_params']`. Setting `normalize=False` disables the per-atom normalisation of the descriptor vector to unit length; choosing `nu_max=1` returns only the radial $\nu=1$ block.
 
 ## References
 

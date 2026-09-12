@@ -15,6 +15,9 @@ Example
 >>> print(atoms.arrays["pyscal_q4"])
 """
 
+import math
+import functools
+import warnings
 import numpy as np
 import itertools
 from scipy.spatial import cKDTree
@@ -1789,13 +1792,40 @@ def _ace_b_basis_nu2(A, nmax, lmax):
     return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
 
 
+@functools.lru_cache(maxsize=None)
+def _wigner_3j(j1, j2, j3, m1, m2, m3):
+    """Wigner 3j symbol (j1 j2 j3; m1 m2 m3) for integer arguments (Racah formula)."""
+    if m1 + m2 + m3 != 0:
+        return 0.0
+    if j3 < abs(j1 - j2) or j3 > j1 + j2:
+        return 0.0
+    if abs(m1) > j1 or abs(m2) > j2 or abs(m3) > j3:
+        return 0.0
+    f = math.factorial
+    delta = f(j1 + j2 - j3) * f(j1 - j2 + j3) * f(-j1 + j2 + j3) / f(j1 + j2 + j3 + 1)
+    pref = math.sqrt(
+        delta * f(j1 + m1) * f(j1 - m1) * f(j2 + m2) * f(j2 - m2) * f(j3 + m3) * f(j3 - m3)
+    )
+    tmin = max(0, j2 - j3 - m1, j1 - j3 + m2)
+    tmax = min(j1 + j2 - j3, j1 - m1, j2 + m2)
+    total = 0.0
+    for t in range(tmin, tmax + 1):
+        total += (-1) ** t / (
+            f(t) * f(j1 + j2 - j3 - t) * f(j1 - m1 - t) * f(j2 + m2 - t)
+            * f(j3 - j2 + m1 + t) * f(j3 - j1 - m2 + t)
+        )
+    return (-1) ** (j1 - j2 - m3) * pref * total
+
+
 def _ace_b_basis_nu3(A, nmax, lmax):
     """Compute nu=3 B-basis (bispectrum-like triplet correlations).
     
-    B^{(3)} = sum_{m1,m2,m3} C_{l1,l2,l3}^{m1,m2,m3} * A_{n1,l1,m1} * A_{n2,l2,m2} * A_{n3,l3,m3}
+    B^{(3)}_{n1 n2 n3 l1 l2 l3} = sum_{m1+m2+m3=0}
+        (l1 l2 l3; m1 m2 m3) * A_{n1,l1,m1} * A_{n2,l2,m2} * A_{n3,l3,m3}
     
-    where the coupling coefficient ensures rotational invariance (total L=0).
-    For simplicity, we use the constraint m1 + m2 + m3 = 0 with equal weights.
+    where (l1 l2 l3; m1 m2 m3) is the Wigner 3j symbol, which couples the
+    three A-functions to total angular momentum L=0 and thereby makes the
+    descriptor rotationally invariant.
     
     This captures 3-body angular correlations.
     
@@ -1837,12 +1867,15 @@ def _ace_b_basis_nu3(A, nmax, lmax):
                                     m3 = -(m1 + m2)  # Enforce m1+m2+m3=0
                                     if abs(m3) > l3:
                                         continue
+                                    w3j = _wigner_3j(l1, l2, l3, m1, m2, m3)
+                                    if w3j == 0.0:
+                                        continue
                                     
-                                    # Product of three A-functions
+                                    # 3j-coupled product of three A-functions
                                     prod = (A[:, n1, l1, m1 + lmax] *
                                             A[:, n2, l2, m2 + lmax] *
                                             A[:, n3, l3, m3 + lmax])
-                                    B_desc += np.real(prod)
+                                    B_desc += w3j * np.real(prod)
                             
                             # Always append so the descriptor count is a
                             # deterministic function of (nmax, lmax) — needed
@@ -1881,10 +1914,13 @@ def ace(atoms: Atoms, nmax=4, lmax=4, nu_max=2, cutoff=None, normalize=True):
         - nu=3: Triplet correlations (bispectrum)
         Higher orders rapidly increase descriptor count.
     cutoff : float, optional
-        Neighbor cutoff radius. If None, uses the cutoff from
-        find_neighbors.
+        Radial cutoff of the basis. If None, uses the cutoff from
+        find_neighbors. Neighbors must have been computed with
+        :func:`find_neighbors` beforehand; only neighbors inside the
+        neighbor list contribute.
     normalize : bool, default True
-        If True, normalize descriptors to unit norm per atom.
+        If True, divide each atom's descriptor vector by its L2 norm
+        (per-atom normalisation across features).
         
     Returns
     -------
