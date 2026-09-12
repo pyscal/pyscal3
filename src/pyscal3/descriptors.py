@@ -17,6 +17,7 @@ Example
 
 import math
 import functools
+import numbers
 import warnings
 import numpy as np
 import itertools
@@ -102,6 +103,13 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
         atoms.info[store_key] = d[key]
 
 
+def _as_int_list(l):
+    """Normalise an int / numpy integer / iterable of them to a list of ints."""
+    if isinstance(l, numbers.Integral):
+        return [int(l)]
+    return [int(v) for v in l]
+
+
 # ---------------------------------------------------------------------------
 # Steinhardt Parameters
 # ---------------------------------------------------------------------------
@@ -125,10 +133,7 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     list of numpy arrays
         One array per requested l value, each of shape (natoms,).
     """
-    if isinstance(l, int):
-        ll = [l]
-    else:
-        ll = list(l)
+    ll = _as_int_list(l)
 
     d = _get_dict_with_neighbors(atoms)
 
@@ -207,10 +212,7 @@ def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
       - ICO (Mackay): −0.16975
       - Liquid: ≈ 0
     """
-    if isinstance(l, int):
-        ll = [l]
-    else:
-        ll = list(l)
+    ll = _as_int_list(l)
 
     d = _get_dict_with_neighbors(atoms)
 

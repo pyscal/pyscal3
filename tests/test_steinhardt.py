@@ -54,3 +54,17 @@ def test_q4_q6_via_ase_bulk():
     q4, q6 = pyscal3.steinhardt_parameter(atoms, l=[4, 6])
     assert round(np.mean(q4), 2) == 0.51
     assert round(np.mean(q6), 2) == 0.63
+
+
+def test_numpy_integer_l_accepted():
+    from pyscal3.structures import make_crystal
+
+    atoms = make_crystal("fcc", lattice_constant=4.0, repetitions=(3, 3, 3))
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
+    q_np = pyscal3.steinhardt_parameter(atoms, l=np.int64(6))[0]
+    q_py = pyscal3.steinhardt_parameter(atoms, l=6)[0]
+    assert np.allclose(q_np, q_py)
+    q_arr = pyscal3.steinhardt_parameter(atoms, l=np.array([4, 6]))
+    assert len(q_arr) == 2
+    w = pyscal3.wigner_w_parameter(atoms, l=np.int32(6))[0]
+    assert np.allclose(w, -0.01316, atol=1e-4)
