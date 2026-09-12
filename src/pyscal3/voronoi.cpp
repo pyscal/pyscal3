@@ -31,8 +31,11 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     double diffx,diffy,diffz;
     double tempr,temptheta,tempphi;
     vector<double> diffi, diffj, pos;
-    int tnx,tny,tnz, ti, tj, nverts;
-    double rx,ry,rz,tsum, fa, x, y, z, vol, weightsum;
+    int tnx,tny,tnz, ti, nverts;
+    double vol, weightsum;
+    // offset added by voro++ to every vertex coordinate; we want vertices
+    // relative to the particle, so it must be exactly zero
+    const double x = 0.0, y = 0.0, z = 0.0;
 
     vector<int> neigh,f_vert, vert_nos;
     vector<double> facearea, v, faceperimeters;
@@ -86,9 +89,6 @@ void get_all_neighbors_voronoi(py::dict& atoms,
         c.face_perimeters(faceperimeters);
 
         vol = c.volume();
-        tsum = 0;
-        vector <double> dummyweights;
-        vector <int> dummyneighs;
 
         weightsum = 0.0;
         for (int i=0; i<facearea.size(); i++){
