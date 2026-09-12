@@ -632,35 +632,85 @@ def entropy(
 # ---------------------------------------------------------------------------
 
 
-def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=True):
+def _resolve_atomic_number(value):
+    """Accept an atomic number or a chemical symbol."""
+    if isinstance(value, str):
+        from ase.data import atomic_numbers
+
+        try:
+            return int(atomic_numbers[value])
+        except KeyError:
+            raise ValueError(f"Unknown chemical symbol '{value}'") from None
+    return int(value)
+
+
+def short_range_order(atoms: Atoms, reference_type=None, compare_type=None, average=True):
     """
-    Calculate Warren-Cowley short-range order parameter.
+    Calculate the Warren-Cowley short-range order parameter.
+
+    For atoms *i* of the reference type A,
+
+    .. math::
+
+        \\alpha_{AB}(i) = 1 - \\frac{p_{AB}(i)}{c_B}
+
+    where :math:`p_{AB}(i)` is the fraction of neighbors of *i* that are of
+    the compare type B and :math:`c_B` is the global concentration of B.
+    :math:`\\alpha < 0` indicates chemical ordering (unlike neighbors
+    preferred), :math:`\\alpha > 0` clustering, and :math:`\\alpha = 0`
+    random mixing. Choosing B = A gives the like-pair parameter.
 
     Parameters
     ----------
     atoms : ase.Atoms
         Structure with neighbors computed.
-    reference_type : int, optional
-        Atomic number of reference type. Default 1.
-    compare_type : int, optional
-        Atomic number to compare. Default 2.
+    reference_type : int or str, optional
+        Atomic number or chemical symbol of the reference species A.
+        Default: the most abundant species.
+    compare_type : int or str, optional
+        Atomic number or chemical symbol of the species B counted among the
+        neighbors. Default: the most abundant species other than A.
     average : bool, optional
-        If True, return system average. Default True.
+        If True, return the mean over all atoms of type A. Default True.
 
     Returns
     -------
-    numpy array or float
-        Per-atom SRO values, or system average.
+    float or numpy array
+        System average, or per-atom values (NaN for atoms that are not of
+        the reference type). Per-atom values are stored in
+        ``atoms.arrays["pyscal_sro"]``.
     """
     d = _get_dict_with_neighbors(atoms)
 
-    pc.calculate_short_range_order(d, reference_type, compare_type)
+    numbers = atoms.get_atomic_numbers()
+    unique, counts = np.unique(numbers, return_counts=True)
+    by_abundance = [int(z) for z in unique[np.argsort(-counts, kind="stable")]]
 
-    sro = np.array(d["sro"])
+    if reference_type is None:
+        reference_type = by_abundance[0]
+    ref = _resolve_atomic_number(reference_type)
+    if compare_type is None:
+        others = [z for z in by_abundance if z != ref]
+        if not others:
+            raise ValueError(
+                "short_range_order needs at least two species; pass "
+                "reference_type and compare_type explicitly for a single species."
+            )
+        compare_type = others[0]
+    cmp = _resolve_atomic_number(compare_type)
+
+    if ref not in unique:
+        raise ValueError(f"No atoms of reference type {ref} in the structure")
+    if cmp not in unique:
+        raise ValueError(f"No atoms of compare type {cmp} in the structure")
+
+    pc.calculate_short_range_order(d, ref, cmp)
+
+    sro = np.array(d["sro"], dtype=float)
     atoms.arrays["pyscal_sro"] = sro
 
     if average:
-        return float(np.mean(sro))
+        return float(np.nanmean(sro))
     return sro
 
 

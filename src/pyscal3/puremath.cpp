@@ -7,6 +7,7 @@
  */
 
 #include "system.h"
+#include <limits>
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -240,8 +241,10 @@ void calculate_voronoi_vector(py::dict& atoms,
 /* =======================================================================
  *  4. Short-Range Order (Warren-Cowley)
  *
- *  For each atom, count how many neighbors are of the reference type,
- *  compute local composition fraction, then SRO parameter.
+ *  alpha_AB(i) = 1 - p_AB(i) / c_B  for atoms i of type A (reference_type),
+ *  where p_AB(i) is the fraction of neighbours of i that are of type B
+ *  (compare_type) and c_B is the global concentration of B.  Atoms that are
+ *  not of the reference type (or have no neighbours) get NaN.
  * ======================================================================= */
 void calculate_short_range_order(py::dict& atoms,
                                  int reference_type,
@@ -253,46 +256,29 @@ void calculate_short_range_order(py::dict& atoms,
         atoms[py::str("neighbors")].cast<vector<vector<int>>>();
 
     int nop = (int)types.size();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
 
-    // Compute global composition
-    map<int, int> type_counts;
+    // global concentration of the compare type
+    int n_compare = 0;
     for (int i = 0; i < nop; i++) {
-        type_counts[types[i]]++;
+        if (types[i] == compare_type) n_compare++;
     }
-    double total = (double)nop;
-    double global_comp = 0.0;
-    if (type_counts.count(reference_type)) {
-        global_comp = type_counts[reference_type] / total;
-    }
+    double c_compare = (nop > 0) ? (double)n_compare / (double)nop : 0.0;
 
-    vector<double> sro(nop, 0.0);
+    vector<double> sro(nop, nan);
 
     for (int i = 0; i < nop; i++) {
+        if (types[i] != reference_type) continue;
         int nn = (int)neighbors[i].size();
-        if (nn == 0) {
-            sro[i] = 0.0;
-            continue;
-        }
+        if (nn == 0 || c_compare <= 0.0) continue;
 
-        // Count neighbors of reference type
-        int ref_count = 0;
+        int cmp_count = 0;
         for (int j = 0; j < nn; j++) {
-            if (types[neighbors[i][j]] == reference_type)
-                ref_count++;
+            if (types[neighbors[i][j]] == compare_type)
+                cmp_count++;
         }
-        double lc = (double)ref_count / (double)nn;
-
-        if (reference_type == compare_type) {
-            if (global_comp < 1.0)
-                sro[i] = (lc - global_comp) / (1.0 - global_comp);
-            else
-                sro[i] = 0.0;
-        } else {
-            if (global_comp > 0.0)
-                sro[i] = 1.0 - (lc / global_comp);
-            else
-                sro[i] = 0.0;
-        }
+        double p = (double)cmp_count / (double)nn;
+        sro[i] = 1.0 - p / c_compare;
     }
 
     atoms[py::str("sro")] = sro;
