@@ -664,14 +664,20 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     Returns
     -------
     (rdf, r) : tuple of numpy arrays
+        ``rdf`` is g(r) normalised such that it tends to 1 for an ideal gas
+        and ``rho * int g(r) 4 pi r^2 dr`` is the number of neighbors;
+        ``r`` holds the left edges of the bins.
+
+    Notes
+    -----
+    This function recomputes the neighbor list with a fixed cutoff of
+    ``rmax`` and overwrites any existing neighbor data on ``atoms``.
     """
     find_neighbors(atoms, method="cutoff", cutoff=rmax)
     d = atoms_to_dict(atoms)
 
-    distances = np.concatenate(d["neighbordist"])
-    hist, bin_edges = np.histogram(
-        distances, bins=bins, range=(rmin, rmax), density=True
-    )
+    distances = np.concatenate([np.asarray(row) for row in d["neighbordist"]])
+    counts, bin_edges = np.histogram(distances, bins=bins, range=(rmin, rmax))
 
     edgewidth = abs(bin_edges[1] - bin_edges[0])
     r = bin_edges[:-1]
@@ -679,8 +685,9 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     volume = abs(np.linalg.det(atoms.cell))
     rho = n / volume
 
+    # g(r) = <number of pairs in shell> / (N * rho * V_shell)
     shell_vols = (4.0 / 3.0) * np.pi * ((r + edgewidth) ** 3 - r**3)
-    rdf = (hist / shell_vols) / rho
+    rdf = counts / (n * rho * shell_vols)
 
     return rdf, r
 
