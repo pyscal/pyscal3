@@ -262,13 +262,72 @@ def guess_cutoff(atoms: Atoms, prefactor):
     return prefactor * (abs(np.linalg.det(np.asarray(atoms.cell))) / len(atoms)) ** (1.0 / 3.0)
 
 
+_NONPERIODIC_PAD = 10.0  # Angstrom, vacuum added when no search radius is known
+
+
+def effective_periodic_cell(atoms: Atoms, pad):
+    """Cell to use for the (always periodic) C++ routines.
+
+    Directions that are periodic and have a non-zero cell vector are kept.
+    Every other direction (``pbc`` False, or a zero cell vector as for a
+    molecule read from an XYZ file) is replaced by a vector orthogonal to
+    the periodic ones whose length is the extent of the atoms along it plus
+    ``2 * pad``. Periodic images along such a direction are then at least
+    ``2 * pad`` apart, so no image can be found within a search radius of
+    ``pad``.
+
+    Returns
+    -------
+    cell : ndarray (3, 3)
+    periodic : ndarray of bool
+        Which directions were genuinely periodic.
+    """
+    cell = np.array(atoms.cell, dtype=float)
+    pbc = np.array(atoms.pbc, dtype=bool)
+    lengths = np.linalg.norm(cell, axis=1)
+    periodic = pbc & (lengths > 0)
+
+    if periodic.all():
+        if abs(np.linalg.det(cell)) <= 0:
+            raise ValueError(
+                "pyscal requires three non-coplanar cell vectors; got cell=%s"
+                % cell.tolist()
+            )
+        return cell, periodic
+
+    kept = cell[periodic]
+    if len(kept) > 0 and np.linalg.matrix_rank(kept) < len(kept):
+        raise ValueError(
+            "The periodic cell vectors are linearly dependent: %s" % cell.tolist()
+        )
+    # orthonormal complement of the periodic directions
+    if len(kept) == 0:
+        complement = np.eye(3)
+    else:
+        _, _, vt = np.linalg.svd(kept)
+        complement = vt[len(kept):]
+
+    positions = atoms.positions
+    new_cell = cell.copy()
+    for j, i in enumerate(np.where(~periodic)[0]):
+        direction = complement[j]
+        proj = positions @ direction
+        extent = float(proj.max() - proj.min()) if len(proj) else 0.0
+        new_cell[i] = direction * (extent + 2.0 * pad)
+    return new_cell, periodic
+
+
 def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
     """
     Build the atom dict for the C++ neighbor search, adding ghost atoms
     (periodic images created with ASE's ``repeat``) when the cell is too
     small for the requested search.
 
-    Padding is applied when
+    Non-periodic directions and zero cell vectors are handled by
+    :func:`effective_periodic_cell`, which adds enough vacuum that periodic
+    images cannot be found within the search radius.
+
+    Padding with ghost atoms is applied along periodic directions when
 
     * the cell has fewer than 200 atoms or a perpendicular width below
       10 Angstrom (legacy rule, keeps the adaptive estimates stable), or
@@ -282,7 +341,7 @@ def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
     Parameters
     ----------
     atoms : ase.Atoms
-        Structure with a periodic cell.
+        The structure.
     cutoff : float, optional
         Largest distance the neighbor search has to resolve.
 
@@ -296,16 +355,19 @@ def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
         Number of real (non-ghost) atoms.
     """
     n = len(atoms)
-    widths = perpendicular_widths(atoms.cell)
     if n == 0:
         raise ValueError("Cannot find neighbors of an empty Atoms object.")
-    if np.any(widths <= 0):
-        raise ValueError(
-            "pyscal requires a periodic cell with three non-zero, non-coplanar "
-            "cell vectors; got cell=%s. Set atoms.cell (and atoms.pbc) first."
-            % np.asarray(atoms.cell).tolist()
-        )
 
+    pad = cutoff if (cutoff is not None and cutoff > 0) else _NONPERIODIC_PAD
+    work_cell, periodic = effective_periodic_cell(atoms, pad)
+    if periodic.all():
+        work = atoms
+    else:
+        work = atoms.copy()
+        work.set_cell(work_cell)
+        work.set_pbc(True)
+
+    widths = perpendicular_widths(work_cell)
     reps = np.ones(3, dtype=int)
 
     if n < _MIN_ATOMS:
@@ -324,12 +386,15 @@ def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
             if widths[i] * reps[i] <= need:
                 reps[i] += 1
 
+    # never replicate along non-periodic directions
+    reps[~periodic] = 1
+
     if np.all(reps == 1):
-        d = atoms_to_dict(atoms)
-        return d, get_box_params(atoms), n
+        d = atoms_to_dict(work)
+        return d, get_box_params(work), n
 
     # Create a repeated supercell using ASE
-    supercell = atoms.repeat([int(r) for r in reps])
+    supercell = work.repeat([int(r) for r in reps])
     nreal = n
     total = len(supercell)
 

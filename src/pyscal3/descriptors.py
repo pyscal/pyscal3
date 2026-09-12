@@ -103,6 +103,17 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
         atoms.info[store_key] = d[key]
 
 
+def _periodic_volume(atoms, name):
+    """Cell volume for density-based descriptors; requires full periodicity."""
+    volume = abs(np.linalg.det(np.asarray(atoms.cell)))
+    if not np.all(atoms.pbc) or volume <= 0:
+        raise ValueError(
+            f"{name} needs the global density N/V and therefore a fully "
+            "periodic cell (all pbc True, non-zero volume)."
+        )
+    return volume
+
+
 def _as_int_list(l):
     """Normalise an int / numpy integer / iterable of them to a list of ints."""
     if isinstance(l, numbers.Integral):
@@ -596,7 +607,7 @@ def entropy(
     d = _get_dict_with_neighbors(atoms)
 
     n = len(atoms)
-    volume = abs(np.linalg.det(atoms.cell))
+    volume = _periodic_volume(atoms, "entropy")
     kb = 1
 
     cutoffs = np.asarray(d.get("cutoff", []), dtype=float)
@@ -755,7 +766,7 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     edgewidth = abs(bin_edges[1] - bin_edges[0])
     r = bin_edges[:-1]
     n = len(atoms)
-    volume = abs(np.linalg.det(atoms.cell))
+    volume = _periodic_volume(atoms, "radial_distribution_function")
     rho = n / volume
 
     # g(r) = <number of pairs in shell> / (N * rho * V_shell)

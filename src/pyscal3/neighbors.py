@@ -25,6 +25,7 @@ from pyscal3._bridge import (
     pad_atoms_for_neighbor_finding,
     guess_cutoff,
     clear_neighbor_data,
+    effective_periodic_cell,
 )
 
 
@@ -237,7 +238,8 @@ def find_neighbors(
 
 def get_distance(atoms: Atoms, pos1, pos2, vector=False):
     """
-    Get the distance between two positions respecting periodic boundaries.
+    Get the distance between two positions respecting periodic boundaries
+    (non-periodic directions of ``atoms`` are not wrapped).
 
     Parameters
     ----------
@@ -253,7 +255,13 @@ def get_distance(atoms: Atoms, pos1, pos2, vector=False):
     float or (float, list)
         Distance, and optionally the displacement vector.
     """
-    triclinic, rot, rotinv, boxdims = get_box_params(atoms)
+    plain = float(np.linalg.norm(np.asarray(pos2, float) - np.asarray(pos1, float)))
+    work_cell, periodic = effective_periodic_cell(atoms, max(plain, 1.0))
+    if periodic.all():
+        triclinic, rot, rotinv, boxdims = get_box_params(atoms)
+    else:
+        work = Atoms(cell=work_cell, pbc=True)
+        triclinic, rot, rotinv, boxdims = get_box_params(work)
     diff = pc.get_distance_vector(
         list(pos1), list(pos2), triclinic, rot, rotinv, boxdims
     )

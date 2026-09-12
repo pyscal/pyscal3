@@ -58,7 +58,9 @@ def test_padding_reps_scale_with_cutoff():
     assert len(d["positions"]) == 256 * 8 and nreal == 256
 
 
-def test_singular_cell_raises():
-    from ase.build import molecule
-    with pytest.raises(ValueError, match="periodic cell"):
-        pyscal3.find_neighbors(molecule("H2O"), method="cutoff", cutoff=1.2)
+def test_coplanar_periodic_cell_raises():
+    from ase import Atoms
+    atoms = Atoms("Cu2", positions=[[0, 0, 0], [1, 1, 0]],
+                  cell=[[4, 0, 0], [0, 4, 0], [4, 4, 0]], pbc=True)
+    with pytest.raises(ValueError, match="coplanar"):
+        pyscal3.find_neighbors(atoms, method="cutoff", cutoff=1.2)
