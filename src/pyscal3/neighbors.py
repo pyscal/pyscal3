@@ -23,6 +23,7 @@ from pyscal3._bridge import (
     atoms_to_dict,
     dict_to_atoms,
     pad_atoms_for_neighbor_finding,
+    guess_cutoff,
 )
 
 
@@ -86,22 +87,23 @@ def find_neighbors(
     if threshold < 1:
         raise ValueError("threshold must be >= 1.0")
 
-    # Use ghost padding for small cells
-    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(atoms)
-    natoms = len(d["positions"])
-
-    if cells is None:
-        cells = natoms > 250
-
-    # Reset existing neighbor data
-    _reset_neighbors(d)
+    def _prepare(pad_cutoff):
+        """Pad the cell for the given search radius and reset neighbor data."""
+        d, box_params, nreal = pad_atoms_for_neighbor_finding(atoms, cutoff=pad_cutoff)
+        natoms = len(d["positions"])
+        use_cells = (natoms > 250) if cells is None else bool(cells)
+        _reset_neighbors(d)
+        return d, box_params, nreal, use_cells
 
     if method == "cutoff":
         if cutoff == "sann":
             finished = False
             for i in range(1, 10):
+                d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(
+                    guess_cutoff(atoms, threshold * i)
+                )
                 finished = pc.get_all_neighbors_sann(
-                    d, 0.0, triclinic, rot, rotinv, boxdims, threshold * i, cells
+                    d, 0.0, triclinic, rot, rotinv, boxdims, threshold * i, use_cells
                 )
                 if finished:
                     if i > 1:
@@ -119,6 +121,9 @@ def find_neighbors(
                 )
 
         elif cutoff == "adaptive" or (cutoff == 0 and shell_thickness == 0):
+            d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(
+                guess_cutoff(atoms, threshold)
+            )
             finished = pc.get_all_neighbors_adaptive(
                 d,
                 0.0,
@@ -129,7 +134,7 @@ def find_neighbors(
                 threshold,
                 nlimit,
                 padding,
-                cells,
+                use_cells,
             )
             if not bool(finished):
                 raise RuntimeError("Could not find adaptive cutoff")
@@ -138,8 +143,11 @@ def find_neighbors(
             if cutoff == 0 and shell_thickness > 0:
                 cutoff = shell_thickness
                 shell_thickness = 0
+            d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(
+                cutoff + shell_thickness
+            )
             if shell_thickness == 0:
-                if cells:
+                if use_cells:
                     pc.get_all_neighbors_cells(
                         d, cutoff, triclinic, rot, rotinv, boxdims
                     )
@@ -148,7 +156,7 @@ def find_neighbors(
                         d, cutoff, triclinic, rot, rotinv, boxdims
                     )
             else:
-                if cells:
+                if use_cells:
                     pc.get_all_neighbors_shell_cells(
                         d,
                         cutoff,
@@ -170,6 +178,9 @@ def find_neighbors(
                     )
 
     elif method == "number":
+        d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(
+            guess_cutoff(atoms, threshold)
+        )
         finished = pc.get_all_neighbors_bynumber(
             d,
             0.0,
@@ -179,7 +190,7 @@ def find_neighbors(
             boxdims,
             threshold,
             nmax,
-            cells,
+            use_cells,
             assign_neighbor,
         )
         if not finished:
@@ -188,6 +199,7 @@ def find_neighbors(
             )
 
     elif method == "voronoi":
+        d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(None)
         pc.get_all_neighbors_voronoi(d, 0.0, triclinic, rot, rotinv, boxdims, voroexp)
 
         if cutoff > 0:

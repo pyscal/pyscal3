@@ -209,13 +209,56 @@ _MIN_ATOMS = 200
 _MIN_BOX_SIDE = 10.0  # Angstroms
 
 
-def pad_atoms_for_neighbor_finding(atoms: Atoms):
+def perpendicular_widths(cell):
+    """Perpendicular width of the cell along each cell vector.
+
+    The width along vector *i* is the volume divided by the area of the
+    face spanned by the other two vectors.  For an orthogonal cell these
+    are simply the box lengths.  The minimum-image convention used by the
+    C++ routines is exact only for distances below half of the smallest
+    width, so this is the quantity that decides how much padding is needed.
     """
-    If the cell has too few atoms (< 200) or is too small (< 10 Å per side),
-    create a padded system using ASE's repeat() for the C++ neighbor search.
+    cell = np.asarray(cell, dtype=float)
+    vol = abs(np.linalg.det(cell))
+    widths = np.zeros(3)
+    for i in range(3):
+        cross = np.cross(cell[(i + 1) % 3], cell[(i + 2) % 3])
+        area = np.linalg.norm(cross)
+        widths[i] = vol / area if area > 0 else 0.0
+    return widths
+
+
+def guess_cutoff(atoms: Atoms, prefactor):
+    """Candidate-search radius used by the adaptive/SANN/number methods.
+
+    Mirrors the C++ estimate ``prefactor * (V / N)^(1/3)``.
+    """
+    return prefactor * (abs(np.linalg.det(np.asarray(atoms.cell))) / len(atoms)) ** (1.0 / 3.0)
+
+
+def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
+    """
+    Build the atom dict for the C++ neighbor search, adding ghost atoms
+    (periodic images created with ASE's ``repeat``) when the cell is too
+    small for the requested search.
+
+    Padding is applied when
+
+    * the cell has fewer than 200 atoms or a perpendicular width below
+      10 Angstrom (legacy rule, keeps the adaptive estimates stable), or
+    * ``cutoff`` is given and some perpendicular width is not larger than
+      ``2 * cutoff`` -- the minimum-image convention would otherwise miss
+      neighbors beyond half the box.
 
     Ghost atoms are marked with ghost=True so results can be trimmed to
     the original atoms.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        Structure with a periodic cell.
+    cutoff : float, optional
+        Largest distance the neighbor search has to resolve.
 
     Returns
     -------
@@ -227,27 +270,40 @@ def pad_atoms_for_neighbor_finding(atoms: Atoms):
         Number of real (non-ghost) atoms.
     """
     n = len(atoms)
-    cell = np.array(atoms.cell)
+    widths = perpendicular_widths(atoms.cell)
+    if n == 0:
+        raise ValueError("Cannot find neighbors of an empty Atoms object.")
+    if np.any(widths <= 0):
+        raise ValueError(
+            "pyscal requires a periodic cell with three non-zero, non-coplanar "
+            "cell vectors; got cell=%s. Set atoms.cell (and atoms.pbc) first."
+            % np.asarray(atoms.cell).tolist()
+        )
 
-    if n >= _MIN_ATOMS:
-        # No padding needed
+    reps = np.ones(3, dtype=int)
+
+    if n < _MIN_ATOMS:
+        needed = max(int(np.ceil((_MIN_ATOMS / n) ** (1.0 / 3.0))), 2)
+        reps[:] = needed
+        for i in range(3):
+            if widths[i] * reps[i] < _MIN_BOX_SIDE:
+                reps[i] = max(reps[i], int(np.ceil(_MIN_BOX_SIDE / widths[i])))
+
+    if cutoff is not None and cutoff > 0:
+        # minimum image is exact only if every width exceeds 2 * cutoff
+        need = 2.0 * cutoff * (1.0 + 1e-6)
+        for i in range(3):
+            if widths[i] * reps[i] <= need:
+                reps[i] = max(reps[i], int(np.ceil(need / widths[i])))
+            if widths[i] * reps[i] <= need:
+                reps[i] += 1
+
+    if np.all(reps == 1):
         d = atoms_to_dict(atoms)
         return d, get_box_params(atoms), n
 
-    # Compute repetitions needed
-    needed = max(int(np.ceil((_MIN_ATOMS / n) ** (1.0 / 3.0))), 2)
-    reps = [needed, needed, needed]
-
-    # Also ensure box is large enough per side
-    for i in range(3):
-        side = np.linalg.norm(cell[i]) * reps[i]
-        if side < _MIN_BOX_SIDE:
-            reps[i] = max(
-                reps[i], int(np.ceil(_MIN_BOX_SIDE / np.linalg.norm(cell[i])))
-            )
-
     # Create a repeated supercell using ASE
-    supercell = atoms.repeat(reps)
+    supercell = atoms.repeat([int(r) for r in reps])
     nreal = n
     total = len(supercell)
 

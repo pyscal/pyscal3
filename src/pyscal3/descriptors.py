@@ -29,6 +29,7 @@ from pyscal3._bridge import (
     ensure_neighbors,
     create_attribute,
     pad_atoms_for_neighbor_finding,
+    guess_cutoff,
 )
 from pyscal3.neighbors import find_neighbors
 
@@ -398,7 +399,9 @@ def common_neighbor_analysis(atoms: Atoms, lattice_constant=None):
     dict
         Counts: {"fcc": n, "hcp": n, "bcc": n, "ico": n, "others": n}
     """
-    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(atoms)
+    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(
+        atoms, cutoff=guess_cutoff(atoms, 2)
+    )
     n = len(d["positions"])
 
     # Create structure attribute
@@ -445,7 +448,9 @@ def diamond_structure(atoms: Atoms):
     dict
         Counts per structure type.
     """
-    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(atoms)
+    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(
+        atoms, cutoff=guess_cutoff(atoms, 2)
+    )
     n = len(d["positions"])
 
     d["structure"] = [0] * n
