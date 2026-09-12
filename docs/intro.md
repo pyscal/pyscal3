@@ -76,7 +76,7 @@ Every descriptor is a top-level function. There is no system state to keep in sy
 import pyscal
 pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)
 q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
-labels = pyscal.identify_ackland_jones(atoms)
+labels, names = pyscal.identify_ackland_jones(atoms)
 ```
 
 Adding a new descriptor in v4 means writing a single function — not extending a class hierarchy.

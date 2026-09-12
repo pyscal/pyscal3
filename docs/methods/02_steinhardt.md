@@ -51,10 +51,9 @@ $$
 q_{lm} (i) =  \frac{1}{N(i)} \sum_{j=1}^{N(i)} \frac{A_{ij}}{A} Y_{lm}(\pmb{r}_{ij})
 $$
 
-where $A_{ij}$ is the area of the Voronoi facet between atoms $i$ and $j$ and $A$ is the sum of the face areas of atom $i$. The dedicated function `minkowski_parameter` performs this calculation; see the [Minkowski parameters](09_minkowski.md) page for details.
+where $A_{ij}$ is the area of the Voronoi facet between atoms $i$ and $j$ and $A$ is the sum of the face areas of atom $i$. The dedicated function `minkowski_parameter` performs this calculation, including the Voronoi tessellation; see the [Minkowski parameters](09_minkowski.md) page for details.
 
 ``` python
-pyscal.find_neighbors(atoms, method='voronoi')
 q4, q6 = pyscal.minkowski_parameter(atoms, l=[4, 6])
 ```
 

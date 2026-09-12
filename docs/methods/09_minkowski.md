@@ -8,14 +8,13 @@ $$
 
 where $A_{ij}$ is the facet area shared by atoms $i$ and $j$, and $A(i) = \sum_j A_{ij}$. The resulting *Minkowski structure metrics* are continuous functions of the atomic positions and remove the discontinuities that affect cutoff-based Steinhardt parameters near coordination changes.
 
-Higher powers of the area weight may be used as discussed in [1]; the exponent is set with the `voroexp` keyword. Neighbors must be obtained through the Voronoi method.
+Higher powers of the area weight may be used as discussed in [1]; the exponent is set with the `voroexp` keyword. `minkowski_parameter` performs the Voronoi tessellation itself, so no separate call to `find_neighbors` is needed (any existing neighbor list is replaced by the Voronoi one).
 
 ``` python
 import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal.find_neighbors(atoms, method='voronoi')
 q4, q6 = pyscal.minkowski_parameter(atoms, l=[4, 6])
 ```
 

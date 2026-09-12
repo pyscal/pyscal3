@@ -10,7 +10,7 @@ $$
 
 where $\pmb{R}_{ij}$ are reference bond vectors and $\pmb{r}_{ij}$ are the corresponding current bond vectors. From $\pmb{F}$ the Lagrangian strain $\pmb{E} = \tfrac{1}{2}(\pmb{F}^T\pmb{F} - \pmb{I})$ is built.
 
-All deformation descriptors require both `atoms` and a `reference` Atoms object with the same number of atoms in matching order. Neighbors are taken from the reference configuration.
+All deformation descriptors require both `atoms` and a `reference` Atoms object with the same number of atoms in matching order. Neighbor lists must be computed for *both* objects (with the same settings); each descriptor uses the neighbors that appear in both lists.
 
 ``` python
 import pyscal
@@ -18,7 +18,8 @@ from ase.io import read
 
 ref = read('conf0.dump', format='lammps-dump-text')
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal.find_neighbors(ref, method='cutoff', cutoff=0)
+for a in (ref, atoms):
+    pyscal.find_neighbors(a, method='cutoff', cutoff=3.5)
 ```
 
 ## Atomic strain
@@ -69,13 +70,13 @@ Stored as `atoms.arrays['pyscal_d2min']`.
 
 ## Slip vector
 
-Zimmerman et al. [2] proposed the slip vector,
+Zimmerman et al. [2] proposed the slip vector as the mean change of the neighbor vectors between reference and current configuration. pyscal computes
 
 $$
-\pmb{s}(i) = -\frac{1}{n_s} \sum_{j} \big( \pmb{r}_{ij} - \pmb{R}_{ij} \big)
+\pmb{s}(i) = \frac{1}{n_i} \sum_{j} \big( \pmb{r}_{ij} - \pmb{R}_{ij} \big)
 $$
 
-where the sum runs over the $n_s$ neighbors that have slipped (whose displacement exceeds a small threshold). The magnitude $|\pmb{s}|$ identifies dislocation cores and stacking faults; the direction gives the local Burgers vector.
+where the sum runs over all $n_i$ neighbors present in both neighbor lists (no threshold is applied to select "slipped" neighbors, and the sign convention is current minus reference). For a homogeneous affine deformation the contributions of symmetric neighbor pairs cancel and $\pmb{s}$ vanishes; it becomes non-zero where neighbors have moved relative to each other. The magnitude $|\pmb{s}|$ identifies dislocation cores and stacking faults; the direction gives the local Burgers vector.
 
 ``` python
 slip = pyscal.slip_vector(atoms, reference=ref)
