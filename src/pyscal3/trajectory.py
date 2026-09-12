@@ -271,10 +271,9 @@ class Timeslice:
         None
 
         """
-        fout = open(outfile, mode)
-        for count, traj in enumerate(self.trajectories):
-            self.trajectories[count]._get_blocks_to_file(fout, self.blocklists[count])
-        fout.close()
+        with open(outfile, mode) as fout:
+            for count, traj in enumerate(self.trajectories):
+                self.trajectories[count]._get_blocks_to_file(fout, self.blocklists[count])
 
 
 class Trajectory:
@@ -375,10 +374,11 @@ class Trajectory:
         line_offset = []
         offset = 0
         nlines = 0
-        for line in open(self.filename, "rb"):
-            line_offset.append(offset)
-            offset += len(line)
-            nlines += 1
+        with open(self.filename, "rb") as fin:
+            for line in fin:
+                line_offset.append(offset)
+                offset += len(line)
+                nlines += 1
 
         self.nlines = nlines
         self.line_offset = line_offset
@@ -420,16 +420,12 @@ class Trajectory:
             list of strings containing data
         """
         start = blockno * self.blocksize
-        stop = (blockno + 1) * self.blocksize
-
-        fin = open(self.filename, "rb")
-        fin.seek(0)
-        fin.seek(self.line_offset[start])
 
         data = []
-        for i in range(self.blocksize):
-            line = fin.readline().decode("utf-8")
-            data.append(line)
+        with open(self.filename, "rb") as fin:
+            fin.seek(self.line_offset[start])
+            for i in range(self.blocksize):
+                data.append(fin.readline().decode("utf-8"))
         return data
 
     def load(self, blockno):
