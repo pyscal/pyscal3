@@ -14,13 +14,12 @@ using namespace std;
 
 
 PYBIND11_MODULE(csystem, m) {
+    // Only functions that are called from the Python layer are bound.
+    // Functions with reference out-parameters cannot return their results
+    // to Python and are used internally by the C++ code only.
     py::options options;
     options.disable_function_signatures();
-    m.def("get_abs_distance", &get_abs_distance);
     m.def("get_distance_vector", &get_distance_vector);
-    m.def("remap_atom_into_box", &remap_atom_into_box);
-    m.def("remap_and_displace_atom", &remap_and_displace_atom);
-    m.def("reset_all_neighbors", &reset_all_neighbors);
     m.def("get_all_neighbors_normal", &get_all_neighbors_normal);
     m.def("get_all_neighbors_shell_normal", &get_all_neighbors_shell_normal);
     m.def("get_all_neighbors_cells", &get_all_neighbors_cells);
@@ -28,8 +27,6 @@ PYBIND11_MODULE(csystem, m) {
     m.def("get_all_neighbors_bynumber", &get_all_neighbors_bynumber);
     m.def("get_all_neighbors_sann", &get_all_neighbors_sann);
     m.def("get_all_neighbors_adaptive", &get_all_neighbors_adaptive);
-    m.def("calculate_q", &calculate_q);
-    m.def("calculate_q_atom", &calculate_q_atom);
     m.def("calculate_q_single", &calculate_q_single);
     m.def("calculate_aq_single", &calculate_aq_single);
     m.def("calculate_w_single", &calculate_w_single);
@@ -42,8 +39,6 @@ PYBIND11_MODULE(csystem, m) {
     m.def("get_cna_neighbors", &get_cna_neighbors);
     m.def("get_acna_neighbors_cn12", &get_acna_neighbors_cn12);
     m.def("get_acna_neighbors_cn14", &get_acna_neighbors_cn14);
-    m.def("get_common_neighbors", &get_common_neighbors);
-    m.def("get_common_bonds", &get_common_bonds);
     m.def("identify_cn12", &identify_cn12);
     m.def("identify_cn14", &identify_cn14);
     m.def("identify_diamond_cna", &identify_diamond_cna);

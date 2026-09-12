@@ -72,7 +72,7 @@ build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
 skip = "pp* *-musllinux_*"
 
 test-requires = ["pytest"]
-test-command = "pytest {project}/tests --ignore={project}/tests/_old_tests -x -q"
+test-command = "pytest {project}/tests -x -q"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
@@ -91,5 +91,4 @@ archs = ["AMD64"]
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--ignore=tests/_old_tests"
 
