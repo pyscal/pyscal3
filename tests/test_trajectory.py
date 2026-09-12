@@ -69,7 +69,7 @@ def _triclinic_dump(scaled, frac, cell, origin):
     yhi_b = yhi + max(0.0, yz)
     lines = ["ITEM: TIMESTEP", "0", "ITEM: NUMBER OF ATOMS", str(len(frac)),
              "ITEM: BOX BOUNDS xy xz yz pp pp pp",
-             f"{xlo_b} {xhi_b} {xy}", f"{ylo_b} {yhi_b} {xz}", f"{zlo_b if False else zlo} {zhi} {yz}"]
+             f"{xlo_b} {xhi_b} {xy}", f"{ylo_b} {yhi_b} {xz}", f"{zlo} {zhi} {yz}"]
     if scaled:
         lines.append("ITEM: ATOMS id type xs ys zs")
         coords = frac
@@ -77,7 +77,7 @@ def _triclinic_dump(scaled, frac, cell, origin):
         lines.append("ITEM: ATOMS id type x y z")
         coords = frac @ cell + origin
     for i, c in enumerate(coords):
-        lines.append(f"{i + 1} 1 {c[0]!r} {c[1]!r} {c[2]!r}")
+        lines.append(f"{i + 1} 1 {float(c[0])!r} {float(c[1])!r} {float(c[2])!r}")
     return [l + "\n" for l in lines]
 
 
