@@ -81,6 +81,8 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
                 custom_data[k].append(raw[headerdict[k]])
 
     # --- build cell ---
+    # LAMMPS dumps the *bounding box* of a triclinic cell; recover the
+    # actual box limits (xlo, xhi, ...) from the bounds and the tilts.
     if triclinic:
         amin = min(0.0, xy, xz, xy + xz)
         amax = max(0.0, xy, xz, xy + xz)
@@ -97,19 +99,16 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
         b = np.array([xy, yhi - ylo, 0.0])
         c = np.array([xz, yz, zhi - zlo])
         cell = np.array([a, b, c])
-
-        # shift positions so origin is at box corner
-        ortho_origin = np.array([boxx[0], boxy[0], boxz[0]])
-        positions -= ortho_origin
+        origin = np.array([xlo, ylo, zlo])
     else:
         cell = np.diag([boxx[1] - boxx[0], boxy[1] - boxy[0], boxz[1] - boxz[0]])
+        origin = np.array([boxx[0], boxy[0], boxz[0]])
 
-    # handle scaled coordinates
+    # handle scaled coordinates: fractional w.r.t. the cell, measured from
+    # the box origin (as in LAMMPS), so convert and add the origin back to
+    # obtain absolute coordinates consistent with the unscaled case
     if scaled:
-        frac = positions.copy()
-        positions = (
-            frac[:, 0:1] * cell[0] + frac[:, 1:2] * cell[1] + frac[:, 2:3] * cell[2]
-        )
+        positions = positions @ cell + origin
 
     # --- determine species ---
     if species is not None:
@@ -120,7 +119,10 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
         symbols = ["X"] * natoms
 
     # --- create ASE Atoms ---
+    # positions are absolute (as written by LAMMPS); the box origin is kept
+    # in celldisp like ASE's own LAMMPS dump reader does
     atoms = ASEAtoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
+    atoms.set_celldisp(origin)
 
     # store LAMMPS metadata
     atoms.arrays["lammps_ids"] = ids
@@ -577,17 +579,18 @@ class Trajectory:
 
     def _get_blocks_to_file(self, fout, blocklist):
         """
-        Get a series of blocks from the file as raw data
+        Write a series of blocks to an open file handle.
 
         Parameters
         ----------
-        blockno : int
-            number of the block to be read, starts from 0
+        fout : file object
+            open, writable file handle
+        blocklist : iterable of int
+            block numbers to write, starting from 0
 
         Returns
         -------
-        data : list
-            list of strings containing data
+        None
         """
         xl = [x for x in blocklist]
         xl = np.array(xl)
