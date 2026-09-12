@@ -11,8 +11,10 @@ $$
 where S is given by,
 
 $$
-S_{jk} = \sum_{-l \leq m \leq l} q_{lm}^j (q_{lm}^k)^*
+S_{jk} = \frac{\sum_{-l \leq m \leq l} q_{lm}^j (q_{lm}^k)^*}{\sqrt{\sum_m |q_{lm}^j|^2}\sqrt{\sum_m |q_{lm}^k|^2}}
 $$
+
+pyscal normalises the overlap, so $S_{jj} = 1$ and $D_j$ lies between 0 (all neighbors share the orientation of atom $j$) and 4.
 
 l = 6 was used in the original publication as it is a good indicator of crystallinity. However, l = 4 can also be used for treating bcc structures. An averaged disorder parameter for each atom can also be calculated in pyscal,
 
