@@ -315,14 +315,18 @@ void calculate_qlm(const int l,
 	double &ylm_real, 
 	double &ylm_imag){
 
-    double factor;
     double m_plm;
 
     m_plm = sph_legendre(l, abs(m), theta);
-    //factor = ((2.0*double(l) + 1.0)/(4.0*PI))*dfactorial(l,m);
-    //factor = (1.0/dfactorial(l,m));
     ylm_real = m_plm*cos(double(m)*phi);
     ylm_imag  = m_plm*sin(double(m)*phi);
+    // Condon-Shortley phase for negative m:  Y_{l,-m} = (-1)^m conj(Y_{lm}).
+    // It cancels in |q_lm|^2 (q_l) but not in the Wigner-3j contraction
+    // used for W_l, which is not rotationally invariant without it.
+    if (m < 0 && (abs(m) % 2 == 1)){
+        ylm_real = -ylm_real;
+        ylm_imag = -ylm_imag;
+    }
 }
 
 
