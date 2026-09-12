@@ -1156,14 +1156,17 @@ int get_all_neighbors_sann(py::dict& atoms,
             //n_neighbors += 1;
         }
 
-        dcut = summ/float(m-2);
+        dcut = summ/double(m-2);
+        cutoff[ti] = dcut;
         maxneighs = temp_neighbors[ti].size();
 
+        // SANN (van Meel et al., J. Chem. Phys. 136, 234107): with the
+        // candidates sorted by distance, the first m atoms are neighbours
+        // where m is the smallest value for which
+        //     R(m) = sum_{i<=m} r_i / (m - 2)  <  r_{m+1}.
+        // `m` counts the neighbours already accepted; temp_neighbors[ti][m]
+        // is the next candidate.
         while( (m < maxneighs) && (dcut >= temp_neighbors[ti][m].dist)){
-            //increase m
-            m = m+1;
-
-            //here now we can add this to the list neighbors and process things
             int tj = temp_neighbors[ti][m].index;
             d = get_abs_distance(positions[ti], positions[tj],
                 triclinic, rot, rotinv, box, 
@@ -1184,11 +1187,11 @@ int get_all_neighbors_sann(py::dict& atoms,
             r[ti].emplace_back(tempr);
             phi[ti].emplace_back(tempphi);
             theta[ti].emplace_back(temptheta);
-            //n_neighbors += 1;        
 
-            //find new dcut
+            //accept this candidate and find the new dcut
             summ = summ + temp_neighbors[ti][m].dist;
-            dcut = summ/float(m-2);
+            m = m+1;
+            dcut = summ/double(m-2);
             cutoff[ti] = dcut;
         }
 
