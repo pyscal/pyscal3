@@ -569,7 +569,8 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
 
 
 def entropy(
-    atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001, local=False, average=False
+    atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001, local=False, average=False,
+    averaged=None,
 ):
     """
     Calculate the entropy parameter for each atom.
@@ -592,11 +593,14 @@ def entropy(
         instead of the global density N/V. Default False.
     average : bool, optional
         Compute neighbor-averaged entropy. Default False.
+    averaged : bool, optional
+        Alias of ``average`` for consistency with the other descriptors.
 
     Returns
     -------
     numpy array
-        Per-atom entropy (or averaged entropy) values.
+        Per-atom entropy (or averaged entropy) values, also stored as
+        ``atoms.arrays["pyscal_entropy"]`` / ``"pyscal_average_entropy"``.
 
     Notes
     -----
@@ -604,6 +608,9 @@ def entropy(
     neighbor cutoff should be at least ``rm``; a warning is issued
     otherwise.
     """
+    if averaged is not None:
+        average = averaged
+
     d = _get_dict_with_neighbors(atoms)
 
     n = len(atoms)
@@ -959,9 +966,11 @@ def identify_ackland_jones(atoms: Atoms):
 
     The algorithm follows Ackland & Jones, *Phys. Rev. B* **73**, 054104
     (2006), adapted for the 9-bin chi scheme used by pyscal3.
+
     Parameters
     ----------
-    atoms : ase.Atoms        Structure with neighbors already computed (via
+    atoms : ase.Atoms
+        Structure with neighbors already computed (via
         :func:`pyscal3.find_neighbors`).
 
     Returns
@@ -980,8 +989,10 @@ def identify_ackland_jones(atoms: Atoms):
         =====  ==========
 
     names : list of str
-        Human-readable name for each atom (``"fcc"``, ``"hcp"``, etc.).
-        Also stored in ``atoms.arrays["pyscal_structure"]``.
+        Human-readable name for each atom: ``"fcc"``, ``"hcp"``, ``"bcc"``,
+        ``"ico"`` or ``"other"``. The labels are stored in
+        ``atoms.arrays["pyscal_ackland_label"]`` and the names in
+        ``atoms.arrays["pyscal_structure"]``.
 
     Notes
     -----
@@ -1046,6 +1057,8 @@ def identify_ackland_jones(atoms: Atoms):
 
     return labels, names
 
+
+# ---------------------------------------------------------------------------
 # Deformation Descriptors (require reference configuration)
 # ---------------------------------------------------------------------------
 
@@ -1107,9 +1120,11 @@ def atomic_strain(atoms: Atoms, reference: Atoms):
     The local deformation gradient F is computed by minimizing the
     squared difference between reference and deformed neighbor vectors.
     The Lagrangian strain is then E = (F^T F - I) / 2.
+
     Parameters
     ----------
-    atoms : ase.Atoms        Deformed configuration with neighbors computed.
+    atoms : ase.Atoms
+        Deformed configuration with neighbors computed.
     reference : ase.Atoms
         Reference (undeformed) configuration with the same neighbor list.
 
@@ -1264,9 +1279,18 @@ def slip_vector(atoms: Atoms, reference: Atoms):
     """
     Compute the slip vector for each atom.
 
-    The slip vector s_i = (1/N_s) sum_j (dX_ij - dx_ij) is the average
-    difference between reference and current displacement vectors,
-    without fitting an affine transformation.
+    The slip vector is the mean change of the neighbor vectors between the
+    reference and the current configuration,
+
+        s_i = (1/N_i) sum_j (r_ij - R_ij),
+
+    taken over all neighbors j that appear in both neighbor lists, without
+    fitting an affine transformation. Unlike the original definition of
+    Zimmerman et al., no threshold is applied to select "slipped"
+    neighbors, and the sign convention is r - R. For a homogeneous affine
+    deformation the contributions of symmetric neighbor pairs cancel and
+    the slip vector vanishes; it is non-zero where neighbors have moved
+    relative to each other (dislocation cores, stacking faults).
 
     Parameters
     ----------
@@ -1396,11 +1420,17 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
         If True, return largest cluster size.
     cutoff : float
         Cluster cutoff (0 = use neighbor cutoff).
+    d : dict, optional
+        Internal: atom dict already built from ``atoms`` (used by
+        :func:`find_solids` to avoid rebuilding it).
 
     Returns
     -------
-    int
-        Largest cluster size if largest=True.
+    int or None
+        Largest cluster size if largest=True, else None. Cluster ids are
+        stored in ``atoms.arrays["pyscal_cluster"]`` (-1 for atoms that do
+        not satisfy the condition) and, if largest=True, a boolean mask of
+        the largest cluster in ``atoms.arrays["pyscal_largest_cluster"]``.
     """
     if d is None:
         d = _get_dict_with_neighbors(atoms)
@@ -1439,7 +1469,9 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     atoms : ase.Atoms
         Structure with neighbors computed.
     key : str
-        Key in atoms.arrays (with or without 'pyscal_' prefix).
+        Name of a per-atom property: a pyscal result with or without the
+        ``pyscal_`` prefix (``"q6"`` and ``"pyscal_q6"`` are equivalent) or
+        any other key of ``atoms.arrays``.
     include_self : bool
         Include the atom itself in the average. Default True.
 
@@ -1449,13 +1481,12 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     """
     d = _get_dict_with_neighbors(atoms)
 
-    # Find the data
-    lookup = key
-    if key not in d and "pyscal_" + key in atoms.arrays:
-        lookup = key
-        values = atoms.arrays["pyscal_" + key]
-    elif key in d:
-        values = np.array(d[key])
+    # Find the data: pyscal keys are stored in d without the prefix
+    plain = key[len("pyscal_"):] if key.startswith("pyscal_") else key
+    if plain in d:
+        values = np.array(d[plain])
+    elif key in atoms.arrays:
+        values = atoms.arrays[key]
     else:
         raise KeyError(f"Property '{key}' not found")
 
@@ -2024,7 +2055,8 @@ def ace(atoms: Atoms, nmax=4, lmax=4, nu_max=2, cutoff=None, normalize=True):
     .. [1] Drautz, R. (2019). "Atomic cluster expansion for accurate and 
            transferable interatomic potentials." Phys. Rev. B 99, 014104.
     .. [2] Dusson et al. (2022). "Atomic cluster expansion: Completeness,
-           efficiency and stability." J. Comput. Phys.    
+           efficiency and stability." J. Comput. Phys.
+
     Examples
     --------
     >>> from ase.build import bulk
@@ -2148,7 +2180,8 @@ def wigner_seitz_analysis(
     
     The algorithm uses nearest-neighbor search via cKDTree. For periodic
     systems, reference sites near cell boundaries are replicated to handle
-    atoms that may have wrapped to different periodic images.    
+    atoms that may have wrapped to different periodic images.
+
     Examples
     --------
     >>> from ase.build import bulk
