@@ -14,23 +14,43 @@ import numpy as np
 from ase import Atoms
 
 
-# ---- Keys managed by pyscal C++ ----
-# Neighbor keys written by C++ neighbor routines
-NEIGHBOR_KEYS = [
-    "pyscal_neighbors",
-    "pyscal_neighbordist",
-    "pyscal_neighborweight",
-    "pyscal_diff",
-    "pyscal_r",
-    "pyscal_phi",
-    "pyscal_theta",
-    "pyscal_cutoff",
-    "pyscal_temp_neighbors",
-    "pyscal_temp_neighbordist",
-]
-
-# We prefix pyscal keys in atoms.info to avoid clashes with ASE
+# We prefix pyscal keys in atoms.arrays / atoms.info to avoid clashes with ASE
 _PREFIX = "pyscal_"
+
+# ---- Keys managed by pyscal C++ ----
+# Everything derived from a neighbor search (all methods, incl. Voronoi).
+# These are removed before a new search so that no stale data survives a
+# change of neighbor method.
+NEIGHBOR_DERIVED_KEYS = [
+    "neighbors",
+    "neighbordist",
+    "neighborweight",
+    "diff",
+    "r",
+    "phi",
+    "theta",
+    "cutoff",
+    "temp_neighbors",
+    "temp_neighbordist",
+    "voronoi_volume",
+    "face_vertices",
+    "face_perimeters",
+    "vertex_vectors",
+    "vertex_numbers",
+    "vertex_is_unique",
+    "vertex_positions",
+    "unique_vertices",
+    "neighbors_found",
+    "neighbor_method",
+]
+NEIGHBOR_KEYS = [_PREFIX + k for k in NEIGHBOR_DERIVED_KEYS]
+
+
+def clear_neighbor_data(atoms: Atoms):
+    """Remove all neighbor-derived pyscal keys from ``atoms``."""
+    for key in NEIGHBOR_KEYS:
+        atoms.arrays.pop(key, None)
+        atoms.info.pop(key, None)
 
 
 def get_box_params(atoms: Atoms):
@@ -110,7 +130,10 @@ def dict_to_atoms(d: dict, atoms: Atoms, nreal=None):
     (used when ghost atoms were added for neighbor finding).
 
     Handles ragged arrays (neighbors, etc.) by storing in atoms.info
-    since atoms.arrays requires uniform-length arrays.
+    since atoms.arrays requires uniform-length arrays. Arrays with three
+    or more dimensions (e.g. the neighbor vectors ``diff``) also go to
+    atoms.info because ASE file writers only support per-atom scalars and
+    vectors.
     """
     skip_keys = {
         "positions",
@@ -163,7 +186,10 @@ def dict_to_atoms(d: dict, atoms: Atoms, nreal=None):
                     head_arr = np.array(head)
                     trimmed = head_arr[trimmed]
                 if len(trimmed) == n:
-                    atoms.arrays[store_key] = trimmed
+                    if arr.ndim <= 2:
+                        atoms.arrays[store_key] = trimmed
+                    else:
+                        atoms.info[store_key] = trimmed
                     continue
         except (ValueError, TypeError, IndexError):
             pass

@@ -95,7 +95,7 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
         store_key = "pyscal_" + key
         try:
             arr = np.asarray(d[key])
-            if arr.ndim >= 1 and len(arr) == n and arr.dtype.kind != "O":
+            if 1 <= arr.ndim <= 2 and len(arr) == n and arr.dtype.kind != "O":
                 atoms.arrays[store_key] = arr
                 continue
         except (ValueError, TypeError):

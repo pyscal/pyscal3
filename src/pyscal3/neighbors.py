@@ -24,6 +24,7 @@ from pyscal3._bridge import (
     dict_to_atoms,
     pad_atoms_for_neighbor_finding,
     guess_cutoff,
+    clear_neighbor_data,
 )
 
 
@@ -72,20 +73,35 @@ def find_neighbors(
     Returns
     -------
     None
-        Results are stored in-place on the ``atoms`` object:
+        Results are stored in-place on the ``atoms`` object with the
+        ``pyscal_`` prefix. Per-atom data whose shape is the same for every
+        atom is stored in ``atoms.arrays``; ragged data (atoms with
+        different numbers of neighbors) and arrays with three or more
+        dimensions are stored in ``atoms.info`` under the same key. Any
+        neighbor-derived key from a previous search is removed first.
 
-        - ``atoms.arrays["pyscal_neighbors"]`` — neighbor indices (natoms, max_neighbors)
-        - ``atoms.arrays["pyscal_neighbordist"]`` — neighbor distances
-        - ``atoms.arrays["pyscal_theta"]`` — polar angles to neighbors
-        - ``atoms.arrays["pyscal_phi"]`` — azimuthal angles to neighbors
-        - ``atoms.info["pyscal_neighbors_found"]`` — set to True
-        - ``atoms.info["pyscal_neighbor_method"]`` — the method used
+        - ``pyscal_neighbors`` — neighbor indices
+        - ``pyscal_neighbordist`` — neighbor distances
+        - ``pyscal_neighborweight`` — weights (1, or Voronoi face-area
+          fractions)
+        - ``pyscal_r``, ``pyscal_theta``, ``pyscal_phi`` — spherical
+          coordinates of the neighbor vectors
+        - ``pyscal_diff`` — neighbor vectors, shape (natoms, nn, 3), always in
+          ``atoms.info``
+        - ``pyscal_cutoff`` — per-atom cutoff that was used
+        - ``pyscal_neighbors_found`` (True) and ``pyscal_neighbor_method`` in
+          ``atoms.info``
 
-        For Voronoi, additional keys include ``face_vertices``, ``face_perimeters``,
-        ``face_areas``, ``vertex_vectors``, and ``voronoivol``.
+        The Voronoi method additionally stores ``pyscal_voronoi_volume``,
+        ``pyscal_face_vertices``, ``pyscal_face_perimeters``,
+        ``pyscal_vertex_vectors``, ``pyscal_vertex_numbers`` and
+        ``pyscal_vertex_positions``.
     """
     if threshold < 1:
         raise ValueError("threshold must be >= 1.0")
+
+    # drop everything derived from a previous neighbor search
+    clear_neighbor_data(atoms)
 
     def _prepare(pad_cutoff):
         """Pad the cell for the given search radius and reset neighbor data."""
