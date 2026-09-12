@@ -128,7 +128,6 @@ void get_all_neighbors_voronoi(py::dict& atoms,
         volume[ti] = vol;
         vertex_vectors[ti] = v;
         vertex_numbers[ti] = vert_nos;
-        cutoff[ti] = cbrt(3*vol/(4*3.141592653589793));
 
         //clean up and add vertex positions
         pos = positions[ti];
@@ -165,6 +164,14 @@ void get_all_neighbors_voronoi(py::dict& atoms,
             phi[ti].emplace_back(tempphi);
             theta[ti].emplace_back(temptheta);
         }
+        // per-atom cutoff = distance to the farthest Voronoi neighbour, so
+        // that every Voronoi neighbour counts for clustering, the ACE
+        // radial cutoff and the local density
+        double dmax = 0.0;
+        for (size_t tj=0; tj<neighbordist[ti].size(); tj++){
+            if (neighbordist[ti][tj] > dmax) dmax = neighbordist[ti][tj];
+        }
+        cutoff[ti] = dmax;
     };
 
     if (triclinic == 1){
