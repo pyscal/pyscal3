@@ -961,7 +961,7 @@ int get_all_neighbors_bynumber(py::dict& atoms,
         c1 = rot[0][2];
         c2 = rot[1][2];
         c3 = rot[2][2];
-        boxvol = c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1);
+        boxvol = fabs(c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1));
     }
     else{
         boxvol = box[0]*box[1]*box[2];
@@ -1092,7 +1092,7 @@ int get_all_neighbors_sann(py::dict& atoms,
         c1 = rot[0][2];
         c2 = rot[1][2];
         c3 = rot[2][2];
-        boxvol = c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1);
+        boxvol = fabs(c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1));
     }
     else{
         boxvol = box[0]*box[1]*box[2];
@@ -1273,7 +1273,7 @@ int get_all_neighbors_adaptive(py::dict& atoms,
         c1 = rot[0][2];
         c2 = rot[1][2];
         c3 = rot[2][2];
-        boxvol = c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1);
+        boxvol = fabs(c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1));
     }
     else{
         boxvol = box[0]*box[1]*box[2];
