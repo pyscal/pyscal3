@@ -574,7 +574,9 @@ def entropy(
     h : float, optional
         Integration step (trapezoidal). Default 0.001.
     local : bool, optional
-        Use local density instead of global. Default False.
+        If True, use the local density of each atom,
+        ``n_i / (4/3 pi r_c,i^3)`` with ``r_c,i`` its neighbor cutoff,
+        instead of the global density N/V. Default False.
     average : bool, optional
         Compute neighbor-averaged entropy. Default False.
 
@@ -582,12 +584,28 @@ def entropy(
     -------
     numpy array
         Per-atom entropy (or averaged entropy) values.
+
+    Notes
+    -----
+    Only atoms in the neighbor list contribute to :math:`g_m^i(r)`, so the
+    neighbor cutoff should be at least ``rm``; a warning is issued
+    otherwise.
     """
     d = _get_dict_with_neighbors(atoms)
 
     n = len(atoms)
     volume = abs(np.linalg.det(atoms.cell))
     kb = 1
+
+    cutoffs = np.asarray(d.get("cutoff", []), dtype=float)
+    if cutoffs.size > 0 and np.max(cutoffs) > 0 and rm > np.max(cutoffs) * (1 + 1e-9):
+        warnings.warn(
+            "entropy: rm=%.3f is larger than the neighbor cutoff (%.3f). "
+            "g(r) is zero beyond the cutoff, so the result depends on it; "
+            "compute neighbors with a cutoff >= rm." % (rm, np.max(cutoffs)),
+            UserWarning,
+            stacklevel=2,
+        )
 
     if local:
         rho = 0
