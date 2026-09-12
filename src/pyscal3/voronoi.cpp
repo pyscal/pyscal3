@@ -66,21 +66,40 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     vector<vector<vector<double>>> vertex_positions(nop);
     vector<vector<bool>> vertex_unique(nop);
 
-    pre_container pcon(0.00, box[0], 0.00, box[1], 0.0, box[2], true, true, true);
-    for(int i=0; i<nop; i++){
-        pos = positions[i];
-        pos = remap_atom_into_box(pos, triclinic, rot, rotinv, box);
-        pcon.put(i, pos[0], pos[1], pos[2]);
+    // ------------------------------------------------------------------
+    // Cell geometry for voro++.
+    //
+    // voro++'s periodic container expects the cell in lower-triangular
+    // form, a = (bx,0,0), b = (bxy,by,0), c = (bxz,byz,bz).  For a
+    // triclinic cell we build the orthonormal frame Q (rows e1,e2,e3)
+    // that brings the cell into that form, rotate the positions into it
+    // and rotate the vertex vectors back afterwards.  Distances, face
+    // areas and volumes are frame independent.
+    // ------------------------------------------------------------------
+    double Q[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
+    double bx = box[0], bxy = 0.0, by = box[1], bxz = 0.0, byz = 0.0, bz = box[2];
+    if (triclinic == 1){
+        // cell vectors are the columns of rot (rot = cell.T)
+        double av[3] = {rot[0][0], rot[1][0], rot[2][0]};
+        double bv[3] = {rot[0][1], rot[1][1], rot[2][1]};
+        double cv[3] = {rot[0][2], rot[1][2], rot[2][2]};
+        bx = sqrt(av[0]*av[0] + av[1]*av[1] + av[2]*av[2]);
+        for (int k=0; k<3; k++) Q[0][k] = av[k]/bx;
+        bxy = bv[0]*Q[0][0] + bv[1]*Q[0][1] + bv[2]*Q[0][2];
+        double bp[3];
+        for (int k=0; k<3; k++) bp[k] = bv[k] - bxy*Q[0][k];
+        by = sqrt(bp[0]*bp[0] + bp[1]*bp[1] + bp[2]*bp[2]);
+        for (int k=0; k<3; k++) Q[1][k] = bp[k]/by;
+        bxz = cv[0]*Q[0][0] + cv[1]*Q[0][1] + cv[2]*Q[0][2];
+        byz = cv[0]*Q[1][0] + cv[1]*Q[1][1] + cv[2]*Q[1][2];
+        double cp[3];
+        for (int k=0; k<3; k++) cp[k] = cv[k] - bxz*Q[0][k] - byz*Q[1][k];
+        bz = sqrt(cp[0]*cp[0] + cp[1]*cp[1] + cp[2]*cp[2]);
+        for (int k=0; k<3; k++) Q[2][k] = cp[k]/bz;
     }
-    pcon.guess_optimal(tnx, tny, tnz);
-    //container con(boxdims[0][0],boxdims[1][1],boxdims[1][0],boxdims[1][1],boxdims[2][0],boxdims[2][1],tnx,tny,tnz,true,true,true, nop);
-    container con(0.00, box[0], 0.00, box[1], 0.0, box[2], tnx, tny, tnz, true, true, true, nop);
-    pcon.setup(con);
 
-    c_loop_all cl(con);
-    if (cl.start()) do if(con.compute_cell(c,cl)) {    
-
-        ti=cl.pid();
+    // Process one Voronoi cell computed by voro++ for atom ti
+    auto process_cell = [&](voronoicell_neighbor& c, int ti){
         c.face_areas(facearea);
         c.neighbors(neigh);
         c.face_orders(f_vert);
@@ -91,8 +110,19 @@ void get_all_neighbors_voronoi(py::dict& atoms,
         vol = c.volume();
 
         weightsum = 0.0;
-        for (int i=0; i<facearea.size(); i++){
+        for (size_t i=0; i<facearea.size(); i++){
             weightsum += pow(facearea[i], face_area_exponent);
+        }
+
+        nverts = int(v.size())/3;
+        if (triclinic == 1){
+            // rotate vertex vectors back into the original Cartesian frame
+            for(int si=0; si<nverts; si++){
+                double vx = v[3*si], vy = v[3*si+1], vz = v[3*si+2];
+                for (int k=0; k<3; k++){
+                    v[3*si+k] = Q[0][k]*vx + Q[1][k]*vy + Q[2][k]*vz;
+                }
+            }
         }
 
         volume[ti] = vol;
@@ -101,22 +131,17 @@ void get_all_neighbors_voronoi(py::dict& atoms,
         cutoff[ti] = cbrt(3*vol/(4*3.141592653589793));
 
         //clean up and add vertex positions
-        nverts = int(v.size())/3;
         pos = positions[ti];
         for(int si=0; si<nverts; si++){
             vector<double> temp;
-            int li=0;
-            for(int vi=si*3; vi<(si*3+3); vi++){
-                //get distance here
-                temp.emplace_back(v[vi]+pos[li]);
-                li++;
+            for(int k=0; k<3; k++){
+                temp.emplace_back(v[3*si+k]+pos[k]);
             }
             vertex_positions[ti].emplace_back(temp);
             vertex_unique[ti].emplace_back(!ghost[ti]);
         }
 
-
-        for (int tj=0; tj<neigh.size(); tj++){
+        for (size_t tj=0; tj<neigh.size(); tj++){
             d = get_abs_distance(positions[ti], positions[neigh[tj]],
                 triclinic, rot, rotinv, box, 
                 diffx, diffy, diffz);
@@ -139,10 +164,45 @@ void get_all_neighbors_voronoi(py::dict& atoms,
             r[ti].emplace_back(tempr);
             phi[ti].emplace_back(tempphi);
             theta[ti].emplace_back(temptheta);
-
         }
+    };
 
-    } while (cl.inc());
+    if (triclinic == 1){
+        // block counts as in pre_container::guess_optimal
+        double ilscale = pow(double(nop)/(optimal_particles*bx*by*bz), 1.0/3.0);
+        tnx = int(bx*ilscale + 1);
+        tny = int(by*ilscale + 1);
+        tnz = int(bz*ilscale + 1);
+        container_periodic con(bx, bxy, by, bxz, byz, bz, tnx, tny, tnz, 8);
+        for(int i=0; i<nop; i++){
+            const vector<double>& p = positions[i];
+            double px = Q[0][0]*p[0] + Q[0][1]*p[1] + Q[0][2]*p[2];
+            double py = Q[1][0]*p[0] + Q[1][1]*p[1] + Q[1][2]*p[2];
+            double pz = Q[2][0]*p[0] + Q[2][1]*p[1] + Q[2][2]*p[2];
+            // put() remaps the particle into the primary cell
+            con.put(i, px, py, pz);
+        }
+        c_loop_all_periodic cl(con);
+        if (cl.start()) do if(con.compute_cell(c,cl)) {
+            process_cell(c, cl.pid());
+        } while (cl.inc());
+    }
+    else{
+        pre_container pcon(0.00, box[0], 0.00, box[1], 0.0, box[2], true, true, true);
+        for(int i=0; i<nop; i++){
+            pos = positions[i];
+            pos = remap_atom_into_box(pos, triclinic, rot, rotinv, box);
+            pcon.put(i, pos[0], pos[1], pos[2]);
+        }
+        pcon.guess_optimal(tnx, tny, tnz);
+        container con(0.00, box[0], 0.00, box[1], 0.0, box[2], tnx, tny, tnz, true, true, true, nop);
+        pcon.setup(con);
+
+        c_loop_all cl(con);
+        if (cl.start()) do if(con.compute_cell(c,cl)) {
+            process_cell(c, cl.pid());
+        } while (cl.inc());
+    }
 
 
     //calculation over lets assign
