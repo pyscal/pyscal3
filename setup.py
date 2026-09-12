@@ -37,5 +37,4 @@ setup(
         ),
     ],
     cmdclass={"build_ext": build_ext},
-    headers=["src/pyscal3/system.h"],
 )
