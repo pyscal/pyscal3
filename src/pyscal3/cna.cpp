@@ -467,13 +467,19 @@ void get_diamond_neighbors(py::dict& atoms,
     vector<vector<double>> theta(nop);
 
     for (int ti=0; ti<nop; ti++){
+        //an atom with fewer than four candidates has no diamond first shell;
+        //leave its neighbor lists empty so it stays classified as "others"
+        if (int(atom_temp_neighbors[ti].size()) < 4) continue;
         for(int i=0 ; i<4; i++){
             int tj = atom_temp_neighbors[ti][i];
+            if ((tj < 0) || (tj >= nop)) continue;
             first_shell[ti].emplace_back(tj);
 
+            if (int(atom_temp_neighbors[tj].size()) < 4) continue;
             for(int j=0; j<4; j++){
                 int tk = atom_temp_neighbors[tj][j];
                 if (ti == tk) continue;
+                if ((tk < 0) || (tk >= nop)) continue;
                 d = get_abs_distance(positions[ti], positions[tk],
                     triclinic, rot, rotinv, box, 
                     diffx, diffy, diffz);
@@ -531,6 +537,12 @@ void identify_diamond_cna(py::dict& atoms,
     vector<vector<double>> neighbordist = atoms[py::str("neighbordist")].cast<vector<vector<double>>>();
 
     for (int ti=0; ti<nop; ti++){
+        //needs the first twelve second-shell distances; without them the atom
+        //cannot be a diamond site and keeps a zero cutoff
+        if (int(neighbordist[ti].size()) < 12){
+            cutoff[ti] = 0.0;
+            continue;
+        }
         double ssum = 0;
         for(int i=0; i<12; i++){
             ssum += neighbordist[ti][i];
@@ -563,7 +575,7 @@ void identify_diamond_cna(py::dict& atoms,
     //second pass
     for (int ti=0; ti<nop; ti++){
         if (structure[ti] < 5){
-            for(int i=0; i<4; i++){
+            for(int i=0; i<int(first_shell[ti].size()) && i<4; i++){
                 if(structure[first_shell[ti][i]] == 5){
                     structure[ti] = 6;
                     break;

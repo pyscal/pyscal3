@@ -1718,9 +1718,17 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
         d, 0.0, triclinic, rot, rotinv, boxdims, 2, nmax, (n > 250), False
     )
     if not finished:
-        raise RuntimeError(
-            "Could not find %d neighbor candidates for every atom; "
-            "the structure may be too sparse or contain isolated atoms." % nmax
+        # Atoms with fewer than `nmax` candidates cannot be classified; the
+        # C++ routines skip them, so they end up labelled "others". That is
+        # the right answer for a surface or a small cluster, so warn instead
+        # of failing the whole analysis.
+        warnings.warn(
+            "Could not find %d neighbor candidates for every atom; those atoms "
+            "are reported as 'others'. The structure may be a small cluster or "
+            "very sparse. If it is meant to be periodic, check that atoms.pbc "
+            "is set and the cell is correct." % nmax,
+            RuntimeWarning,
+            stacklevel=3,
         )
 
 
