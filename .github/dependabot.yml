@@ -1,0 +1,11 @@
+# Keep GitHub Actions versions current (the workflows had fallen several
+# majors behind before 4.0). Python dependencies are unpinned on purpose.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
