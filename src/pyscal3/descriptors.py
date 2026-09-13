@@ -2216,9 +2216,15 @@ def wigner_seitz_analysis(
     # Handle periodicity by replicating reference sites near boundaries
     # We'll use the reference cell for PBC handling
     ref_cell = reference.get_cell()
-    pbc = reference.get_pbc()
+    pbc = np.asarray(reference.get_pbc(), dtype=bool)
     
     if any(pbc) and ref_cell.any():
+        # Wrap the displaced atoms into the reference cell along the periodic
+        # directions so that atoms that drifted several cells away (unwrapped
+        # trajectories) are still matched to the right site.
+        frac = np.linalg.solve(np.asarray(ref_cell).T, disp_pos.T).T
+        frac[:, pbc] -= np.floor(frac[:, pbc])
+        disp_pos = frac @ np.asarray(ref_cell)
         # Build expanded reference with periodic images
         expanded_ref, expanded_indices = _expand_for_pbc(ref_pos, ref_cell, pbc)
     else:
@@ -2385,17 +2391,11 @@ def identify_defect_atoms(
     
     # Check for antisites in multi-component systems
     if "occupancy_by_type" in result and len(result["occupancy_by_type"]) > 1:
-        ref_types = reference.get_chemical_symbols()
-        antisite_count = 0
-        for site_idx in range(len(reference)):
-            if occupancy[site_idx] == 1:
-                # Single atom at this site - check type match
-                site_type = ref_types[site_idx]
-                atom_at_site = np.where(site_index == site_idx)[0]
-                if len(atom_at_site) == 1:
-                    atom_type = atoms.get_chemical_symbols()[atom_at_site[0]]
-                    if atom_type != site_type:
-                        antisite_count += 1
+        ref_types = np.asarray(reference.get_chemical_symbols())
+        atom_types = np.asarray(atoms.get_chemical_symbols())
+        # singly occupied sites whose atom has a different species than the site
+        single = occupancy[site_index] == 1
+        antisite_count = int(np.sum(atom_types[single] != ref_types[site_index[single]]))
         if antisite_count > 0:
             summary_parts.append(f"{antisite_count} antisites")
     
