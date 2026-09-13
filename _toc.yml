@@ -23,6 +23,8 @@ chapters:
     - file: docs/methods/14_deformation.md
     - file: docs/methods/15_wigner_seitz.md
     - file: docs/methods/16_ace.md
+    - file: docs/methods/17_cna.md
+    - file: docs/methods/18_sro.md
   - file: docs/examples.md
     sections:
     - file: examples/01_getting_started

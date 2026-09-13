@@ -16,9 +16,9 @@ pyscal can calculate the following descriptors:
 | Angular and bond length distributions: *ADF and BLDF as local fingerprints.* | [Method](methods/13_distributions)    |  [Example](../examples/18_angular_bond_distributions) |
 | Voronoi tessellation: *structural vector and Voronoi volume.* | [Method](methods/06_voronoi)    |  [Example](../examples/06_voronoi_tessellation) |
 | Centrosymmetry parameter: *find breaks in the ordered crystal.* | [Method](methods/07_centrosymmetry)    |  [Example](../examples/09_centrosymmetry_parameter) |
-| Common neighbor analysis: *CNA and adaptive CNA for bcc, fcc, hcp; diamond variants.* |      |  [Example](../examples/05_common_neighbor_analysis) |
+| Common neighbor analysis: *CNA and adaptive CNA for bcc, fcc, hcp; diamond variants.* | [Method](methods/17_cna)    |  [Example](../examples/05_common_neighbor_analysis) |
 | Entropy parameter: *Piaggi-Parrinello fingerprint for distinguishing crystal structures.* |  [Method](methods/08_entropy)    |  [Example](../examples/10_entropy_parameter) |
-| Chemical short range order: *Warren-Cowley parameters for multi-component alloys.* |      |  [Example](../examples/11_short_range_order) |
+| Chemical short range order: *Warren-Cowley parameters for multi-component alloys.* | [Method](methods/18_sro)    |  [Example](../examples/11_short_range_order) |
 | Atomic deformation: *atomic strain, von Mises invariant, $D^2_{\min}$, slip vector.* | [Method](methods/14_deformation)    |  [Example](../examples/21_deformation_descriptors) |
 | Wigner-Seitz defect analysis: *vacancies, interstitials, antisites against a reference.* | [Method](methods/15_wigner_seitz)    |  [Example](../examples/22_wigner_seitz_defects) |
 | ACE descriptors: *Atomic Cluster Expansion features up to body order four.* | [Method](methods/16_ace)    |  [Example](../examples/28_ace_descriptors) |
