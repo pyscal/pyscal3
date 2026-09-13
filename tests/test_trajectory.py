@@ -109,3 +109,32 @@ def test_parse_orthogonal_scaled():
     b = _parse_lammps_lines_to_atoms(_triclinic_dump(True, frac, cell, origin), species=["Al"])
     assert np.allclose(a.positions, b.positions, atol=1e-8)
     assert np.allclose(a.positions, frac @ cell + origin, atol=1e-8)
+
+
+def test_to_file_copies_block_bytes_exactly(tmp_path):
+    # unmodified blocks are copied verbatim, whatever the platform's newline
+    traj = Trajectory(TRAJ)
+    out = tmp_path / "copy.dump"
+    traj[0].to_file(str(out))
+    src = Path(TRAJ).read_bytes().splitlines(keepends=True)[: traj.blocksize]
+    assert out.read_bytes() == b"".join(src)
+
+
+def test_to_file_after_load_round_trips(tmp_path):
+    # blocks regenerated from loaded data use "\n" only (no "\r\r\n" on Windows)
+    traj = Trajectory(TRAJ)
+    traj.load(0)
+    out = tmp_path / "loaded.dump"
+    traj[0].to_file(str(out))
+    raw = out.read_bytes()
+    assert b"\r" not in raw
+    assert raw.count(b"\n") == traj.blocksize
+
+    reread = Trajectory(str(out))
+    assert reread.nblocks == 1
+    assert reread.natoms == traj.natoms
+    a = traj[0].to_atoms(species=["Au"])[0]
+    b = reread[0].to_atoms(species=["Au"])[0]
+    assert np.allclose(a.positions, b.positions)
+    assert np.allclose(a.cell, b.cell)
+    assert np.array_equal(a.arrays["lammps_ids"], b.arrays["lammps_ids"])

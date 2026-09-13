@@ -271,7 +271,10 @@ class Timeslice:
         None
 
         """
-        with open(outfile, mode) as fout:
+        # the lines carry their own newlines (copied from the source file or
+        # generated with "\n"); newline="" stops the text layer from turning
+        # them into "\r\n" on Windows
+        with open(outfile, mode, encoding="utf-8", newline="") as fout:
             for count, traj in enumerate(self.trajectories):
                 self.trajectories[count]._get_blocks_to_file(fout, self.blocklists[count])
 
@@ -499,13 +502,13 @@ class Trajectory:
 
         data = []
         data.append("ITEM: TIMESTEP\n")
-        data.append("".join([str(0), os.linesep]))
+        data.append("".join([str(0), "\n"]))
         data.append("ITEM: NUMBER OF ATOMS\n")
-        data.append("".join([str(self.natoms), os.linesep]))
+        data.append("".join([str(self.natoms), "\n"]))
         data.append("ITEM: BOX BOUNDS pp pp pp\n")
         for b in dd["box"]:
             dstr = " ".join(b.astype(str))
-            data.append("".join([dstr, os.linesep]))
+            data.append("".join([dstr, "\n"]))
 
         xf = []
         xd = []
@@ -536,17 +539,16 @@ class Trajectory:
         if len(xf) > 0:
             for i in range(len(xf[0])):
                 dstr = " ".join((xf[:, i]).astype(str))
-                xfstrs.append("".join([dstr, os.linesep]))
+                xfstrs.append("".join([dstr, "\n"]))
 
         xfheader = " ".join(xfkeys)
         mainheader = " ".join([xdheader, xfheader])
-        mainheader = "".join([mainheader, os.linesep])
+        mainheader = "".join([mainheader, "\n"])
 
         data.append(mainheader)
 
         for i in range(len(xfstrs)):
             valstr = " ".join([xdstrs[i], xfstrs[i]])
-            # valstr = "".join([valstr, os.linesep])
             data.append(valstr)
 
         return data
