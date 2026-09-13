@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyscal3"
-version = "4.0.0"
+dynamic = ["version"]  # single source: pyscal3.__version__
 description = "Python library written in C++ for calculation of local atomic structural environment"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
@@ -52,6 +52,9 @@ Documentation = "https://pyscal.org"
 Repository = "https://github.com/pyscal/pyscal3"
 Issues = "https://github.com/pyscal/pyscal3/issues"
 Changelog = "https://github.com/pyscal/pyscal3/releases"
+
+[tool.setuptools.dynamic]
+version = {attr = "pyscal3.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
