@@ -49,12 +49,9 @@ double get_abs_distance(vector<double> pos1, vector<double> pos2,
 
         //now check pbc
         //nearest image
-        if (diffx> box[0]/2.0) {diffx-=box[0];};
-        if (diffx<-box[0]/2.0) {diffx+=box[0];};
-        if (diffy> box[1]/2.0) {diffy-=box[1];};
-        if (diffy<-box[1]/2.0) {diffy+=box[1];};
-        if (diffz> box[2]/2.0) {diffz-=box[2];};
-        if (diffz<-box[2]/2.0) {diffz+=box[2];};
+        diffx -= box[0]*round(diffx/box[0]);   // nearest image, any distance
+        diffy -= box[1]*round(diffy/box[1]);   // nearest image, any distance
+        diffz -= box[2]*round(diffz/box[2]);   // nearest image, any distance
 
         //now divide by box vals - scale down the size
         diffx = diffx/box[0];
@@ -77,12 +74,9 @@ double get_abs_distance(vector<double> pos1, vector<double> pos2,
     }
     else{
         //nearest image
-        if (diffx> box[0]/2.0) {diffx-=box[0];};
-        if (diffx<-box[0]/2.0) {diffx+=box[0];};
-        if (diffy> box[1]/2.0) {diffy-=box[1];};
-        if (diffy<-box[1]/2.0) {diffy+=box[1];};
-        if (diffz> box[2]/2.0) {diffz-=box[2];};
-        if (diffz<-box[2]/2.0) {diffz+=box[2];};
+        diffx -= box[0]*round(diffx/box[0]);   // nearest image, any distance
+        diffy -= box[1]*round(diffy/box[1]);   // nearest image, any distance
+        diffz -= box[2]*round(diffz/box[2]);   // nearest image, any distance
         abs = sqrt(diffx*diffx + diffy*diffy + diffz*diffz);
     }
     return abs;
@@ -133,12 +127,9 @@ vector<double> remap_atom_into_box(vector<double> pos,
 
         //now check pbc
         //nearest image
-        if (dx < 0) {dx+=box[0];};
-        if (dx >= box[0]) {dx-=box[0];};
-        if (dy < 0) {dy+=box[1];};
-        if (dy >= box[1]) {dy-=box[1];};
-        if (dz < 0) {dz+=box[2];};
-        if (dz >= box[2]) {dz-=box[2];};
+        dx -= box[0]*floor(dx/box[0]);   // wrap into [0, L)
+        dy -= box[1]*floor(dy/box[1]);   // wrap into [0, L)
+        dz -= box[2]*floor(dz/box[2]);   // wrap into [0, L)
 
         //now divide by box vals - scale down the size
         dx = dx/box[0];
@@ -157,12 +148,9 @@ vector<double> remap_atom_into_box(vector<double> pos,
     }
     else{
         //nearest image
-        if (dx < 0) {dx+=box[0];};
-        if (dx >= box[0]) {dx-=box[0];};
-        if (dy < 0) {dy+=box[1];};
-        if (dy >= box[1]) {dy-=box[1];};
-        if (dz < 0) {dz+=box[2];};
-        if (dz >= box[2]) {dz-=box[2];};
+        dx -= box[0]*floor(dx/box[0]);   // wrap into [0, L)
+        dy -= box[1]*floor(dy/box[1]);   // wrap into [0, L)
+        dz -= box[2]*floor(dz/box[2]);   // wrap into [0, L)
     }
     
     vector<double> rpos;
@@ -201,12 +189,9 @@ vector<double> remap_and_displace_atom(vector<double> pos,
 
         //now check pbc
         //nearest image
-        if (dx < 0) {dx+=box[0];};
-        if (dx >= box[0]) {dx-=box[0];};
-        if (dy < 0) {dy+=box[1];};
-        if (dy >= box[1]) {dy-=box[1];};
-        if (dz < 0) {dz+=box[2];};
-        if (dz >= box[2]) {dz-=box[2];};
+        dx -= box[0]*floor(dx/box[0]);   // wrap into [0, L)
+        dy -= box[1]*floor(dy/box[1]);   // wrap into [0, L)
+        dz -= box[2]*floor(dz/box[2]);   // wrap into [0, L)
 
         //now divide by box vals - scale down the size
         dx = dx/box[0];
@@ -229,12 +214,9 @@ vector<double> remap_and_displace_atom(vector<double> pos,
     }
     else{
         //nearest image
-        if (dx < 0) {dx+=box[0];};
-        if (dx >= box[0]) {dx-=box[0];};
-        if (dy < 0) {dy+=box[1];};
-        if (dy >= box[1]) {dy-=box[1];};
-        if (dz < 0) {dz+=box[2];};
-        if (dz >= box[2]) {dz-=box[2];};
+        dx -= box[0]*floor(dx/box[0]);   // wrap into [0, L)
+        dy -= box[1]*floor(dy/box[1]);   // wrap into [0, L)
+        dz -= box[2]*floor(dz/box[2]);   // wrap into [0, L)
 
         dx = dx/box[0];
         dy = dy/box[1];
