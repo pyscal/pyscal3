@@ -53,7 +53,10 @@ def find_neighbors(
         Neighbor finding algorithm.
     cutoff : float or str
         Cutoff distance. Use 'sann' or 'adaptive' for adaptive methods.
-        0 defaults to adaptive.
+        0 defaults to adaptive. For ``method='voronoi'`` a positive value
+        is the distance below which Voronoi vertices are merged into the
+        unique interstitial sites stored in
+        ``atoms.info["pyscal_unique_vertices"]``.
     shell_thickness : float, optional
         If > 0, find neighbors in a shell [cutoff, cutoff+shell_thickness].
     threshold : float, optional
@@ -219,12 +222,6 @@ def find_neighbors(
         d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(None)
         pc.get_all_neighbors_voronoi(d, 0.0, triclinic, rot, rotinv, boxdims, voroexp)
 
-        if cutoff > 0:
-            unique_vertices = pc.clean_voronoi_vertices(
-                d, triclinic, rot, rotinv, boxdims, cutoff
-            )
-            atoms.info["pyscal_unique_vertices"] = unique_vertices
-
     else:
         raise ValueError(
             f"Unknown method: {method}. Use 'cutoff', 'voronoi', or 'number'."
@@ -234,6 +231,50 @@ def find_neighbors(
     dict_to_atoms(d, atoms, nreal=nreal)
     atoms.info["pyscal_neighbors_found"] = True
     atoms.info["pyscal_neighbor_method"] = method
+
+    if method == "voronoi" and isinstance(cutoff, (int, float)) and cutoff > 0:
+        # merge Voronoi vertices closer than `cutoff` into unique sites
+        atoms.info["pyscal_unique_vertices"] = _unique_voronoi_vertices(
+            atoms, d["vertex_positions"][:nreal], cutoff
+        )
+
+
+def _unique_voronoi_vertices(atoms: Atoms, vertex_positions, cutoff):
+    """Merge the Voronoi vertices of all atoms into unique sites.
+
+    Vertices closer than ``cutoff`` (under the periodic boundary conditions
+    of ``atoms``) are considered the same site; one representative per
+    group is returned, wrapped into the cell. A Voronoi vertex is shared by
+    every cell meeting there, which are not necessarily Voronoi neighbours
+    of each other, so the merge has to be done over all vertices.
+    """
+    from ase.neighborlist import neighbor_list
+
+    pts = [np.asarray(v, dtype=float).reshape(-1, 3) for v in vertex_positions if len(v)]
+    if not pts:
+        return np.zeros((0, 3))
+    pts = np.concatenate(pts)
+
+    work_cell, _ = effective_periodic_cell(atoms, cutoff)
+    dummy = Atoms(positions=pts, cell=work_cell, pbc=True)
+    dummy.wrap()
+    i, j = neighbor_list("ij", dummy, cutoff)
+
+    # union-find over the close pairs
+    parent = np.arange(len(pts))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for a, b in zip(i, j):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+    roots = np.array([find(a) for a in range(len(pts))])
+    return dummy.positions[np.unique(roots)]
 
 
 def get_distance(atoms: Atoms, pos1, pos2, vector=False):

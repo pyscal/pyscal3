@@ -45,7 +45,6 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
     //vector<bool> mask_1 = atoms[py::str("mask_1")].cast<vector<bool>>();
     //vector<bool> mask_2 = atoms[py::str("mask_2")].cast<vector<bool>>();
-    vector<bool> ghost = atoms[py::str("ghost")].cast<vector<bool>>();
 
     int nop = positions.size();
     vector<vector<int>> neighbors(nop);
@@ -64,7 +63,6 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     vector<vector<double>> vertex_vectors(nop);
     vector<vector<int>> vertex_numbers(nop);
     vector<vector<vector<double>>> vertex_positions(nop);
-    vector<vector<bool>> vertex_unique(nop);
 
     // ------------------------------------------------------------------
     // Cell geometry for voro++.
@@ -137,7 +135,6 @@ void get_all_neighbors_voronoi(py::dict& atoms,
                 temp.emplace_back(v[3*si+k]+pos[k]);
             }
             vertex_positions[ti].emplace_back(temp);
-            vertex_unique[ti].emplace_back(!ghost[ti]);
         }
 
         for (size_t tj=0; tj<neigh.size(); tj++){
@@ -226,82 +223,5 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     atoms[py::str("face_perimeters")] = face_perimeters;
     atoms[py::str("vertex_vectors")] = vertex_vectors;
     atoms[py::str("vertex_numbers")] = vertex_numbers;
-    atoms[py::str("vertex_is_unique")] = vertex_unique;
     atoms[py::str("vertex_positions")] = vertex_positions;
-} 
-
-
-bool check_if_in_box(const vector<double>& pos,
-    const vector<double>& box){
-    if ((pos[0] < -0.01) || (pos[0] > box[0]+0.01)) return false;
-    else if ((pos[1] < -0.0001) || (pos[1] > box[1])) return false;
-    else if ((pos[2] < -0.0001) || (pos[2] > box[2])) return false;
-    else return true;
 }
-
-vector<vector<double>> clean_voronoi_vertices(py::dict& atoms,
-    const int triclinic,
-    const vector<vector<double>> rot, 
-    const vector<vector<double>> rotinv,
-    const vector<double> box,
-    const double distance_cutoff){
-
-    vector<vector<vector<double>>> positions = atoms[py::str("vertex_positions")].cast<vector<vector<vector<double>>>>();
-    vector<vector<bool>> vertex_unique = atoms[py::str("vertex_is_unique")].cast<vector<vector<bool>>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    //vector<bool> ghost = atoms[py::str("ghost")].cast<vector<bool>>();
-    
-    int nop = positions.size();
-
-    double d, diffx, diffy, diffz;
-    int nn;
-
-    for(int ti=0; ti<nop; ti++){
-        //if (ghost[ti]) continue;
-        for(int vi=0; vi<positions[ti].size(); vi++){
-            if (!vertex_unique[ti][vi]) continue;
-            if (!check_if_in_box(positions[ti][vi], box)){
-                vertex_unique[ti][vi] = false;
-                continue;
-            }
-            for(int vj=vi+1; vj<positions[ti].size(); vj++){
-                if (!vertex_unique[ti][vj]) continue;
-                d = get_abs_distance(positions[ti][vi], positions[ti][vj],
-                    triclinic, rot, rotinv, box, 
-                    diffx, diffy, diffz);
-                if (d < distance_cutoff){
-                    vertex_unique[ti][vj] = false;
-                }                
-            }
-            for(int tj=0; tj<neighbors[ti].size(); tj++){
-                nn = neighbors[ti][tj];
-                if (ti==nn) continue;
-                //if (ghost[nn]) continue;
-                for(int vj=0; vj<positions[nn].size(); vj++){
-                    if (!vertex_unique[nn][vj]) continue;
-                    if (!check_if_in_box(positions[nn][vj], box)){
-                        vertex_unique[nn][vj] = false;
-                        continue;
-                    }
-                    d = get_abs_distance(positions[ti][vi], positions[nn][vj],
-                        triclinic, rot, rotinv, box, 
-                        diffx, diffy, diffz);
-                    if (d < distance_cutoff){
-                        vertex_unique[nn][vj] = false;
-                    }                                        
-                }
-            }
-        }
-    }
-
-    vector<vector<double>> unique_positions;
-    for(int ti=0; ti<nop; ti++){
-        for(int tj=0; tj<vertex_unique[ti].size(); tj++){
-            if(vertex_unique[ti][tj]){
-                unique_positions.emplace_back(positions[ti][tj]);
-            }
-        }
-    }
-    
-    return unique_positions;    
-}	

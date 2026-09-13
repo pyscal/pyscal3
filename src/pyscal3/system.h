@@ -176,15 +176,7 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     const vector<double> box,
     const double face_area_exponent);
 
-vector<vector<double>> clean_voronoi_vertices(py::dict& atoms,
-    const int triclinic,
-    const vector<vector<double>> rot, 
-    const vector<vector<double>> rotinv,
-    const vector<double> box,
-    const double distance_cutoff);
 
-bool check_if_in_box(const vector<double>& pos,
-    const vector<double>& box);
 
 /*-----------------------------------------------------
     Steinhardt Methods

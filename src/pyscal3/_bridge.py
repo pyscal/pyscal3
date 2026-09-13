@@ -37,7 +37,6 @@ NEIGHBOR_DERIVED_KEYS = [
     "face_perimeters",
     "vertex_vectors",
     "vertex_numbers",
-    "vertex_is_unique",
     "vertex_positions",
     "unique_vertices",
     "neighbors_found",

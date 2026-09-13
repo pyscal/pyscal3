@@ -35,7 +35,6 @@ PYBIND11_MODULE(csystem, m) {
     m.def("calculate_bonds", &calculate_bonds);
     m.def("find_clusters", &find_clusters);
     m.def("get_all_neighbors_voronoi", &get_all_neighbors_voronoi);
-    m.def("clean_voronoi_vertices", &clean_voronoi_vertices);
     m.def("get_cna_neighbors", &get_cna_neighbors);
     m.def("get_acna_neighbors_cn12", &get_acna_neighbors_cn12);
     m.def("get_acna_neighbors_cn14", &get_acna_neighbors_cn14);

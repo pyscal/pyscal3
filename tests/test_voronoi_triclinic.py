@@ -82,3 +82,29 @@ def test_voronoi_left_handed_cell():
     vol = atoms.arrays["pyscal_voronoi_volume"]
     assert np.isclose(vol.sum(), atoms.get_volume())
     assert np.all(pyscal3.coordination_number(atoms) == 12)
+
+
+@pytest.mark.parametrize("builder, sites_per_atom", [
+    (lambda: bulk("Cu", "fcc", cubic=True).repeat(3), 3),   # 1 octahedral + 2 tetrahedral
+    (lambda: bulk("Cu", "fcc").repeat(4), 3),               # primitive cell
+    (lambda: bulk("Fe", "bcc", cubic=True).repeat(3), 6),   # 24 vertices shared by 4 cells
+])
+def test_unique_voronoi_vertices(builder, sites_per_atom):
+    """Unique Voronoi vertices = interstitial sites, independent of the cell."""
+    ref = builder()
+    rot = _rotate(ref, [1, 1, 0], 0.9)
+    for a in (ref, rot):
+        pyscal3.find_neighbors(a, method="voronoi", cutoff=0.2)
+        u = np.asarray(a.info["pyscal_unique_vertices"])
+        assert u.shape == (sites_per_atom * len(a), 3)
+        # all returned sites are distinct under the periodic boundary conditions
+        from ase import Atoms
+        from ase.neighborlist import neighbor_list
+        probe = Atoms(positions=u, cell=a.cell, pbc=True)
+        assert len(neighbor_list("i", probe, 0.2)) == 0
+
+
+def test_voronoi_ignores_string_cutoff():
+    atoms = bulk("Cu", "fcc", cubic=True).repeat(2)
+    pyscal3.find_neighbors(atoms, method="voronoi", cutoff="sann")
+    assert "pyscal_unique_vertices" not in atoms.info
