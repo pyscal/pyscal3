@@ -277,3 +277,37 @@ class TestEdgeCases:
         assert result["vacancy_count"] == 0
         assert result["interstitial_count"] == 0
         assert result["occupancy"][0] == 1
+
+
+def test_wigner_seitz_unwrapped_positions():
+    """Atoms several cells outside the reference box must map to the same sites."""
+    import numpy as np
+    from ase.build import bulk
+    import pyscal3
+
+    ref = bulk("Cu", "fcc", cubic=True).repeat(3)
+    defected = ref.copy()
+    del defected[5]
+    expected = pyscal3.wigner_seitz_analysis(defected, ref)
+    moved = defected.copy()
+    rng = np.random.default_rng(0)
+    moved.positions += rng.integers(-3, 4, size=(len(moved), 3)) @ np.array(ref.cell)
+    result = pyscal3.wigner_seitz_analysis(moved, ref)
+    assert result["vacancy_count"] == 1
+    assert result["interstitial_count"] == 0
+    assert np.array_equal(result["site_index"], expected["site_index"])
+
+
+def test_identify_defect_atoms_antisites():
+    import numpy as np
+    from pyscal3.structures import make_crystal
+    import pyscal3
+
+    ref = make_crystal("b2", lattice_constant=2.87, repetitions=(3, 3, 3), element=["Ni", "Al"])
+    swapped = ref.copy()
+    symbols = swapped.get_chemical_symbols()
+    symbols[0], symbols[1] = symbols[1], symbols[0]      # one Ni<->Al swap = 2 antisites
+    swapped.set_chemical_symbols(symbols)
+    res = pyscal3.identify_defect_atoms(swapped, ref)
+    assert res["defect_summary"] == "2 antisites"
+    assert np.all(res["perfect_mask"])

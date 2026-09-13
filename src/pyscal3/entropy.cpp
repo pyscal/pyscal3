@@ -26,9 +26,9 @@
  * n_neighbors × (8σ/h).  With σ=0.2 and h=0.001 this is a ~3× reduction
  * in exp() calls, plus improved cache locality.
  *
- * The original trapezoidal rule quirk (skipping j=nsteps-1) and the
- * local-density bug (using atom 0's density for all atoms when rho==0)
- * are preserved for backward compatibility.
+ * rho == 0 selects the "local" mode in which every atom uses its own
+ * density n_i / (4/3 pi r_c,i^3), with r_c,i the neighbour cutoff of that
+ * atom; otherwise the global density rho is used for all atoms.
  */
 
 void calculate_entropy(py::dict& atoms,
@@ -47,13 +47,7 @@ void calculate_entropy(py::dict& atoms,
         atoms[py::str("neighbordist")].cast<vector<vector<double>>>();
     int nop = (int)neighbors.size();
 
-    /* Match original: when rho==0 (local mode), set rho from atom 0
-       and use for all atoms (original code modifies the rho parameter
-       in first iteration and never resets it). */
-    if (rho == 0) {
-        rho = neighbors[0].size() /
-            (4.1887902047863905 * pow(cutoff_vec[0], 3));
-    }
+    const bool local = (rho == 0.0);
 
     int nsteps = (int)((rstop - rstart) / h);
 
@@ -75,6 +69,17 @@ void calculate_entropy(py::dict& atoms,
 
         int nn = (int)neighbordist[ti].size();
 
+        double rho_i = rho;
+        if (local) {
+            double rc = cutoff_vec[ti];
+            rho_i = (rc > 0.0 && nn > 0)
+                ? nn / (4.1887902047863905 * rc * rc * rc) : 0.0;
+        }
+        if (rho_i <= 0.0) {
+            entropy_out[ti] = 0.0;
+            continue;
+        }
+
         /* ---- Accumulate raw Gaussian sum with windowing ---- */
         fill(raw_g.begin(), raw_g.end(), 0.0);
 
@@ -88,20 +93,13 @@ void calculate_entropy(py::dict& atoms,
             }
         }
 
-        /* ---- Trapezoidal integration (matches original loop structure) ----
-         *
-         *  Original code: xstart at j=0,
-         *                 summ   for j = 1 .. nsteps-2,
-         *                 xend   at j = nsteps.
-         *  We replicate that exactly using half-weight endpoints
-         *  and skipping j = nsteps-1.
-         */
+        /* ---- Trapezoidal integration over [rstart, rstart + nsteps*h] ---- */
         double summ = 0.0;
 
         for (int j = 0; j <= nsteps; j++) {
             double r   = r_grid[j];
             double r2  = r * r;
-            double frho = 4.0 * PI * rho * r2;
+            double frho = 4.0 * PI * rho_i * r2;
 
             /* g(r) = raw_g / (4π·ρ·r²·√(2πσ²)) */
             double g = (frho > 0.0) ? inv_fsigma * raw_g[j] / frho : 0.0;
@@ -114,15 +112,14 @@ void calculate_entropy(py::dict& atoms,
             else
                 integrand = r2;
 
-            /* Weight: half for endpoints, full for interior,
-               but skip j = nsteps-1 to match original code. */
+            /* Trapezoid weights: half at the end points. */
             if (j == 0 || j == nsteps)
                 summ += 0.5 * integrand;
-            else if (j != nsteps - 1)
+            else
                 summ += integrand;
         }
 
-        entropy_out[ti] = -rho * kb * h * summ;
+        entropy_out[ti] = -rho_i * kb * h * summ;
     }
 
     atoms[py::str("entropy")] = entropy_out;

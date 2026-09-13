@@ -27,12 +27,13 @@ import pyscal
 from ase.io import read
 
 atoms = read('conf.dump', format='lammps-dump-text')
-pyscal.find_neighbors(atoms, method='cutoff', cutoff=0)
 lattice_constant = 4.00
-pyscal.entropy(atoms, rm=1.4 * lattice_constant, average=True)
+rm = 1.4 * lattice_constant
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=rm)
+pyscal.entropy(atoms, rm=rm, average=True)
 ```
 
-The value of $r_m$ is provided in the same units as the input coordinates (typically Å). Other parameters such as $\sigma$, the integration step `h`, and the integration starting point `rstart` can be set through keyword arguments. Per-atom values are stored as `atoms.arrays['pyscal_entropy']` and `pyscal_average_entropy`.
+Only neighbors in the neighbor list contribute to $g_m^i(r)$, so the neighbor cutoff must be at least $r_m$ (pyscal warns otherwise). The value of $r_m$ is provided in the same units as the input coordinates (typically Å). With `local=True` the density $\rho$ is replaced by the local density of each atom, $n_i / (\tfrac{4}{3}\pi r_{c,i}^3)$, with $r_{c,i}$ its neighbor cutoff. Other parameters such as $\sigma$, the integration step `h`, and the integration starting point `rstart` can be set through keyword arguments. Per-atom values are stored as `atoms.arrays['pyscal_entropy']` and `pyscal_average_entropy`.
 
 In pyscal, a slightly different version of $s_s^i$ is calculated. This is given by,
 

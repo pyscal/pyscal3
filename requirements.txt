@@ -1,10 +1,13 @@
+# Dependencies for building the documentation (Read the Docs) and running
+# the example notebooks. The package itself declares its runtime
+# dependencies in pyproject.toml.
 numpy
-matplotlib
+scipy>=1.15
 ase
+pyyaml
+matplotlib
 plotly
 ipywidgets
+scikit-learn
 pybind11
-scipy
-spglib
-pyyaml
 jupyter-book<2

@@ -1,5 +1,4 @@
-import sys
-import random
+import warnings
 from math import degrees, atan, sqrt, pi, ceil, cos, acos, sin, gcd, radians
 import numpy as np
 from numpy import dot, cross
@@ -37,25 +36,6 @@ def get_cubic_theta(uvw, m, n=1):
         return 2 * atan(sqrt(sqsum) * n / m)
     else:
         return pi
-
-def get_theta_m_n_list(uvw, sigma):
-    """
-    Finds integers m and n lists that match the input sigma.
-    """
-    if sigma == 1:
-        return [(0., 0., 0.)]
-    thetas = []
-    max_m = int(ceil(sqrt(4*sigma)))
-
-    for m in range(1, max_m):
-        for n in range(1, max_m):
-            if gcd(m, n) == 1:
-                s = get_cubic_sigma(uvw, m, n)
-            if s == sigma:
-                theta = (get_cubic_theta(uvw, m, n))
-                thetas.append((theta, m, n))
-                thetas.sort(key=lambda x: x[0])
-    return thetas
 
 def get_sigma_list(uvw, limit):
     """
@@ -381,7 +361,7 @@ def integer_matrix(a):
                 break
         if all(b[i] == 0):
             Found = False
-            print("Can not make integer matrix!")
+            warnings.warn("Can not make integer matrix!", RuntimeWarning, stacklevel=2)
     return (b) if Found else None
 
 def angv(a, b):
@@ -473,8 +453,8 @@ def generate_ortho_unitcell_atoms(ortho, basis):
     Atoms = []
     tol = 0.001
     if V > 5e6:
-        print("Warning! It may take a very long time"
-              "to produce this cell!")
+        warnings.warn("It may take a very long time to produce this cell!",
+                      RuntimeWarning, stacklevel=2)
     # produce Atoms:
 
     for i in range(V):
@@ -575,8 +555,8 @@ def find_overlapping_atoms(ortho1, atoms1, atoms2, dim, overlap=0.0):
     Y_del = Y_new[indice_y]
 
     if (len(X_del) != len(Y_del)):
-        print("Warning! the number of deleted atoms"
-              "in the two grains are not equal!")
+        warnings.warn("The number of deleted atoms in the two grains is not equal!",
+                      RuntimeWarning, stacklevel=2)
     # print(type(IndX), len(IndY), len(IndY_image))
     return (X_del, Y_del, IndX[indice_x], IndY_new[indice_y])
 

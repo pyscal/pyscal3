@@ -8,10 +8,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyscal3"
-version = "4.0.0"
+dynamic = ["version"]  # single source: pyscal3.__version__
 description = "Python library written in C++ for calculation of local atomic structural environment"
 readme = "README.md"
-license = {text = "GPL-3.0-or-later"}
+license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
 authors = [
     {name = "Sarath Menon", email = "sarath.menon@pyscal.org"},
@@ -19,13 +19,14 @@ authors = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: C++",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Chemistry",
@@ -34,6 +35,7 @@ keywords = ["atomic structure", "steinhardt", "descriptors", "molecular dynamics
 
 dependencies = [
     "numpy",
+    "scipy>=1.15",  # sph_harm_y and cKDTree are imported at module level
     "ase",
     "pyyaml",
 ]
@@ -42,16 +44,6 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
-    "scipy",
-    "spglib",
-]
-structures = [
-    "scipy",
-    "spglib",
-]
-all = [
-    "scipy",
-    "spglib",
 ]
 
 [project.urls]
@@ -60,6 +52,9 @@ Documentation = "https://pyscal.org"
 Repository = "https://github.com/pyscal/pyscal3"
 Issues = "https://github.com/pyscal/pyscal3/issues"
 Changelog = "https://github.com/pyscal/pyscal3/releases"
+
+[tool.setuptools.dynamic]
+version = {attr = "pyscal3.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -75,12 +70,12 @@ where = ["src"]
 # cibuildwheel
 # ---------------------------------------------------------------------------
 [tool.cibuildwheel]
-# Build CPython 3.10 – 3.13, skip PyPy and musl
-build = "cp310-* cp311-* cp312-* cp313-*"
+# Build CPython 3.10 – 3.14, skip PyPy and musl
+build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
 skip = "pp* *-musllinux_*"
 
-test-requires = ["pytest", "ase", "pyyaml", "scipy", "spglib"]
-test-command = "pytest {project}/tests --ignore={project}/tests/_old_tests -x -q"
+test-requires = ["pytest"]
+test-command = "pytest {project}/tests -x -q"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
@@ -99,5 +94,4 @@ archs = ["AMD64"]
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--ignore=tests/_old_tests"
 

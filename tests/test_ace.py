@@ -331,3 +331,42 @@ class TestACEDescriptorCount:
         result = pyscal3.ace(atoms, nmax=3, lmax=2, nu_max=2)
         expected_nu2 = (3 * 4 // 2) * 3  # 6 * 3 = 18
         assert result["nu2"].shape[1] == expected_nu2
+
+
+class TestACENu3Invariance:
+    """nu=3 must be coupled with Wigner 3j symbols to be rotation invariant."""
+
+    @staticmethod
+    def _rotate(atoms, axis, angle):
+        axis = np.asarray(axis, float) / np.linalg.norm(axis)
+        k = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+        rot = np.eye(3) + np.sin(angle) * k + (1 - np.cos(angle)) * k @ k
+        out = atoms.copy()
+        out.set_cell(np.array(atoms.cell) @ rot.T, scale_atoms=False)
+        out.positions = atoms.positions @ rot.T
+        return out
+
+    def test_nu3_rotation_invariance(self):
+        atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
+        rng = np.random.default_rng(0)
+        atoms.positions += rng.normal(scale=0.05, size=atoms.positions.shape)
+        rot = self._rotate(atoms, [1, 2, 3], 1.3)
+        res = []
+        for a in (atoms, rot):
+            pyscal3.find_neighbors(a, method="cutoff", cutoff=4.0)
+            res.append(pyscal3.ace(a, nmax=3, lmax=3, nu_max=3, normalize=False))
+        for key in ("nu1", "nu2", "nu3"):
+            np.testing.assert_allclose(res[0][key], res[1][key], atol=1e-10)
+        # the nu3 block is non-trivial
+        assert np.max(np.abs(res[0]["nu3"])) > 1e-3
+
+    def test_wigner_3j_known_values(self):
+        from pyscal3.descriptors import _wigner_3j
+
+        assert np.isclose(_wigner_3j(1, 1, 0, 0, 0, 0), -1 / np.sqrt(3))
+        assert np.isclose(_wigner_3j(2, 2, 2, 0, 0, 0), -np.sqrt(2 / 35))
+        assert np.isclose(_wigner_3j(1, 1, 2, 1, -1, 0), 1 / np.sqrt(30))
+        assert _wigner_3j(1, 1, 1, 0, 0, 0) == 0.0  # odd sum vanishes
+        assert _wigner_3j(1, 1, 0, 1, 0, -1) == 0.0  # triangle violated by m3
+        # symmetry: even permutation of columns leaves the symbol unchanged
+        assert np.isclose(_wigner_3j(2, 1, 3, 1, -1, 0), _wigner_3j(1, 3, 2, -1, 0, 1))

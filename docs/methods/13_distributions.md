@@ -21,7 +21,7 @@ pyscal.find_neighbors(atoms, method='cutoff', cutoff=3.5)
 hist, angles = pyscal.angular_distribution_function(atoms, bins=180)
 ```
 
-The histogram and bin centers are also stored as `atoms.info['pyscal_adf']` and `atoms.info['pyscal_adf_angles']`.
+The histogram and the left edges of the bins are also stored as `atoms.info['pyscal_adf']` and `atoms.info['pyscal_adf_angles']`.
 
 ## Bond length distribution function
 
@@ -31,4 +31,4 @@ The BLDF is the distribution of pair distances $r_{ij}$ restricted to the bonds 
 hist, r = pyscal.bond_length_distribution(atoms, bins=100)
 ```
 
-The histogram and bin centers are stored as `atoms.info['pyscal_bldf']` and `atoms.info['pyscal_bldf_r']`.
+The histogram and the left edges of the bins are stored as `atoms.info['pyscal_bldf']` and `atoms.info['pyscal_bldf_r']`.

@@ -25,7 +25,7 @@ existing bugs.
 If you have an idea for new feature, you can submit a feature idea
 through the [issues page of the
 repository](https://github.com/pyscal/pyscal3/issues). As much as
-information as you can provide about the new feauture would be greatly
+information as you can provide about the new feature would be greatly
 helpful. Additionally, you could also work on feature requests already
 on the issues page. The following instructions will help you get started
 with local feature development.
@@ -40,7 +40,7 @@ with local feature development.
     [link](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html)
     for help on managing environments.
 3.  Once the environment is set up, you can create a new branch for your
-    feature by `git checkout -b new_feauture`.
+    feature by `git checkout -b new_feature`.
 4.  Now implement the necessary feature.
 5.  Once done, you can reinstall `pyscal` by `pip install .`.
     After that please make sure that the existing tests work by running
@@ -59,7 +59,7 @@ with local feature development.
 9.  Final step - Submit a pull request through github. Before you
     submit, please make sure that the new feature is documented and has
     tests. Once the request is submitted, automated tests would be done.
-    If all tests are successful, your feauture will be incorporated to calphy and your contributions
+    If all tests are successful, your feature will be incorporated into pyscal and your contributions
     will be credited.
 
 If you have trouble with any of the steps, or you need help, please
@@ -74,15 +74,15 @@ help!
     sarath.menon@pyscal.org
 
 
-## Contributers
+## Contributors
 
-Please see the complete list of contributers [here](https://github.com/pyscal/pyscal3/graphs/contributors).
+Please see the complete list of contributors [here](https://github.com/pyscal/pyscal3/graphs/contributors).
 
 
 ## Acknowledgements
 
 - [Bond order analysis](https://github.com/WolfgangLechner/StructureAnalysis) code for the inspiration and the base for what later grew to be `pyscal`. 
-- [Voro++](math.lbl.gov/voro++/) and [pybind11](https://pybind11.readthedocs.io/en/stable/) for developing the great tools that we could use in `pyscal`.  
+- [Voro++](https://math.lbl.gov/voro++/) and [pybind11](https://pybind11.readthedocs.io/en/stable/) for developing the great tools that we could use in `pyscal`.  
 - [E-CAM High Throughput Computing ESDW](https://www.e-cam2020.eu/event/4424/?instance_id=71) held in [Turin](https://www.polito.it/?lang=en) in 2018 and 2019 for programming help, especially David W.H. Swenson and Alan O'Cais. 
 - Scholarship from the International Max Planck Research School for Interface Controlled Materials for Energy Conversion for funding the initial stages of this work.
 - [Interdisciplinary Centre for Advanced Materials Simulation](http://www.icams.de/content), at the [Ruhr University Bochum](https://www.ruhr-uni-bochum.de/en), Germany for the resources.

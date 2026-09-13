@@ -14,23 +14,42 @@ import numpy as np
 from ase import Atoms
 
 
-# ---- Keys managed by pyscal C++ ----
-# Neighbor keys written by C++ neighbor routines
-NEIGHBOR_KEYS = [
-    "pyscal_neighbors",
-    "pyscal_neighbordist",
-    "pyscal_neighborweight",
-    "pyscal_diff",
-    "pyscal_r",
-    "pyscal_phi",
-    "pyscal_theta",
-    "pyscal_cutoff",
-    "pyscal_temp_neighbors",
-    "pyscal_temp_neighbordist",
-]
-
-# We prefix pyscal keys in atoms.info to avoid clashes with ASE
+# We prefix pyscal keys in atoms.arrays / atoms.info to avoid clashes with ASE
 _PREFIX = "pyscal_"
+
+# ---- Keys managed by pyscal C++ ----
+# Everything derived from a neighbor search (all methods, incl. Voronoi).
+# These are removed before a new search so that no stale data survives a
+# change of neighbor method.
+NEIGHBOR_DERIVED_KEYS = [
+    "neighbors",
+    "neighbordist",
+    "neighborweight",
+    "diff",
+    "r",
+    "phi",
+    "theta",
+    "cutoff",
+    "temp_neighbors",
+    "temp_neighbordist",
+    "voronoi_volume",
+    "face_vertices",
+    "face_perimeters",
+    "vertex_vectors",
+    "vertex_numbers",
+    "vertex_positions",
+    "unique_vertices",
+    "neighbors_found",
+    "neighbor_method",
+]
+NEIGHBOR_KEYS = [_PREFIX + k for k in NEIGHBOR_DERIVED_KEYS]
+
+
+def clear_neighbor_data(atoms: Atoms):
+    """Remove all neighbor-derived pyscal keys from ``atoms``."""
+    for key in NEIGHBOR_KEYS:
+        atoms.arrays.pop(key, None)
+        atoms.info.pop(key, None)
 
 
 def get_box_params(atoms: Atoms):
@@ -110,7 +129,10 @@ def dict_to_atoms(d: dict, atoms: Atoms, nreal=None):
     (used when ghost atoms were added for neighbor finding).
 
     Handles ragged arrays (neighbors, etc.) by storing in atoms.info
-    since atoms.arrays requires uniform-length arrays.
+    since atoms.arrays requires uniform-length arrays. Arrays with three
+    or more dimensions (e.g. the neighbor vectors ``diff``) also go to
+    atoms.info because ASE file writers only support per-atom scalars and
+    vectors.
     """
     skip_keys = {
         "positions",
@@ -163,7 +185,10 @@ def dict_to_atoms(d: dict, atoms: Atoms, nreal=None):
                     head_arr = np.array(head)
                     trimmed = head_arr[trimmed]
                 if len(trimmed) == n:
-                    atoms.arrays[store_key] = trimmed
+                    if arr.ndim <= 2:
+                        atoms.arrays[store_key] = trimmed
+                    else:
+                        atoms.info[store_key] = trimmed
                     continue
         except (ValueError, TypeError, IndexError):
             pass
@@ -209,13 +234,115 @@ _MIN_ATOMS = 200
 _MIN_BOX_SIDE = 10.0  # Angstroms
 
 
-def pad_atoms_for_neighbor_finding(atoms: Atoms):
+def perpendicular_widths(cell):
+    """Perpendicular width of the cell along each cell vector.
+
+    The width along vector *i* is the volume divided by the area of the
+    face spanned by the other two vectors.  For an orthogonal cell these
+    are simply the box lengths.  The minimum-image convention used by the
+    C++ routines is exact only for distances below half of the smallest
+    width, so this is the quantity that decides how much padding is needed.
     """
-    If the cell has too few atoms (< 200) or is too small (< 10 Å per side),
-    create a padded system using ASE's repeat() for the C++ neighbor search.
+    cell = np.asarray(cell, dtype=float)
+    vol = abs(np.linalg.det(cell))
+    widths = np.zeros(3)
+    for i in range(3):
+        cross = np.cross(cell[(i + 1) % 3], cell[(i + 2) % 3])
+        area = np.linalg.norm(cross)
+        widths[i] = vol / area if area > 0 else 0.0
+    return widths
+
+
+def guess_cutoff(atoms: Atoms, prefactor):
+    """Candidate-search radius used by the adaptive/SANN/number methods.
+
+    Mirrors the C++ estimate ``prefactor * (V / N)^(1/3)``.
+    """
+    return prefactor * (abs(np.linalg.det(np.asarray(atoms.cell))) / len(atoms)) ** (1.0 / 3.0)
+
+
+_NONPERIODIC_PAD = 10.0  # Angstrom, vacuum added when no search radius is known
+
+
+def effective_periodic_cell(atoms: Atoms, pad):
+    """Cell to use for the (always periodic) C++ routines.
+
+    Directions that are periodic and have a non-zero cell vector are kept.
+    Every other direction (``pbc`` False, or a zero cell vector as for a
+    molecule read from an XYZ file) is replaced by a vector orthogonal to
+    the periodic ones whose length is the extent of the atoms along it plus
+    ``2 * pad``. Periodic images along such a direction are then at least
+    ``2 * pad`` apart, so no image can be found within a search radius of
+    ``pad``.
+
+    Returns
+    -------
+    cell : ndarray (3, 3)
+    periodic : ndarray of bool
+        Which directions were genuinely periodic.
+    """
+    cell = np.array(atoms.cell, dtype=float)
+    pbc = np.array(atoms.pbc, dtype=bool)
+    lengths = np.linalg.norm(cell, axis=1)
+    periodic = pbc & (lengths > 0)
+
+    if periodic.all():
+        if abs(np.linalg.det(cell)) <= 0:
+            raise ValueError(
+                "pyscal requires three non-coplanar cell vectors; got cell=%s"
+                % cell.tolist()
+            )
+        return cell, periodic
+
+    kept = cell[periodic]
+    if len(kept) > 0 and np.linalg.matrix_rank(kept) < len(kept):
+        raise ValueError(
+            "The periodic cell vectors are linearly dependent: %s" % cell.tolist()
+        )
+    # orthonormal complement of the periodic directions
+    if len(kept) == 0:
+        complement = np.eye(3)
+    else:
+        _, _, vt = np.linalg.svd(kept)
+        complement = vt[len(kept):]
+
+    positions = atoms.positions
+    new_cell = cell.copy()
+    for j, i in enumerate(np.where(~periodic)[0]):
+        direction = complement[j]
+        proj = positions @ direction
+        extent = float(proj.max() - proj.min()) if len(proj) else 0.0
+        new_cell[i] = direction * (extent + 2.0 * pad)
+    return new_cell, periodic
+
+
+def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
+    """
+    Build the atom dict for the C++ neighbor search, adding ghost atoms
+    (periodic images created with ASE's ``repeat``) when the cell is too
+    small for the requested search.
+
+    Non-periodic directions and zero cell vectors are handled by
+    :func:`effective_periodic_cell`, which adds enough vacuum that periodic
+    images cannot be found within the search radius.
+
+    Padding with ghost atoms is applied along periodic directions when
+
+    * the cell has fewer than 200 atoms or a perpendicular width below
+      10 Angstrom (legacy rule, keeps the adaptive estimates stable), or
+    * ``cutoff`` is given and some perpendicular width is not larger than
+      ``2 * cutoff`` -- the minimum-image convention would otherwise miss
+      neighbors beyond half the box.
 
     Ghost atoms are marked with ghost=True so results can be trimmed to
     the original atoms.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        The structure.
+    cutoff : float, optional
+        Largest distance the neighbor search has to resolve.
 
     Returns
     -------
@@ -227,27 +354,46 @@ def pad_atoms_for_neighbor_finding(atoms: Atoms):
         Number of real (non-ghost) atoms.
     """
     n = len(atoms)
-    cell = np.array(atoms.cell)
+    if n == 0:
+        raise ValueError("Cannot find neighbors of an empty Atoms object.")
 
-    if n >= _MIN_ATOMS:
-        # No padding needed
-        d = atoms_to_dict(atoms)
-        return d, get_box_params(atoms), n
+    pad = cutoff if (cutoff is not None and cutoff > 0) else _NONPERIODIC_PAD
+    work_cell, periodic = effective_periodic_cell(atoms, pad)
+    if periodic.all():
+        work = atoms
+    else:
+        work = atoms.copy()
+        work.set_cell(work_cell)
+        work.set_pbc(True)
 
-    # Compute repetitions needed
-    needed = max(int(np.ceil((_MIN_ATOMS / n) ** (1.0 / 3.0))), 2)
-    reps = [needed, needed, needed]
+    widths = perpendicular_widths(work_cell)
+    reps = np.ones(3, dtype=int)
 
-    # Also ensure box is large enough per side
-    for i in range(3):
-        side = np.linalg.norm(cell[i]) * reps[i]
-        if side < _MIN_BOX_SIDE:
-            reps[i] = max(
-                reps[i], int(np.ceil(_MIN_BOX_SIDE / np.linalg.norm(cell[i])))
-            )
+    if n < _MIN_ATOMS:
+        needed = max(int(np.ceil((_MIN_ATOMS / n) ** (1.0 / 3.0))), 2)
+        reps[:] = needed
+        for i in range(3):
+            if widths[i] * reps[i] < _MIN_BOX_SIDE:
+                reps[i] = max(reps[i], int(np.ceil(_MIN_BOX_SIDE / widths[i])))
+
+    if cutoff is not None and cutoff > 0:
+        # minimum image is exact only if every width exceeds 2 * cutoff
+        need = 2.0 * cutoff * (1.0 + 1e-6)
+        for i in range(3):
+            if widths[i] * reps[i] <= need:
+                reps[i] = max(reps[i], int(np.ceil(need / widths[i])))
+            if widths[i] * reps[i] <= need:
+                reps[i] += 1
+
+    # never replicate along non-periodic directions
+    reps[~periodic] = 1
+
+    if np.all(reps == 1):
+        d = atoms_to_dict(work)
+        return d, get_box_params(work), n
 
     # Create a repeated supercell using ASE
-    supercell = atoms.repeat(reps)
+    supercell = work.repeat([int(r) for r in reps])
     nreal = n
     total = len(supercell)
 

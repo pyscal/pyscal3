@@ -1,14 +1,16 @@
 channels:
   - conda-forge
 dependencies:
-  - python
+  - python=3.12
+  - pip
+  - cxx-compiler
+  - pybind11
   - jupyterlab
-  - nodejs
-  - notebook
   - numpy
-  - matplotlib
-  - lammps
+  - scipy>=1.15
   - ase
-  - ipywidgets
+  - pyyaml
+  - matplotlib
   - plotly
-  - h5py
+  - ipywidgets
+  - scikit-learn

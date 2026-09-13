@@ -11,7 +11,7 @@ from pyscal3 import csl as _csl
 _DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 def _load_yaml(filename):
-    with open(os.path.join(_DATA_DIR, filename)) as f:
+    with open(os.path.join(_DATA_DIR, filename), encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 _structures = _load_yaml("structure_data.yaml")

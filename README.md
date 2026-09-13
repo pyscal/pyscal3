@@ -23,7 +23,7 @@ from ase.build import bulk
 atoms = bulk("Cu", "fcc", cubic=True).repeat(4)
 pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)   # adaptive
 q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
-labels = pyscal.identify_ackland_jones(atoms)
+labels, names = pyscal.identify_ackland_jones(atoms)
 
 print(atoms.arrays["pyscal_q6"].mean())   # ≈ 0.57 for fcc
 ```

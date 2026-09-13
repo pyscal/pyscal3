@@ -81,6 +81,8 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
                 custom_data[k].append(raw[headerdict[k]])
 
     # --- build cell ---
+    # LAMMPS dumps the *bounding box* of a triclinic cell; recover the
+    # actual box limits (xlo, xhi, ...) from the bounds and the tilts.
     if triclinic:
         amin = min(0.0, xy, xz, xy + xz)
         amax = max(0.0, xy, xz, xy + xz)
@@ -97,19 +99,16 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
         b = np.array([xy, yhi - ylo, 0.0])
         c = np.array([xz, yz, zhi - zlo])
         cell = np.array([a, b, c])
-
-        # shift positions so origin is at box corner
-        ortho_origin = np.array([boxx[0], boxy[0], boxz[0]])
-        positions -= ortho_origin
+        origin = np.array([xlo, ylo, zlo])
     else:
         cell = np.diag([boxx[1] - boxx[0], boxy[1] - boxy[0], boxz[1] - boxz[0]])
+        origin = np.array([boxx[0], boxy[0], boxz[0]])
 
-    # handle scaled coordinates
+    # handle scaled coordinates: fractional w.r.t. the cell, measured from
+    # the box origin (as in LAMMPS), so convert and add the origin back to
+    # obtain absolute coordinates consistent with the unscaled case
     if scaled:
-        frac = positions.copy()
-        positions = (
-            frac[:, 0:1] * cell[0] + frac[:, 1:2] * cell[1] + frac[:, 2:3] * cell[2]
-        )
+        positions = positions @ cell + origin
 
     # --- determine species ---
     if species is not None:
@@ -120,7 +119,10 @@ def _parse_lammps_lines_to_atoms(lines, species=None, customkeys=None):
         symbols = ["X"] * natoms
 
     # --- create ASE Atoms ---
+    # positions are absolute (as written by LAMMPS); the box origin is kept
+    # in celldisp like ASE's own LAMMPS dump reader does
     atoms = ASEAtoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
+    atoms.set_celldisp(origin)
 
     # store LAMMPS metadata
     atoms.arrays["lammps_ids"] = ids
@@ -269,10 +271,12 @@ class Timeslice:
         None
 
         """
-        fout = open(outfile, mode)
-        for count, traj in enumerate(self.trajectories):
-            self.trajectories[count]._get_blocks_to_file(fout, self.blocklists[count])
-        fout.close()
+        # the lines carry their own newlines (copied from the source file or
+        # generated with "\n"); newline="" stops the text layer from turning
+        # them into "\r\n" on Windows
+        with open(outfile, mode, encoding="utf-8", newline="") as fout:
+            for count, traj in enumerate(self.trajectories):
+                self.trajectories[count]._get_blocks_to_file(fout, self.blocklists[count])
 
 
 class Trajectory:
@@ -373,10 +377,11 @@ class Trajectory:
         line_offset = []
         offset = 0
         nlines = 0
-        for line in open(self.filename, "rb"):
-            line_offset.append(offset)
-            offset += len(line)
-            nlines += 1
+        with open(self.filename, "rb") as fin:
+            for line in fin:
+                line_offset.append(offset)
+                offset += len(line)
+                nlines += 1
 
         self.nlines = nlines
         self.line_offset = line_offset
@@ -418,16 +423,12 @@ class Trajectory:
             list of strings containing data
         """
         start = blockno * self.blocksize
-        stop = (blockno + 1) * self.blocksize
-
-        fin = open(self.filename, "rb")
-        fin.seek(0)
-        fin.seek(self.line_offset[start])
 
         data = []
-        for i in range(self.blocksize):
-            line = fin.readline().decode("utf-8")
-            data.append(line)
+        with open(self.filename, "rb") as fin:
+            fin.seek(self.line_offset[start])
+            for i in range(self.blocksize):
+                data.append(fin.readline().decode("utf-8"))
         return data
 
     def load(self, blockno):
@@ -501,13 +502,13 @@ class Trajectory:
 
         data = []
         data.append("ITEM: TIMESTEP\n")
-        data.append("".join([str(0), os.linesep]))
+        data.append("".join([str(0), "\n"]))
         data.append("ITEM: NUMBER OF ATOMS\n")
-        data.append("".join([str(self.natoms), os.linesep]))
+        data.append("".join([str(self.natoms), "\n"]))
         data.append("ITEM: BOX BOUNDS pp pp pp\n")
         for b in dd["box"]:
             dstr = " ".join(b.astype(str))
-            data.append("".join([dstr, os.linesep]))
+            data.append("".join([dstr, "\n"]))
 
         xf = []
         xd = []
@@ -538,17 +539,16 @@ class Trajectory:
         if len(xf) > 0:
             for i in range(len(xf[0])):
                 dstr = " ".join((xf[:, i]).astype(str))
-                xfstrs.append("".join([dstr, os.linesep]))
+                xfstrs.append("".join([dstr, "\n"]))
 
         xfheader = " ".join(xfkeys)
         mainheader = " ".join([xdheader, xfheader])
-        mainheader = "".join([mainheader, os.linesep])
+        mainheader = "".join([mainheader, "\n"])
 
         data.append(mainheader)
 
         for i in range(len(xfstrs)):
             valstr = " ".join([xdstrs[i], xfstrs[i]])
-            # valstr = "".join([valstr, os.linesep])
             data.append(valstr)
 
         return data
@@ -577,17 +577,18 @@ class Trajectory:
 
     def _get_blocks_to_file(self, fout, blocklist):
         """
-        Get a series of blocks from the file as raw data
+        Write a series of blocks to an open file handle.
 
         Parameters
         ----------
-        blockno : int
-            number of the block to be read, starts from 0
+        fout : file object
+            open, writable file handle
+        blocklist : iterable of int
+            block numbers to write, starting from 0
 
         Returns
         -------
-        data : list
-            list of strings containing data
+        None
         """
         xl = [x for x in blocklist]
         xl = np.array(xl)

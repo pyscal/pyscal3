@@ -1,4 +1,5 @@
 #include "system.h"
+#include <cmath>
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -48,12 +49,9 @@ double get_abs_distance(vector<double> pos1, vector<double> pos2,
 
         //now check pbc
         //nearest image
-        if (diffx> box[0]/2.0) {diffx-=box[0];};
-        if (diffx<-box[0]/2.0) {diffx+=box[0];};
-        if (diffy> box[1]/2.0) {diffy-=box[1];};
-        if (diffy<-box[1]/2.0) {diffy+=box[1];};
-        if (diffz> box[2]/2.0) {diffz-=box[2];};
-        if (diffz<-box[2]/2.0) {diffz+=box[2];};
+        diffx -= box[0]*round(diffx/box[0]);   // nearest image, any distance
+        diffy -= box[1]*round(diffy/box[1]);   // nearest image, any distance
+        diffz -= box[2]*round(diffz/box[2]);   // nearest image, any distance
 
         //now divide by box vals - scale down the size
         diffx = diffx/box[0];
@@ -76,12 +74,9 @@ double get_abs_distance(vector<double> pos1, vector<double> pos2,
     }
     else{
         //nearest image
-        if (diffx> box[0]/2.0) {diffx-=box[0];};
-        if (diffx<-box[0]/2.0) {diffx+=box[0];};
-        if (diffy> box[1]/2.0) {diffy-=box[1];};
-        if (diffy<-box[1]/2.0) {diffy+=box[1];};
-        if (diffz> box[2]/2.0) {diffz-=box[2];};
-        if (diffz<-box[2]/2.0) {diffz+=box[2];};
+        diffx -= box[0]*round(diffx/box[0]);   // nearest image, any distance
+        diffy -= box[1]*round(diffy/box[1]);   // nearest image, any distance
+        diffz -= box[2]*round(diffz/box[2]);   // nearest image, any distance
         abs = sqrt(diffx*diffx + diffy*diffy + diffz*diffz);
     }
     return abs;
@@ -132,12 +127,9 @@ vector<double> remap_atom_into_box(vector<double> pos,
 
         //now check pbc
         //nearest image
-        if (dx < 0) {dx+=box[0];};
-        if (dx >= box[0]) {dx-=box[0];};
-        if (dy < 0) {dy+=box[1];};
-        if (dy >= box[1]) {dy-=box[1];};
-        if (dz < 0) {dz+=box[2];};
-        if (dz >= box[2]) {dz-=box[2];};
+        dx -= box[0]*floor(dx/box[0]);   // wrap into [0, L)
+        dy -= box[1]*floor(dy/box[1]);   // wrap into [0, L)
+        dz -= box[2]*floor(dz/box[2]);   // wrap into [0, L)
 
         //now divide by box vals - scale down the size
         dx = dx/box[0];
@@ -156,12 +148,9 @@ vector<double> remap_atom_into_box(vector<double> pos,
     }
     else{
         //nearest image
-        if (dx < 0) {dx+=box[0];};
-        if (dx >= box[0]) {dx-=box[0];};
-        if (dy < 0) {dy+=box[1];};
-        if (dy >= box[1]) {dy-=box[1];};
-        if (dz < 0) {dz+=box[2];};
-        if (dz >= box[2]) {dz-=box[2];};
+        dx -= box[0]*floor(dx/box[0]);   // wrap into [0, L)
+        dy -= box[1]*floor(dy/box[1]);   // wrap into [0, L)
+        dz -= box[2]*floor(dz/box[2]);   // wrap into [0, L)
     }
     
     vector<double> rpos;
@@ -200,12 +189,9 @@ vector<double> remap_and_displace_atom(vector<double> pos,
 
         //now check pbc
         //nearest image
-        if (dx < 0) {dx+=box[0];};
-        if (dx >= box[0]) {dx-=box[0];};
-        if (dy < 0) {dy+=box[1];};
-        if (dy >= box[1]) {dy-=box[1];};
-        if (dz < 0) {dz+=box[2];};
-        if (dz >= box[2]) {dz-=box[2];};
+        dx -= box[0]*floor(dx/box[0]);   // wrap into [0, L)
+        dy -= box[1]*floor(dy/box[1]);   // wrap into [0, L)
+        dz -= box[2]*floor(dz/box[2]);   // wrap into [0, L)
 
         //now divide by box vals - scale down the size
         dx = dx/box[0];
@@ -228,12 +214,9 @@ vector<double> remap_and_displace_atom(vector<double> pos,
     }
     else{
         //nearest image
-        if (dx < 0) {dx+=box[0];};
-        if (dx >= box[0]) {dx-=box[0];};
-        if (dy < 0) {dy+=box[1];};
-        if (dy >= box[1]) {dy-=box[1];};
-        if (dz < 0) {dz+=box[2];};
-        if (dz >= box[2]) {dz-=box[2];};
+        dx -= box[0]*floor(dx/box[0]);   // wrap into [0, L)
+        dy -= box[1]*floor(dy/box[1]);   // wrap into [0, L)
+        dz -= box[2]*floor(dz/box[2]);   // wrap into [0, L)
 
         dx = dx/box[0];
         dy = dy/box[1];
@@ -500,95 +483,112 @@ vector<int> cell_periodic(int i, int j, int k, int nx, int ny, int nz){
 }
 
 vector<cell> set_up_cells(const vector<vector<double>>& positions,
+    const int triclinic,
+    const vector<vector<double>>& rot,
+    const vector<vector<double>>& rotinv,
     const vector<double>& box,
     const double neighbordistance){
+    /*
+    Build a cell list for neighbor searching.
 
-      int maincell, subcell, total_cells;
-      int nx, ny, nz;
-      double lx, ly, lz;
-      vector<int> cc;
-      vector<cell> cells;
-      //find of all find the number of cells in each direction
-      nx = box[0]/neighbordistance;
-      ny = box[1]/neighbordistance;
-      nz = box[2]/neighbordistance;
-      
-      //now use this to find length of cell in each direction
-      lx = box[0]/nx;
-      ly = box[1]/ny;
-      lz = box[2]/nz;
-      
-      //find the total number of cells
-      total_cells = nx*ny*nz;
-      cells.resize(total_cells);
-      
-      //all neighbor cells are also added
-      for(int i=0; i<nx; i++){
-         for(int j=0; j<ny; j++){
-           for(int k=0; k<nz; k++){
-              maincell = cell_index(i, j, k, nx, ny, nz);
-              for(int si=i-1; si<=i+1; si++){
-                  for(int sj=j-1; sj<=j+1; sj++){
-                      for(int sk=k-1; sk<=k+1; sk++){
-                         cc = cell_periodic(si, sj, sk, nx, ny, nz);
-                         subcell = cell_index(cc[0], cc[1], cc[2], nx, ny, nz);
-                         //add this to the list of neighbors
-                         cells[maincell].neighbor_cells.emplace_back(subcell);
+    Atoms are binned by their wrapped *fractional* coordinates so that the
+    same code is correct for orthogonal and triclinic cells.  The number of
+    cells along each cell vector is chosen so that the perpendicular width
+    of one cell slab is at least `neighbordistance`; together with the +-1
+    stencil of neighbor cells this guarantees that every pair of atoms
+    closer than `neighbordistance` is compared.  With fewer than three
+    cells in a direction the stencil simply covers all cells.
+    */
+    int nx, ny, nz;
+    double width[3];
 
-                      }
-                  }
-              }
-           }
+    if (triclinic == 1){
+        // cell vectors are the columns of rot (rot = cell.T)
+        double a[3] = {rot[0][0], rot[1][0], rot[2][0]};
+        double b[3] = {rot[0][1], rot[1][1], rot[2][1]};
+        double c[3] = {rot[0][2], rot[1][2], rot[2][2]};
+        double bc[3] = {b[1]*c[2]-b[2]*c[1], b[2]*c[0]-b[0]*c[2], b[0]*c[1]-b[1]*c[0]};
+        double ca[3] = {c[1]*a[2]-c[2]*a[1], c[2]*a[0]-c[0]*a[2], c[0]*a[1]-c[1]*a[0]};
+        double ab[3] = {a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]};
+        double vol = fabs(a[0]*bc[0] + a[1]*bc[1] + a[2]*bc[2]);
+        width[0] = vol/sqrt(bc[0]*bc[0] + bc[1]*bc[1] + bc[2]*bc[2]);
+        width[1] = vol/sqrt(ca[0]*ca[0] + ca[1]*ca[1] + ca[2]*ca[2]);
+        width[2] = vol/sqrt(ab[0]*ab[0] + ab[1]*ab[1] + ab[2]*ab[2]);
+    }
+    else{
+        width[0] = box[0];
+        width[1] = box[1];
+        width[2] = box[2];
+    }
+
+    int ncells[3];
+    for (int k=0; k<3; k++){
+        ncells[k] = 1;
+        if (neighbordistance > 0 && width[k] > 0){
+            ncells[k] = int(width[k]/neighbordistance);
+        }
+        if (ncells[k] < 1) ncells[k] = 1;
+    }
+    nx = ncells[0];
+    ny = ncells[1];
+    nz = ncells[2];
+
+    int maincell, subcell, total_cells;
+    vector<int> cc;
+    vector<cell> cells;
+
+    total_cells = nx*ny*nz;
+    cells.resize(total_cells);
+
+    //all neighbor cells are also added
+    for(int i=0; i<nx; i++){
+       for(int j=0; j<ny; j++){
+         for(int k=0; k<nz; k++){
+            maincell = cell_index(i, j, k, nx, ny, nz);
+            for(int si=i-1; si<=i+1; si++){
+                for(int sj=j-1; sj<=j+1; sj++){
+                    for(int sk=k-1; sk<=k+1; sk++){
+                       cc = cell_periodic(si, sj, sk, nx, ny, nz);
+                       subcell = cell_index(cc[0], cc[1], cc[2], nx, ny, nz);
+                       //add this to the list of neighbors
+                       cells[maincell].neighbor_cells.emplace_back(subcell);
+                    }
+                }
+            }
          }
-      }
+       }
+    }
 
-      //clean up cell neighbors to remove duplicates
-      for(int i=0; i<total_cells; i++){
-        sort( cells[i].neighbor_cells.begin(), cells[i].neighbor_cells.end() );
-        cells[i].neighbor_cells.erase( unique( cells[i].neighbor_cells.begin(), cells[i].neighbor_cells.end() ), cells[i].neighbor_cells.end() );        
-      }
-      
-      int cx, cy, cz;
-      double dx, dy, dz;
-      int ind;
-      int nop = positions.size();
-      
-      //now loop over all atoms and assign cells
-      for(int ti=0; ti<nop; ti++){
+    //clean up cell neighbors to remove duplicates
+    for(int i=0; i<total_cells; i++){
+      sort( cells[i].neighbor_cells.begin(), cells[i].neighbor_cells.end() );
+      cells[i].neighbor_cells.erase( unique( cells[i].neighbor_cells.begin(), cells[i].neighbor_cells.end() ), cells[i].neighbor_cells.end() );
+    }
 
-          //calculate c indices for the atom
-          dx = positions[ti][0];
-          dy = positions[ti][1];
-          dz = positions[ti][2];
-          
-          //now apply boxdims
-          if( abs(dx-0) < 1E-6)
-              dx = 0;
-          if( abs(dy-0) < 1E-6)
-              dy = 0;
-          if( abs(dz-0) < 1E-6)
-              dz = 0;
-          
-          if (dx < 0) dx+=box[0];
-          else if (dx >= box[0]) dx-=box[0];
-          if (dy < 0) dy+=box[1];
-          else if (dy >= box[1]) dy-=box[1];
-          if (dz < 0) dz+=box[2];
-          else if (dz >= box[2]) dz-=box[2];
-          
-          //now find c vals
-          cx = dx/lx;
-          cy = dy/ly;
-          cz = dz/lz;
-          
-          //now get cell index
-          ind = cell_index(cx, cy, cz, nx, ny, nz);
-          //now add the atom to the corresponding cells
-          //cout<<"atom "<<ti<<" assigned to "<<ind<<endl;
-          cells[ind].members.emplace_back(ti);
-
-      }
-      return cells;
+    //now loop over all atoms and assign cells based on fractional coordinates
+    int nop = positions.size();
+    double frac[3];
+    int cidx[3];
+    for(int ti=0; ti<nop; ti++){
+        const double x = positions[ti][0];
+        const double y = positions[ti][1];
+        const double z = positions[ti][2];
+        for (int k=0; k<3; k++){
+            if (triclinic == 1){
+                frac[k] = rotinv[k][0]*x + rotinv[k][1]*y + rotinv[k][2]*z;
+            }
+            else{
+                frac[k] = (box[k] > 0) ? positions[ti][k]/box[k] : 0.0;
+            }
+            //wrap into [0, 1)
+            frac[k] -= floor(frac[k]);
+            cidx[k] = int(frac[k]*ncells[k]);
+            if (cidx[k] >= ncells[k]) cidx[k] = ncells[k]-1;
+            if (cidx[k] < 0) cidx[k] = 0;
+        }
+        cells[cell_index(cidx[0], cidx[1], cidx[2], nx, ny, nz)].members.emplace_back(ti);
+    }
+    return cells;
 }
 
 
@@ -617,7 +617,7 @@ void get_all_neighbors_cells(py::dict& atoms,
     vector<vector<double>> phi(nop);
     vector<vector<double>> theta(nop);
     vector<double> cutoff(nop); 
-    vector<cell> cells = set_up_cells(positions, box, neighbordistance);
+    vector<cell> cells = set_up_cells(positions, triclinic, rot, rotinv, box, neighbordistance);
     int total_cells = cells.size();
     int subcell;
     //now loop to find distance
@@ -723,7 +723,7 @@ void get_all_neighbors_shell_cells(py::dict& atoms,
     vector<vector<double>> phi(nop);
     vector<vector<double>> theta(nop);
     vector<double> cutoff(nop); 
-    vector<cell> cells = set_up_cells(positions, box, dmax);
+    vector<cell> cells = set_up_cells(positions, triclinic, rot, rotinv, box, dmax);
     int total_cells = cells.size();
     int subcell;
     //now loop to find distance
@@ -847,7 +847,7 @@ void get_temp_neighbors_cells(const vector<vector<double>>& positions,
     const vector<double>& box){
 
     //first create cells
-    vector<cell> cells = set_up_cells(positions, box, neighbordistance);
+    vector<cell> cells = set_up_cells(positions, triclinic, rot, rotinv, box, neighbordistance);
     int total_cells = cells.size();
     int subcell;
     int ti, tj;
@@ -943,7 +943,7 @@ int get_all_neighbors_bynumber(py::dict& atoms,
         c1 = rot[0][2];
         c2 = rot[1][2];
         c3 = rot[2][2];
-        boxvol = c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1);
+        boxvol = fabs(c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1));
     }
     else{
         boxvol = box[0]*box[1]*box[2];
@@ -1074,7 +1074,7 @@ int get_all_neighbors_sann(py::dict& atoms,
         c1 = rot[0][2];
         c2 = rot[1][2];
         c3 = rot[2][2];
-        boxvol = c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1);
+        boxvol = fabs(c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1));
     }
     else{
         boxvol = box[0]*box[1]*box[2];
@@ -1138,14 +1138,17 @@ int get_all_neighbors_sann(py::dict& atoms,
             //n_neighbors += 1;
         }
 
-        dcut = summ/float(m-2);
+        dcut = summ/double(m-2);
+        cutoff[ti] = dcut;
         maxneighs = temp_neighbors[ti].size();
 
+        // SANN (van Meel et al., J. Chem. Phys. 136, 234107): with the
+        // candidates sorted by distance, the first m atoms are neighbours
+        // where m is the smallest value for which
+        //     R(m) = sum_{i<=m} r_i / (m - 2)  <  r_{m+1}.
+        // `m` counts the neighbours already accepted; temp_neighbors[ti][m]
+        // is the next candidate.
         while( (m < maxneighs) && (dcut >= temp_neighbors[ti][m].dist)){
-            //increase m
-            m = m+1;
-
-            //here now we can add this to the list neighbors and process things
             int tj = temp_neighbors[ti][m].index;
             d = get_abs_distance(positions[ti], positions[tj],
                 triclinic, rot, rotinv, box, 
@@ -1166,11 +1169,11 @@ int get_all_neighbors_sann(py::dict& atoms,
             r[ti].emplace_back(tempr);
             phi[ti].emplace_back(tempphi);
             theta[ti].emplace_back(temptheta);
-            //n_neighbors += 1;        
 
-            //find new dcut
+            //accept this candidate and find the new dcut
             summ = summ + temp_neighbors[ti][m].dist;
-            dcut = summ/float(m-2);
+            m = m+1;
+            dcut = summ/double(m-2);
             cutoff[ti] = dcut;
         }
 
@@ -1252,7 +1255,7 @@ int get_all_neighbors_adaptive(py::dict& atoms,
         c1 = rot[0][2];
         c2 = rot[1][2];
         c3 = rot[2][2];
-        boxvol = c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1);
+        boxvol = fabs(c1*(a2*b3-a3*b2) - c2*(a1*b3-b1*a3) + c3*(a1*b2-a2*b1));
     }
     else{
         boxvol = box[0]*box[1]*box[2];

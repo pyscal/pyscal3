@@ -34,3 +34,19 @@ def test_voronoi_vector_fcc():
     pyscal3.find_neighbors(atoms, method="voronoi")
     vv = pyscal3.voronoi_vector(atoms)
     assert vv[0][1] == 12  # 12 square faces for FCC
+
+
+def test_voronoi_cutoff_is_farthest_neighbor():
+    atoms = make_crystal("fcc", lattice_constant=4.0, repetitions=(4, 4, 4))
+    pyscal3.find_neighbors(atoms, method="voronoi")
+    dists = atoms.arrays["pyscal_neighbordist"]
+    assert np.allclose(atoms.arrays["pyscal_cutoff"], dists.max(axis=1))
+
+
+def test_find_solids_clusters_with_voronoi_neighbors():
+    """Regression: the Voronoi cutoff was the equal-volume sphere radius,
+    smaller than any neighbour distance, so no atom could join a cluster."""
+    atoms = make_crystal("fcc", lattice_constant=4.0, repetitions=(4, 4, 4))
+    pyscal3.find_neighbors(atoms, method="voronoi")
+    largest = pyscal3.find_solids(atoms, bonds=6, threshold=0.5, avgthreshold=0.6, cluster=True)
+    assert largest == len(atoms)

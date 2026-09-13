@@ -23,6 +23,9 @@ from pyscal3._bridge import (
     atoms_to_dict,
     dict_to_atoms,
     pad_atoms_for_neighbor_finding,
+    guess_cutoff,
+    clear_neighbor_data,
+    effective_periodic_cell,
 )
 
 
@@ -50,7 +53,10 @@ def find_neighbors(
         Neighbor finding algorithm.
     cutoff : float or str
         Cutoff distance. Use 'sann' or 'adaptive' for adaptive methods.
-        0 defaults to adaptive.
+        0 defaults to adaptive. For ``method='voronoi'`` a positive value
+        is the distance below which Voronoi vertices are merged into the
+        unique interstitial sites stored in
+        ``atoms.info["pyscal_unique_vertices"]``.
     shell_thickness : float, optional
         If > 0, find neighbors in a shell [cutoff, cutoff+shell_thickness].
     threshold : float, optional
@@ -71,37 +77,53 @@ def find_neighbors(
     Returns
     -------
     None
-        Results are stored in-place on the ``atoms`` object:
+        Results are stored in-place on the ``atoms`` object with the
+        ``pyscal_`` prefix. Per-atom data whose shape is the same for every
+        atom is stored in ``atoms.arrays``; ragged data (atoms with
+        different numbers of neighbors) and arrays with three or more
+        dimensions are stored in ``atoms.info`` under the same key. Any
+        neighbor-derived key from a previous search is removed first.
 
-        - ``atoms.arrays["pyscal_neighbors"]`` — neighbor indices (natoms, max_neighbors)
-        - ``atoms.arrays["pyscal_neighbordist"]`` — neighbor distances
-        - ``atoms.arrays["pyscal_theta"]`` — polar angles to neighbors
-        - ``atoms.arrays["pyscal_phi"]`` — azimuthal angles to neighbors
-        - ``atoms.info["pyscal_neighbors_found"]`` — set to True
-        - ``atoms.info["pyscal_neighbor_method"]`` — the method used
+        - ``pyscal_neighbors`` — neighbor indices
+        - ``pyscal_neighbordist`` — neighbor distances
+        - ``pyscal_neighborweight`` — weights (1, or Voronoi face-area
+          fractions)
+        - ``pyscal_r``, ``pyscal_theta``, ``pyscal_phi`` — spherical
+          coordinates of the neighbor vectors
+        - ``pyscal_diff`` — neighbor vectors, shape (natoms, nn, 3), always in
+          ``atoms.info``
+        - ``pyscal_cutoff`` — per-atom cutoff that was used
+        - ``pyscal_neighbors_found`` (True) and ``pyscal_neighbor_method`` in
+          ``atoms.info``
 
-        For Voronoi, additional keys include ``face_vertices``, ``face_perimeters``,
-        ``face_areas``, ``vertex_vectors``, and ``voronoivol``.
+        The Voronoi method additionally stores ``pyscal_voronoi_volume``,
+        ``pyscal_face_vertices``, ``pyscal_face_perimeters``,
+        ``pyscal_vertex_vectors``, ``pyscal_vertex_numbers`` and
+        ``pyscal_vertex_positions``.
     """
     if threshold < 1:
         raise ValueError("threshold must be >= 1.0")
 
-    # Use ghost padding for small cells
-    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(atoms)
-    natoms = len(d["positions"])
+    # drop everything derived from a previous neighbor search
+    clear_neighbor_data(atoms)
 
-    if cells is None:
-        cells = natoms > 250
-
-    # Reset existing neighbor data
-    _reset_neighbors(d)
+    def _prepare(pad_cutoff):
+        """Pad the cell for the given search radius and reset neighbor data."""
+        d, box_params, nreal = pad_atoms_for_neighbor_finding(atoms, cutoff=pad_cutoff)
+        natoms = len(d["positions"])
+        use_cells = (natoms > 250) if cells is None else bool(cells)
+        _reset_neighbors(d)
+        return d, box_params, nreal, use_cells
 
     if method == "cutoff":
         if cutoff == "sann":
             finished = False
             for i in range(1, 10):
+                d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(
+                    guess_cutoff(atoms, threshold * i)
+                )
                 finished = pc.get_all_neighbors_sann(
-                    d, 0.0, triclinic, rot, rotinv, boxdims, threshold * i, cells
+                    d, 0.0, triclinic, rot, rotinv, boxdims, threshold * i, use_cells
                 )
                 if finished:
                     if i > 1:
@@ -119,6 +141,9 @@ def find_neighbors(
                 )
 
         elif cutoff == "adaptive" or (cutoff == 0 and shell_thickness == 0):
+            d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(
+                guess_cutoff(atoms, threshold)
+            )
             finished = pc.get_all_neighbors_adaptive(
                 d,
                 0.0,
@@ -129,7 +154,7 @@ def find_neighbors(
                 threshold,
                 nlimit,
                 padding,
-                cells,
+                use_cells,
             )
             if not bool(finished):
                 raise RuntimeError("Could not find adaptive cutoff")
@@ -138,8 +163,11 @@ def find_neighbors(
             if cutoff == 0 and shell_thickness > 0:
                 cutoff = shell_thickness
                 shell_thickness = 0
+            d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(
+                cutoff + shell_thickness
+            )
             if shell_thickness == 0:
-                if cells:
+                if use_cells:
                     pc.get_all_neighbors_cells(
                         d, cutoff, triclinic, rot, rotinv, boxdims
                     )
@@ -148,7 +176,7 @@ def find_neighbors(
                         d, cutoff, triclinic, rot, rotinv, boxdims
                     )
             else:
-                if cells:
+                if use_cells:
                     pc.get_all_neighbors_shell_cells(
                         d,
                         cutoff,
@@ -170,6 +198,9 @@ def find_neighbors(
                     )
 
     elif method == "number":
+        d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(
+            guess_cutoff(atoms, threshold)
+        )
         finished = pc.get_all_neighbors_bynumber(
             d,
             0.0,
@@ -179,7 +210,7 @@ def find_neighbors(
             boxdims,
             threshold,
             nmax,
-            cells,
+            use_cells,
             assign_neighbor,
         )
         if not finished:
@@ -188,13 +219,8 @@ def find_neighbors(
             )
 
     elif method == "voronoi":
+        d, (triclinic, rot, rotinv, boxdims), nreal, use_cells = _prepare(None)
         pc.get_all_neighbors_voronoi(d, 0.0, triclinic, rot, rotinv, boxdims, voroexp)
-
-        if cutoff > 0:
-            unique_vertices = pc.clean_voronoi_vertices(
-                d, triclinic, rot, rotinv, boxdims, cutoff
-            )
-            atoms.info["pyscal_unique_vertices"] = unique_vertices
 
     else:
         raise ValueError(
@@ -206,10 +232,55 @@ def find_neighbors(
     atoms.info["pyscal_neighbors_found"] = True
     atoms.info["pyscal_neighbor_method"] = method
 
+    if method == "voronoi" and isinstance(cutoff, (int, float)) and cutoff > 0:
+        # merge Voronoi vertices closer than `cutoff` into unique sites
+        atoms.info["pyscal_unique_vertices"] = _unique_voronoi_vertices(
+            atoms, d["vertex_positions"][:nreal], cutoff
+        )
+
+
+def _unique_voronoi_vertices(atoms: Atoms, vertex_positions, cutoff):
+    """Merge the Voronoi vertices of all atoms into unique sites.
+
+    Vertices closer than ``cutoff`` (under the periodic boundary conditions
+    of ``atoms``) are considered the same site; one representative per
+    group is returned, wrapped into the cell. A Voronoi vertex is shared by
+    every cell meeting there, which are not necessarily Voronoi neighbours
+    of each other, so the merge has to be done over all vertices.
+    """
+    from ase.neighborlist import neighbor_list
+
+    pts = [np.asarray(v, dtype=float).reshape(-1, 3) for v in vertex_positions if len(v)]
+    if not pts:
+        return np.zeros((0, 3))
+    pts = np.concatenate(pts)
+
+    work_cell, _ = effective_periodic_cell(atoms, cutoff)
+    dummy = Atoms(positions=pts, cell=work_cell, pbc=True)
+    dummy.wrap()
+    i, j = neighbor_list("ij", dummy, cutoff)
+
+    # union-find over the close pairs
+    parent = np.arange(len(pts))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for a, b in zip(i, j):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+    roots = np.array([find(a) for a in range(len(pts))])
+    return dummy.positions[np.unique(roots)]
+
 
 def get_distance(atoms: Atoms, pos1, pos2, vector=False):
     """
-    Get the distance between two positions respecting periodic boundaries.
+    Get the distance between two positions respecting periodic boundaries
+    (non-periodic directions of ``atoms`` are not wrapped).
 
     Parameters
     ----------
@@ -225,7 +296,13 @@ def get_distance(atoms: Atoms, pos1, pos2, vector=False):
     float or (float, list)
         Distance, and optionally the displacement vector.
     """
-    triclinic, rot, rotinv, boxdims = get_box_params(atoms)
+    plain = float(np.linalg.norm(np.asarray(pos2, float) - np.asarray(pos1, float)))
+    work_cell, periodic = effective_periodic_cell(atoms, max(plain, 1.0))
+    if periodic.all():
+        triclinic, rot, rotinv, boxdims = get_box_params(atoms)
+    else:
+        work = Atoms(cell=work_cell, pbc=True)
+        triclinic, rot, rotinv, boxdims = get_box_params(work)
     diff = pc.get_distance_vector(
         list(pos1), list(pos2), triclinic, rot, rotinv, boxdims
     )

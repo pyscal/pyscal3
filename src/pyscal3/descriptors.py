@@ -15,6 +15,10 @@ Example
 >>> print(atoms.arrays["pyscal_q4"])
 """
 
+import math
+import functools
+import numbers
+import warnings
 import numpy as np
 import itertools
 from scipy.spatial import cKDTree
@@ -29,6 +33,7 @@ from pyscal3._bridge import (
     ensure_neighbors,
     create_attribute,
     pad_atoms_for_neighbor_finding,
+    guess_cutoff,
 )
 from pyscal3.neighbors import find_neighbors
 
@@ -90,12 +95,30 @@ def _sync_back(d: dict, atoms: Atoms, keys: list):
         store_key = "pyscal_" + key
         try:
             arr = np.asarray(d[key])
-            if arr.ndim >= 1 and len(arr) == n and arr.dtype.kind != "O":
+            if 1 <= arr.ndim <= 2 and len(arr) == n and arr.dtype.kind != "O":
                 atoms.arrays[store_key] = arr
                 continue
         except (ValueError, TypeError):
             pass
         atoms.info[store_key] = d[key]
+
+
+def _periodic_volume(atoms, name):
+    """Cell volume for density-based descriptors; requires full periodicity."""
+    volume = abs(np.linalg.det(np.asarray(atoms.cell)))
+    if not np.all(atoms.pbc) or volume <= 0:
+        raise ValueError(
+            f"{name} needs the global density N/V and therefore a fully "
+            "periodic cell (all pbc True, non-zero volume)."
+        )
+    return volume
+
+
+def _as_int_list(l):
+    """Normalise an int / numpy integer / iterable of them to a list of ints."""
+    if isinstance(l, numbers.Integral):
+        return [int(l)]
+    return [int(v) for v in l]
 
 
 # ---------------------------------------------------------------------------
@@ -121,10 +144,7 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     list of numpy arrays
         One array per requested l value, each of shape (natoms,).
     """
-    if isinstance(l, int):
-        ll = [l]
-    else:
-        ll = list(l)
+    ll = _as_int_list(l)
 
     d = _get_dict_with_neighbors(atoms)
 
@@ -203,10 +223,7 @@ def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
       - ICO (Mackay): −0.16975
       - Liquid: ≈ 0
     """
-    if isinstance(l, int):
-        ll = [l]
-    else:
-        ll = list(l)
+    ll = _as_int_list(l)
 
     d = _get_dict_with_neighbors(atoms)
 
@@ -398,7 +415,9 @@ def common_neighbor_analysis(atoms: Atoms, lattice_constant=None):
     dict
         Counts: {"fcc": n, "hcp": n, "bcc": n, "ico": n, "others": n}
     """
-    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(atoms)
+    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(
+        atoms, cutoff=guess_cutoff(atoms, 2)
+    )
     n = len(d["positions"])
 
     # Create structure attribute
@@ -445,7 +464,9 @@ def diamond_structure(atoms: Atoms):
     dict
         Counts per structure type.
     """
-    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(atoms)
+    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(
+        atoms, cutoff=guess_cutoff(atoms, 2)
+    )
     n = len(d["positions"])
 
     d["structure"] = [0] * n
@@ -548,7 +569,8 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
 
 
 def entropy(
-    atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001, local=False, average=False
+    atoms: Atoms, rm, sigma=0.2, rstart=0.001, h=0.001, local=False, average=False,
+    averaged=None,
 ):
     """
     Calculate the entropy parameter for each atom.
@@ -566,20 +588,44 @@ def entropy(
     h : float, optional
         Integration step (trapezoidal). Default 0.001.
     local : bool, optional
-        Use local density instead of global. Default False.
+        If True, use the local density of each atom,
+        ``n_i / (4/3 pi r_c,i^3)`` with ``r_c,i`` its neighbor cutoff,
+        instead of the global density N/V. Default False.
     average : bool, optional
         Compute neighbor-averaged entropy. Default False.
+    averaged : bool, optional
+        Alias of ``average`` for consistency with the other descriptors.
 
     Returns
     -------
     numpy array
-        Per-atom entropy (or averaged entropy) values.
+        Per-atom entropy (or averaged entropy) values, also stored as
+        ``atoms.arrays["pyscal_entropy"]`` / ``"pyscal_average_entropy"``.
+
+    Notes
+    -----
+    Only atoms in the neighbor list contribute to :math:`g_m^i(r)`, so the
+    neighbor cutoff should be at least ``rm``; a warning is issued
+    otherwise.
     """
+    if averaged is not None:
+        average = averaged
+
     d = _get_dict_with_neighbors(atoms)
 
     n = len(atoms)
-    volume = abs(np.linalg.det(atoms.cell))
+    volume = _periodic_volume(atoms, "entropy")
     kb = 1
+
+    cutoffs = np.asarray(d.get("cutoff", []), dtype=float)
+    if cutoffs.size > 0 and np.max(cutoffs) > 0 and rm > np.max(cutoffs) * (1 + 1e-9):
+        warnings.warn(
+            "entropy: rm=%.3f is larger than the neighbor cutoff (%.3f). "
+            "g(r) is zero beyond the cutoff, so the result depends on it; "
+            "compute neighbors with a cutoff >= rm." % (rm, np.max(cutoffs)),
+            UserWarning,
+            stacklevel=2,
+        )
 
     if local:
         rho = 0
@@ -606,35 +652,85 @@ def entropy(
 # ---------------------------------------------------------------------------
 
 
-def short_range_order(atoms: Atoms, reference_type=1, compare_type=2, average=True):
+def _resolve_atomic_number(value):
+    """Accept an atomic number or a chemical symbol."""
+    if isinstance(value, str):
+        from ase.data import atomic_numbers
+
+        try:
+            return int(atomic_numbers[value])
+        except KeyError:
+            raise ValueError(f"Unknown chemical symbol '{value}'") from None
+    return int(value)
+
+
+def short_range_order(atoms: Atoms, reference_type=None, compare_type=None, average=True):
     """
-    Calculate Warren-Cowley short-range order parameter.
+    Calculate the Warren-Cowley short-range order parameter.
+
+    For atoms *i* of the reference type A,
+
+    .. math::
+
+        \\alpha_{AB}(i) = 1 - \\frac{p_{AB}(i)}{c_B}
+
+    where :math:`p_{AB}(i)` is the fraction of neighbors of *i* that are of
+    the compare type B and :math:`c_B` is the global concentration of B.
+    :math:`\\alpha < 0` indicates chemical ordering (unlike neighbors
+    preferred), :math:`\\alpha > 0` clustering, and :math:`\\alpha = 0`
+    random mixing. Choosing B = A gives the like-pair parameter.
 
     Parameters
     ----------
     atoms : ase.Atoms
         Structure with neighbors computed.
-    reference_type : int, optional
-        Atomic number of reference type. Default 1.
-    compare_type : int, optional
-        Atomic number to compare. Default 2.
+    reference_type : int or str, optional
+        Atomic number or chemical symbol of the reference species A.
+        Default: the most abundant species.
+    compare_type : int or str, optional
+        Atomic number or chemical symbol of the species B counted among the
+        neighbors. Default: the most abundant species other than A.
     average : bool, optional
-        If True, return system average. Default True.
+        If True, return the mean over all atoms of type A. Default True.
 
     Returns
     -------
-    numpy array or float
-        Per-atom SRO values, or system average.
+    float or numpy array
+        System average, or per-atom values (NaN for atoms that are not of
+        the reference type). Per-atom values are stored in
+        ``atoms.arrays["pyscal_sro"]``.
     """
     d = _get_dict_with_neighbors(atoms)
 
-    pc.calculate_short_range_order(d, reference_type, compare_type)
+    numbers = atoms.get_atomic_numbers()
+    unique, counts = np.unique(numbers, return_counts=True)
+    by_abundance = [int(z) for z in unique[np.argsort(-counts, kind="stable")]]
 
-    sro = np.array(d["sro"])
+    if reference_type is None:
+        reference_type = by_abundance[0]
+    ref = _resolve_atomic_number(reference_type)
+    if compare_type is None:
+        others = [z for z in by_abundance if z != ref]
+        if not others:
+            raise ValueError(
+                "short_range_order needs at least two species; pass "
+                "reference_type and compare_type explicitly for a single species."
+            )
+        compare_type = others[0]
+    cmp = _resolve_atomic_number(compare_type)
+
+    if ref not in unique:
+        raise ValueError(f"No atoms of reference type {ref} in the structure")
+    if cmp not in unique:
+        raise ValueError(f"No atoms of compare type {cmp} in the structure")
+
+    pc.calculate_short_range_order(d, ref, cmp)
+
+    sro = np.array(d["sro"], dtype=float)
     atoms.arrays["pyscal_sro"] = sro
 
     if average:
-        return float(np.mean(sro))
+        return float(np.nanmean(sro))
     return sro
 
 
@@ -659,23 +755,30 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     Returns
     -------
     (rdf, r) : tuple of numpy arrays
+        ``rdf`` is g(r) normalised such that it tends to 1 for an ideal gas
+        and ``rho * int g(r) 4 pi r^2 dr`` is the number of neighbors;
+        ``r`` holds the left edges of the bins.
+
+    Notes
+    -----
+    This function recomputes the neighbor list with a fixed cutoff of
+    ``rmax`` and overwrites any existing neighbor data on ``atoms``.
     """
     find_neighbors(atoms, method="cutoff", cutoff=rmax)
     d = atoms_to_dict(atoms)
 
-    distances = np.concatenate(d["neighbordist"])
-    hist, bin_edges = np.histogram(
-        distances, bins=bins, range=(rmin, rmax), density=True
-    )
+    distances = np.concatenate([np.asarray(row) for row in d["neighbordist"]])
+    counts, bin_edges = np.histogram(distances, bins=bins, range=(rmin, rmax))
 
     edgewidth = abs(bin_edges[1] - bin_edges[0])
     r = bin_edges[:-1]
     n = len(atoms)
-    volume = abs(np.linalg.det(atoms.cell))
+    volume = _periodic_volume(atoms, "radial_distribution_function")
     rho = n / volume
 
+    # g(r) = <number of pairs in shell> / (N * rho * V_shell)
     shell_vols = (4.0 / 3.0) * np.pi * ((r + edgewidth) ** 3 - r**3)
-    rdf = (hist / shell_vols) / rho
+    rdf = counts / (n * rho * shell_vols)
 
     return rdf, r
 
@@ -863,9 +966,11 @@ def identify_ackland_jones(atoms: Atoms):
 
     The algorithm follows Ackland & Jones, *Phys. Rev. B* **73**, 054104
     (2006), adapted for the 9-bin chi scheme used by pyscal3.
+
     Parameters
     ----------
-    atoms : ase.Atoms        Structure with neighbors already computed (via
+    atoms : ase.Atoms
+        Structure with neighbors already computed (via
         :func:`pyscal3.find_neighbors`).
 
     Returns
@@ -884,8 +989,10 @@ def identify_ackland_jones(atoms: Atoms):
         =====  ==========
 
     names : list of str
-        Human-readable name for each atom (``"fcc"``, ``"hcp"``, etc.).
-        Also stored in ``atoms.arrays["pyscal_structure"]``.
+        Human-readable name for each atom: ``"fcc"``, ``"hcp"``, ``"bcc"``,
+        ``"ico"`` or ``"other"``. The labels are stored in
+        ``atoms.arrays["pyscal_ackland_label"]`` and the names in
+        ``atoms.arrays["pyscal_structure"]``.
 
     Notes
     -----
@@ -950,6 +1057,8 @@ def identify_ackland_jones(atoms: Atoms):
 
     return labels, names
 
+
+# ---------------------------------------------------------------------------
 # Deformation Descriptors (require reference configuration)
 # ---------------------------------------------------------------------------
 
@@ -1011,9 +1120,11 @@ def atomic_strain(atoms: Atoms, reference: Atoms):
     The local deformation gradient F is computed by minimizing the
     squared difference between reference and deformed neighbor vectors.
     The Lagrangian strain is then E = (F^T F - I) / 2.
+
     Parameters
     ----------
-    atoms : ase.Atoms        Deformed configuration with neighbors computed.
+    atoms : ase.Atoms
+        Deformed configuration with neighbors computed.
     reference : ase.Atoms
         Reference (undeformed) configuration with the same neighbor list.
 
@@ -1168,9 +1279,18 @@ def slip_vector(atoms: Atoms, reference: Atoms):
     """
     Compute the slip vector for each atom.
 
-    The slip vector s_i = (1/N_s) sum_j (dX_ij - dx_ij) is the average
-    difference between reference and current displacement vectors,
-    without fitting an affine transformation.
+    The slip vector is the mean change of the neighbor vectors between the
+    reference and the current configuration,
+
+        s_i = (1/N_i) sum_j (r_ij - R_ij),
+
+    taken over all neighbors j that appear in both neighbor lists, without
+    fitting an affine transformation. Unlike the original definition of
+    Zimmerman et al., no threshold is applied to select "slipped"
+    neighbors, and the sign convention is r - R. For a homogeneous affine
+    deformation the contributions of symmetric neighbor pairs cancel and
+    the slip vector vanishes; it is non-zero where neighbors have moved
+    relative to each other (dislocation cores, stacking faults).
 
     Parameters
     ----------
@@ -1300,11 +1420,17 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
         If True, return largest cluster size.
     cutoff : float
         Cluster cutoff (0 = use neighbor cutoff).
+    d : dict, optional
+        Internal: atom dict already built from ``atoms`` (used by
+        :func:`find_solids` to avoid rebuilding it).
 
     Returns
     -------
-    int
-        Largest cluster size if largest=True.
+    int or None
+        Largest cluster size if largest=True, else None. Cluster ids are
+        stored in ``atoms.arrays["pyscal_cluster"]`` (-1 for atoms that do
+        not satisfy the condition) and, if largest=True, a boolean mask of
+        the largest cluster in ``atoms.arrays["pyscal_largest_cluster"]``.
     """
     if d is None:
         d = _get_dict_with_neighbors(atoms)
@@ -1343,7 +1469,9 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     atoms : ase.Atoms
         Structure with neighbors computed.
     key : str
-        Key in atoms.arrays (with or without 'pyscal_' prefix).
+        Name of a per-atom property: a pyscal result with or without the
+        ``pyscal_`` prefix (``"q6"`` and ``"pyscal_q6"`` are equivalent) or
+        any other key of ``atoms.arrays``.
     include_self : bool
         Include the atom itself in the average. Default True.
 
@@ -1353,13 +1481,12 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     """
     d = _get_dict_with_neighbors(atoms)
 
-    # Find the data
-    lookup = key
-    if key not in d and "pyscal_" + key in atoms.arrays:
-        lookup = key
-        values = atoms.arrays["pyscal_" + key]
-    elif key in d:
-        values = np.array(d[key])
+    # Find the data: pyscal keys are stored in d without the prefix
+    plain = key[len("pyscal_"):] if key.startswith("pyscal_") else key
+    if plain in d:
+        values = np.array(d[plain])
+    elif key in atoms.arrays:
+        values = atoms.arrays[key]
     else:
         raise KeyError(f"Property '{key}' not found")
 
@@ -1587,9 +1714,14 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     d["phi"] = [[] for _ in range(n)]
     d["cutoff"] = [0.0] * n
 
-    pc.get_all_neighbors_bynumber(
+    finished = pc.get_all_neighbors_bynumber(
         d, 0.0, triclinic, rot, rotinv, boxdims, 2, nmax, (n > 250), False
     )
+    if not finished:
+        raise RuntimeError(
+            "Could not find %d neighbor candidates for every atom; "
+            "the structure may be too sparse or contain isolated atoms." % nmax
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1772,13 +1904,40 @@ def _ace_b_basis_nu2(A, nmax, lmax):
     return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
 
 
+@functools.lru_cache(maxsize=None)
+def _wigner_3j(j1, j2, j3, m1, m2, m3):
+    """Wigner 3j symbol (j1 j2 j3; m1 m2 m3) for integer arguments (Racah formula)."""
+    if m1 + m2 + m3 != 0:
+        return 0.0
+    if j3 < abs(j1 - j2) or j3 > j1 + j2:
+        return 0.0
+    if abs(m1) > j1 or abs(m2) > j2 or abs(m3) > j3:
+        return 0.0
+    f = math.factorial
+    delta = f(j1 + j2 - j3) * f(j1 - j2 + j3) * f(-j1 + j2 + j3) / f(j1 + j2 + j3 + 1)
+    pref = math.sqrt(
+        delta * f(j1 + m1) * f(j1 - m1) * f(j2 + m2) * f(j2 - m2) * f(j3 + m3) * f(j3 - m3)
+    )
+    tmin = max(0, j2 - j3 - m1, j1 - j3 + m2)
+    tmax = min(j1 + j2 - j3, j1 - m1, j2 + m2)
+    total = 0.0
+    for t in range(tmin, tmax + 1):
+        total += (-1) ** t / (
+            f(t) * f(j1 + j2 - j3 - t) * f(j1 - m1 - t) * f(j2 + m2 - t)
+            * f(j3 - j2 + m1 + t) * f(j3 - j1 - m2 + t)
+        )
+    return (-1) ** (j1 - j2 - m3) * pref * total
+
+
 def _ace_b_basis_nu3(A, nmax, lmax):
     """Compute nu=3 B-basis (bispectrum-like triplet correlations).
     
-    B^{(3)} = sum_{m1,m2,m3} C_{l1,l2,l3}^{m1,m2,m3} * A_{n1,l1,m1} * A_{n2,l2,m2} * A_{n3,l3,m3}
+    B^{(3)}_{n1 n2 n3 l1 l2 l3} = sum_{m1+m2+m3=0}
+        (l1 l2 l3; m1 m2 m3) * A_{n1,l1,m1} * A_{n2,l2,m2} * A_{n3,l3,m3}
     
-    where the coupling coefficient ensures rotational invariance (total L=0).
-    For simplicity, we use the constraint m1 + m2 + m3 = 0 with equal weights.
+    where (l1 l2 l3; m1 m2 m3) is the Wigner 3j symbol, which couples the
+    three A-functions to total angular momentum L=0 and thereby makes the
+    descriptor rotationally invariant.
     
     This captures 3-body angular correlations.
     
@@ -1820,12 +1979,15 @@ def _ace_b_basis_nu3(A, nmax, lmax):
                                     m3 = -(m1 + m2)  # Enforce m1+m2+m3=0
                                     if abs(m3) > l3:
                                         continue
+                                    w3j = _wigner_3j(l1, l2, l3, m1, m2, m3)
+                                    if w3j == 0.0:
+                                        continue
                                     
-                                    # Product of three A-functions
+                                    # 3j-coupled product of three A-functions
                                     prod = (A[:, n1, l1, m1 + lmax] *
                                             A[:, n2, l2, m2 + lmax] *
                                             A[:, n3, l3, m3 + lmax])
-                                    B_desc += np.real(prod)
+                                    B_desc += w3j * np.real(prod)
                             
                             # Always append so the descriptor count is a
                             # deterministic function of (nmax, lmax) — needed
@@ -1864,10 +2026,13 @@ def ace(atoms: Atoms, nmax=4, lmax=4, nu_max=2, cutoff=None, normalize=True):
         - nu=3: Triplet correlations (bispectrum)
         Higher orders rapidly increase descriptor count.
     cutoff : float, optional
-        Neighbor cutoff radius. If None, uses the cutoff from
-        find_neighbors.
+        Radial cutoff of the basis. If None, uses the cutoff from
+        find_neighbors. Neighbors must have been computed with
+        :func:`find_neighbors` beforehand; only neighbors inside the
+        neighbor list contribute.
     normalize : bool, default True
-        If True, normalize descriptors to unit norm per atom.
+        If True, divide each atom's descriptor vector by its L2 norm
+        (per-atom normalisation across features).
         
     Returns
     -------
@@ -1890,7 +2055,8 @@ def ace(atoms: Atoms, nmax=4, lmax=4, nu_max=2, cutoff=None, normalize=True):
     .. [1] Drautz, R. (2019). "Atomic cluster expansion for accurate and 
            transferable interatomic potentials." Phys. Rev. B 99, 014104.
     .. [2] Dusson et al. (2022). "Atomic cluster expansion: Completeness,
-           efficiency and stability." J. Comput. Phys.    
+           efficiency and stability." J. Comput. Phys.
+
     Examples
     --------
     >>> from ase.build import bulk
@@ -2014,7 +2180,8 @@ def wigner_seitz_analysis(
     
     The algorithm uses nearest-neighbor search via cKDTree. For periodic
     systems, reference sites near cell boundaries are replicated to handle
-    atoms that may have wrapped to different periodic images.    
+    atoms that may have wrapped to different periodic images.
+
     Examples
     --------
     >>> from ase.build import bulk
@@ -2049,9 +2216,15 @@ def wigner_seitz_analysis(
     # Handle periodicity by replicating reference sites near boundaries
     # We'll use the reference cell for PBC handling
     ref_cell = reference.get_cell()
-    pbc = reference.get_pbc()
+    pbc = np.asarray(reference.get_pbc(), dtype=bool)
     
     if any(pbc) and ref_cell.any():
+        # Wrap the displaced atoms into the reference cell along the periodic
+        # directions so that atoms that drifted several cells away (unwrapped
+        # trajectories) are still matched to the right site.
+        frac = np.linalg.solve(np.asarray(ref_cell).T, disp_pos.T).T
+        frac[:, pbc] -= np.floor(frac[:, pbc])
+        disp_pos = frac @ np.asarray(ref_cell)
         # Build expanded reference with periodic images
         expanded_ref, expanded_indices = _expand_for_pbc(ref_pos, ref_cell, pbc)
     else:
@@ -2218,17 +2391,11 @@ def identify_defect_atoms(
     
     # Check for antisites in multi-component systems
     if "occupancy_by_type" in result and len(result["occupancy_by_type"]) > 1:
-        ref_types = reference.get_chemical_symbols()
-        antisite_count = 0
-        for site_idx in range(len(reference)):
-            if occupancy[site_idx] == 1:
-                # Single atom at this site - check type match
-                site_type = ref_types[site_idx]
-                atom_at_site = np.where(site_index == site_idx)[0]
-                if len(atom_at_site) == 1:
-                    atom_type = atoms.get_chemical_symbols()[atom_at_site[0]]
-                    if atom_type != site_type:
-                        antisite_count += 1
+        ref_types = np.asarray(reference.get_chemical_symbols())
+        atom_types = np.asarray(atoms.get_chemical_symbols())
+        # singly occupied sites whose atom has a different species than the site
+        single = occupancy[site_index] == 1
+        antisite_count = int(np.sum(atom_types[single] != ref_types[site_index[single]]))
         if antisite_count > 0:
             summary_parts.append(f"{antisite_count} antisites")
     

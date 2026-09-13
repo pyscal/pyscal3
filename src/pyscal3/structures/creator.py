@@ -11,7 +11,7 @@ from ase import Atoms
 _DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 def _load_yaml(filename):
-    with open(os.path.join(_DATA_DIR, filename)) as f:
+    with open(os.path.join(_DATA_DIR, filename), encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 _structures = _load_yaml("structure_data.yaml")
@@ -36,7 +36,9 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
     Parameters
     ----------
     structure : str
-        Crystal type: 'sc', 'bcc', 'fcc', 'hcp', 'dhcp', 'diamond', 'a15', 'l12', 'b2'.
+        Crystal type: 'simple_cubic', 'bcc', 'fcc', 'hcp', 'dhcp', 'diamond',
+        'a15', 'l12', 'b2' (see :func:`available_structures`). 'dhcp' is
+        only available as a primitive cell.
     lattice_constant : float
         Lattice constant in Angstroms. Default 1.0.
     repetitions : int or tuple of 3 ints, optional
@@ -46,7 +48,14 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
     noise : float
         Standard deviation of Gaussian noise on positions. Default 0.
     element : str or list of str, optional
-        Chemical element(s).
+        Chemical element(s), one per lattice type in increasing type order.
+        For 'l12' type 1 is the single corner site and type 2 the three
+        face-centre sites, so Cu3Au is ``element=["Au", "Cu"]``; for 'b2'
+        type 1 is the corner and type 2 the body centre. If omitted, the
+        1-based lattice type is used as the atomic
+        number (type 1 -> Z=1, type 2 -> Z=2, ...) and also stored in
+        ``atoms.get_tags()``, so type-dependent descriptors such as
+        :func:`pyscal3.short_range_order` can distinguish the sublattices.
     primitive : bool
         If True, use primitive cell. Default False.
 
@@ -139,12 +148,14 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
             pbc=True,
         )
     else:
+        # No element given: use the 1-based lattice type as atomic number so
+        # the sublattices stay distinguishable, and keep it in the tags too.
         atoms = Atoms(
+            numbers=final_types,
             positions=final_pos,
             cell=cell,
             pbc=True,
         )
-        # Store integer types as tags
         atoms.set_tags(final_types)
 
     return atoms

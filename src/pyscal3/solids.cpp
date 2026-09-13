@@ -77,10 +77,12 @@ void calculate_bonds(py::dict& atoms,
             scalar = get_number_from_bond(lm, q_real[ti], q_imag[ti], q_real[neighbors[ti][c]], q_imag[neighbors[ti][c]]);
             sij[ti].emplace_back(scalar);
             
-            if (comparecriteria == 0)
+            if (comparecriteria == 0){
                 if (scalar > threshold) frenkelcons += 1;
-            else
+            }
+            else{
                 if (scalar < threshold) frenkelcons += 1;
+            }
             
             tempsij += scalar;
         }

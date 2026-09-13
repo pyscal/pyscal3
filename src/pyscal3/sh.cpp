@@ -315,14 +315,18 @@ void calculate_qlm(const int l,
 	double &ylm_real, 
 	double &ylm_imag){
 
-    double factor;
     double m_plm;
 
     m_plm = sph_legendre(l, abs(m), theta);
-    //factor = ((2.0*double(l) + 1.0)/(4.0*PI))*dfactorial(l,m);
-    //factor = (1.0/dfactorial(l,m));
     ylm_real = m_plm*cos(double(m)*phi);
     ylm_imag  = m_plm*sin(double(m)*phi);
+    // Condon-Shortley phase for negative m:  Y_{l,-m} = (-1)^m conj(Y_{lm}).
+    // It cancels in |q_lm|^2 (q_l) but not in the Wigner-3j contraction
+    // used for W_l, which is not rotationally invariant without it.
+    if (m < 0 && (abs(m) % 2 == 1)){
+        ylm_real = -ylm_real;
+        ylm_imag = -ylm_imag;
+    }
 }
 
 
@@ -702,15 +706,19 @@ void calculate_disorder(py::dict& atoms,
 
     //first round is over
     //now find cross terms
+    //   D_i = 1/n_i * sum_{j in nbrs(i)} [S_ii + S_jj - 2 S_ij]
+    // with S_ij = Re(q_i . q_j*) / (|q_i| |q_j|), i.e. the normalised
+    // Kawasaki-Onuki variable (S_ii = 1).
     for(int ti=0; ti<nop; ti++){
 
-        sum2ti = 0.0;
-        sum2tj = 0.0;
-        realdotproduct = 0.0;
-        imgdotproduct = 0.0;
         dis = 0;
 
-        for(int tj=0; tj<neighbors[ti].size(); tj++){
+        for(size_t ni=0; ni<neighbors[ti].size(); ni++){
+            int tj = neighbors[ti][ni];
+            sum2ti = 0.0;
+            sum2tj = 0.0;
+            realdotproduct = 0.0;
+            imgdotproduct = 0.0;
             for (int mi = 0; mi<2*lm+1 ; mi++){
                 sum2ti += q_real[ti][mi]*q_real[ti][mi] + q_imag[ti][mi]*q_imag[ti][mi];
                 sum2tj += q_real[tj][mi]*q_real[tj][mi] + q_imag[tj][mi]*q_imag[tj][mi];
@@ -720,7 +728,12 @@ void calculate_disorder(py::dict& atoms,
             connection = (realdotproduct+imgdotproduct)/(sqrt(sum2tj)*sqrt(sum2ti));
             dis += (sii[ti] + sii[tj] - 2*connection);
         }
-        disorder.emplace_back(dis/float(neighbors[ti].size()));
+        if (neighbors[ti].size() > 0){
+            disorder.emplace_back(dis/double(neighbors[ti].size()));
+        }
+        else{
+            disorder.emplace_back(0.0);
+        }
     }
 
     atoms[py::str("disorder")] = disorder;

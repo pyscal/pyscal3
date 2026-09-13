@@ -7,6 +7,7 @@
  */
 
 #include "system.h"
+#include <limits>
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -183,7 +184,6 @@ void calculate_voronoi_vector(py::dict& atoms,
 
     for (int x = 0; x < nop; x++) {
         int st = 1;   // starting index into vertex_numbers (skip first entry)
-        int refined_edge_count = 0;
 
         for (int fi = 0; fi < (int)face_vertices[x].size(); fi++) {
             int vno = face_vertices[x][fi];
@@ -195,33 +195,10 @@ void calculate_voronoi_vector(py::dict& atoms,
                 vphase[k] = vertex_numbers[x][st + k];
             }
 
-            // Compute edge lengths
+            // Edge lengths: vno edges between consecutive vertices
+            // (the last vertex is paired with the first).
             double edge_sum = 0.0;
             vector<double> edge_lengths(vno);
-            for (int i = -1; i < vno - 1; i++) {
-                // Wrap: i=-1 → last vertex paired with first
-                int ii = (i < 0) ? vno - 1 : i;
-                int jj = i + 1;
-                int vi_idx = vphase[ii] * 3;
-                int vj_idx = vphase[jj] * 3;
-                double dx = vertex_vectors[x][vi_idx]     - vertex_vectors[x][vj_idx];
-                double dy = vertex_vectors[x][vi_idx + 1] - vertex_vectors[x][vj_idx + 1];
-                double dz = vertex_vectors[x][vi_idx + 2] - vertex_vectors[x][vj_idx + 2];
-                double elen = sqrt(dx*dx + dy*dy + dz*dz);
-                edge_lengths[ii == vno - 1 ? 0 : ii + 1] = elen;
-                // Actually, Python iterates i in range(-1, len(vphase)-1)
-                // storing sequentially. Let's just store sequentially:
-            }
-            // Re-do more carefully to exactly match Python:
-            // Python: for i in range(-1, len(vphase)-1):
-            //   edgeln between vphase[i] and vphase[i+1]
-            // i=-1: vphase[-1] (last) vs vphase[0]
-            // i=0:  vphase[0] vs vphase[1]
-            // ...
-            // i=vno-2: vphase[vno-2] vs vphase[vno-1]
-            // Total: vno edges
-            edge_sum = 0.0;
-            edge_lengths.resize(vno);
             for (int i = -1; i < vno - 1; i++) {
                 int idx_i = (i < 0) ? vno - 1 : i;
                 int idx_j = i + 1;
@@ -237,9 +214,10 @@ void calculate_voronoi_vector(py::dict& atoms,
 
             st += (vno + 1);
 
-            // Normalise and check area cutoff
-            if (refined_edge_count < (int)neighborweight[x].size() &&
-                neighborweight[x][refined_edge_count] > area_cutoff) {
+            // Skip faces whose (relative) area is below area_cutoff.
+            // neighborweight holds the area fraction of face fi.
+            if (fi < (int)neighborweight[x].size() &&
+                neighborweight[x][fi] > area_cutoff) {
                 // Count edges passing edge_cutoff
                 int edgecount = 0;
                 if (edge_sum > 0.0) {
@@ -248,7 +226,6 @@ void calculate_voronoi_vector(py::dict& atoms,
                             edgecount++;
                     }
                 }
-                refined_edge_count++;
                 // Bin into n3,n4,n5,n6
                 if (edgecount >= 3 && edgecount <= 6) {
                     vorovectors[x][edgecount - 3]++;
@@ -264,8 +241,10 @@ void calculate_voronoi_vector(py::dict& atoms,
 /* =======================================================================
  *  4. Short-Range Order (Warren-Cowley)
  *
- *  For each atom, count how many neighbors are of the reference type,
- *  compute local composition fraction, then SRO parameter.
+ *  alpha_AB(i) = 1 - p_AB(i) / c_B  for atoms i of type A (reference_type),
+ *  where p_AB(i) is the fraction of neighbours of i that are of type B
+ *  (compare_type) and c_B is the global concentration of B.  Atoms that are
+ *  not of the reference type (or have no neighbours) get NaN.
  * ======================================================================= */
 void calculate_short_range_order(py::dict& atoms,
                                  int reference_type,
@@ -277,46 +256,29 @@ void calculate_short_range_order(py::dict& atoms,
         atoms[py::str("neighbors")].cast<vector<vector<int>>>();
 
     int nop = (int)types.size();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
 
-    // Compute global composition
-    map<int, int> type_counts;
+    // global concentration of the compare type
+    int n_compare = 0;
     for (int i = 0; i < nop; i++) {
-        type_counts[types[i]]++;
+        if (types[i] == compare_type) n_compare++;
     }
-    double total = (double)nop;
-    double global_comp = 0.0;
-    if (type_counts.count(reference_type)) {
-        global_comp = type_counts[reference_type] / total;
-    }
+    double c_compare = (nop > 0) ? (double)n_compare / (double)nop : 0.0;
 
-    vector<double> sro(nop, 0.0);
+    vector<double> sro(nop, nan);
 
     for (int i = 0; i < nop; i++) {
+        if (types[i] != reference_type) continue;
         int nn = (int)neighbors[i].size();
-        if (nn == 0) {
-            sro[i] = 0.0;
-            continue;
-        }
+        if (nn == 0 || c_compare <= 0.0) continue;
 
-        // Count neighbors of reference type
-        int ref_count = 0;
+        int cmp_count = 0;
         for (int j = 0; j < nn; j++) {
-            if (types[neighbors[i][j]] == reference_type)
-                ref_count++;
+            if (types[neighbors[i][j]] == compare_type)
+                cmp_count++;
         }
-        double lc = (double)ref_count / (double)nn;
-
-        if (reference_type == compare_type) {
-            if (global_comp < 1.0)
-                sro[i] = (lc - global_comp) / (1.0 - global_comp);
-            else
-                sro[i] = 0.0;
-        } else {
-            if (global_comp > 0.0)
-                sro[i] = 1.0 - (lc / global_comp);
-            else
-                sro[i] = 0.0;
-        }
+        double p = (double)cmp_count / (double)nn;
+        sro[i] = 1.0 - p / c_compare;
     }
 
     atoms[py::str("sro")] = sro;
