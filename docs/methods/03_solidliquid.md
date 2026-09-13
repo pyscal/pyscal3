@@ -35,6 +35,19 @@ largest = pyscal.find_solids(atoms, bonds=6, threshold=0.5,
 
 `bonds` sets the number of minimum bonds a particle should have (as defined above), `threshold` and `avgthreshold` are the same quantities that appear in the equations above. Setting the keyword `cluster` to `True` returns the size of the largest solid cluster. The per-atom solid/liquid label is stored as `atoms.arrays['pyscal_solid']`.
 
+The intermediate quantities are stored as well, so the distribution of bond correlations can be inspected directly: $s_{ij}$ for every atom and each of its neighbors as `pyscal_sij` (in `atoms.arrays` when all atoms have the same number of neighbors, otherwise in `atoms.info`), the per-atom average $\langle s_{ij} \rangle$ as `atoms.arrays['pyscal_avg_sij']`, and the number of solid bonds as `atoms.arrays['pyscal_bonds']`.
+
+``` python
+import numpy as np
+
+pyscal.find_solids(atoms, bonds=6, threshold=0.5, avgthreshold=0.6, cluster=False)
+sij = atoms.arrays.get('pyscal_sij', atoms.info.get('pyscal_sij'))
+all_sij = np.concatenate([np.asarray(row) for row in sij])   # every i-j pair
+hist, edges = np.histogram(all_sij, bins=50, range=(-0.5, 1.0))
+```
+
+Clustering can use a different cutoff than the neighbor search through the `cutoff` keyword of `find_solids` (or `find_clusters`); by default the neighbor cutoff is used.
+
 ## References
 
 1. Auer, S. & Frenkel, D. Numerical Simulation of Crystal Nucleation in Colloids. in Advanced Computer Simulation: Approaches for Soft Matter Sciences I (eds. Dr. Holm, C. & Prof. Dr. Kremer, K.) 149–208 (Springer Berlin Heidelberg, Berlin, Heidelberg, 2005). doi:10.1007/b99429.
