@@ -45,8 +45,27 @@ and ACE descriptors up to body order four.
 - Neighbor vectors (`pyscal_diff`) are stored in `atoms.info`, so
   `ase.io.write` keeps working after a pyscal calculation.
 
+### Neighbor search
+
+- `find_neighbors` uses the matscipy-neighbours library (libAtoms, MIT), whose
+  C++ core is included in `lib/matscipy-neighbours`. For 131 072 atoms, a
+  cutoff with 12 neighbors per atom takes 0.15 s instead of 3.4 s, and the
+  adaptive, SANN and number methods are about 5 times faster. The stored keys,
+  formats and values are unchanged, except for the two points below.
+- Candidates at the same distance (to within 1e-10) are ordered by atom index,
+  so `method="number"` picks the same neighbors every time when a shell is
+  split, for example `nmax=8` in fcc. Before, the choice was left to the
+  sorting routine.
+- If no atom has a neighbor, the neighbor keys are stored as (n, 0) arrays in
+  `atoms.arrays` for any cell size. Small cells used to put them in
+  `atoms.info` as lists.
+- The `cells` argument of `find_neighbors` is ignored.
+
 ### Fixes
 
+- `common_neighbor_analysis` and `diamond_structure` no longer label every
+  atom as "others" when a single atom, for example an isolated atom next to a
+  surface, has too few neighbor candidates.
 - Cell lists are built on fractional coordinates: triclinic, hexagonal and
   rotated cells (primitive fcc, hcp, ASE `fcc111` slabs, LAMMPS triclinic
   boxes) gave wrong neighbors or hung above 250 atoms.

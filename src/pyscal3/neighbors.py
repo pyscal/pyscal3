@@ -101,6 +101,16 @@ def find_neighbors(
         ``pyscal_face_vertices``, ``pyscal_face_perimeters``,
         ``pyscal_vertex_vectors``, ``pyscal_vertex_numbers`` and
         ``pyscal_vertex_positions``.
+
+    Notes
+    -----
+    Except for Voronoi, the search uses the bundled matscipy-neighbours
+    library. A fixed cutoff keeps pairs with ``d < cutoff``, a shell keeps
+    ``cutoff <= d <= cutoff + shell_thickness``. The adaptive, SANN and number
+    methods start from the candidates with ``d <= threshold * (V / N)**(1/3)``,
+    sorted by distance and, for distances equal to within 1e-10, by atom
+    index. ``pyscal_diff`` holds ``r_i - r_j``. When the cutoff exceeds half
+    the cell width, each periodic image of a neighbor is a separate entry.
     """
     if threshold < 1:
         raise ValueError("threshold must be >= 1.0")
