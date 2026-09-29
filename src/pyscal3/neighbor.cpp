@@ -965,15 +965,18 @@ int get_all_neighbors_bynumber(py::dict& atoms,
         get_temp_neighbors_brute(positions, mask_1, mask_2, temp_neighbors, triclinic, neighbordistance, rot, rotinv, box);
     }
     for (int ti=0; ti<nop; ti++){
-        if (int(temp_neighbors[ti].size()) < nns){
-            return 0;
-        }
-
         sort(temp_neighbors[ti].begin(), temp_neighbors[ti].end(), by_dist());
 
         for(size_t i=0; i<temp_neighbors[ti].size(); i++){
             atom_temp_neighbors[ti].emplace_back(temp_neighbors[ti][i].index);
             atom_temp_neighbordist[ti].emplace_back(temp_neighbors[ti][i].dist);
+        }
+
+        //an atom with too few candidates makes the search fail, but the
+        //candidates of every other atom are still stored (CNA uses them)
+        if (int(temp_neighbors[ti].size()) < nns){
+            finished = 0;
+            continue;
         }
 
         if(assign == 1){
@@ -1003,8 +1006,6 @@ int get_all_neighbors_bynumber(py::dict& atoms,
                 cutoff[ti] = neighbordistance;
             }
         }
-
-        finished = 1;            
     }
     if (assign==1){
         atoms[py::str("neighbors")] = neighbors;
