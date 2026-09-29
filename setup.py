@@ -21,6 +21,7 @@ setup(
             "pyscal3.csystem",
             [
                 "src/pyscal3/neighbor.cpp",
+                "src/pyscal3/neighbor_backend.cpp",
                 "src/pyscal3/sh.cpp",
                 "src/pyscal3/solids.cpp",
                 "src/pyscal3/voronoi.cpp",

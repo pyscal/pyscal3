@@ -27,6 +27,11 @@ PYBIND11_MODULE(csystem, m) {
     m.def("get_all_neighbors_bynumber", &get_all_neighbors_bynumber);
     m.def("get_all_neighbors_sann", &get_all_neighbors_sann);
     m.def("get_all_neighbors_adaptive", &get_all_neighbors_adaptive);
+    m.def("nl_cutoff", &nl_cutoff);
+    m.def("nl_shell", &nl_shell);
+    m.def("nl_number", &nl_number);
+    m.def("nl_adaptive", &nl_adaptive);
+    m.def("nl_sann", &nl_sann);
     m.def("calculate_q_single", &calculate_q_single);
     m.def("calculate_aq_single", &calculate_aq_single);
     m.def("calculate_w_single", &calculate_w_single);

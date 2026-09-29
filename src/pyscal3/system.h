@@ -176,6 +176,24 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     const vector<double> box,
     const double face_area_exponent);
 
+/*-----------------------------------------------------
+    Neighbor search on matscipy-neighbours
+    (neighbor_backend.cpp)
+-----------------------------------------------------*/
+using nl_positions = py::array_t<double, py::array::c_style | py::array::forcecast>;
+
+py::dict nl_cutoff(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double rc);
+py::dict nl_shell(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double dmin, double dmax);
+py::dict nl_candidates(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor, int nmin);
+py::dict nl_number(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor, int nmax, bool assign);
+py::dict nl_adaptive(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor, int nlimit, double padding);
+py::dict nl_sann(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor);
 
 
 /*-----------------------------------------------------

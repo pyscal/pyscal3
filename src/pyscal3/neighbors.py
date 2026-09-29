@@ -26,6 +26,7 @@ from pyscal3._bridge import (
     guess_cutoff,
     clear_neighbor_data,
     effective_periodic_cell,
+    _NONPERIODIC_PAD,
 )
 
 
@@ -68,7 +69,8 @@ def find_neighbors(
     nlimit : int, optional
         Number of atoms for adaptive cutoff estimation. Default 6.
     cells : bool or None, optional
-        Force cell lists on/off. None = auto (>250 atoms).
+        Ignored. It selected the cell-list search in earlier versions and is
+        kept so that existing calls keep working.
     nmax : int, optional
         Number of neighbors for 'number' method. Default 12.
     assign_neighbor : bool, optional
@@ -101,6 +103,187 @@ def find_neighbors(
         ``pyscal_vertex_vectors``, ``pyscal_vertex_numbers`` and
         ``pyscal_vertex_positions``.
     """
+    if threshold < 1:
+        raise ValueError("threshold must be >= 1.0")
+
+    # drop everything derived from a previous neighbor search
+    clear_neighbor_data(atoms)
+
+    if method == "cutoff":
+        if cutoff == "sann":
+            for i in range(1, 10):
+                res = pc.nl_sann(*_geometry(atoms, threshold * i), threshold * i)
+                if res["finished"]:
+                    if i > 1:
+                        warnings.warn(
+                            "Found neighbors with higher threshold than default/user input"
+                        )
+                    break
+                warnings.warn(
+                    "Could not find sann cutoff. Trying with higher threshold",
+                    RuntimeWarning,
+                )
+            else:
+                raise RuntimeError(
+                    "SANN cutoff could not be converged. Try increasing threshold."
+                )
+
+        elif cutoff == "adaptive" or (cutoff == 0 and shell_thickness == 0):
+            res = pc.nl_adaptive(
+                *_geometry(atoms, threshold), threshold, nlimit, padding
+            )
+            if not res["finished"]:
+                raise RuntimeError("Could not find adaptive cutoff")
+
+        else:
+            if cutoff == 0 and shell_thickness > 0:
+                cutoff = shell_thickness
+                shell_thickness = 0
+            pad = cutoff + shell_thickness
+            positions, cell, pbc = _working_cell(atoms, pad if pad > 0 else None)
+            if shell_thickness == 0:
+                res = pc.nl_cutoff(positions, cell, pbc, cutoff)
+            else:
+                res = pc.nl_shell(positions, cell, pbc, cutoff, cutoff + shell_thickness)
+
+    elif method == "number":
+        res = pc.nl_number(
+            *_geometry(atoms, threshold), threshold, nmax, bool(assign_neighbor)
+        )
+        if not res["finished"]:
+            raise RuntimeError(
+                "Could not find enough neighbors - try increasing threshold"
+            )
+
+    elif method == "voronoi":
+        d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(atoms)
+        _reset_neighbors(d)
+        pc.get_all_neighbors_voronoi(d, 0.0, triclinic, rot, rotinv, boxdims, voroexp)
+        dict_to_atoms(d, atoms, nreal=nreal)
+        if isinstance(cutoff, (int, float)) and cutoff > 0:
+            # merge Voronoi vertices closer than `cutoff` into unique sites
+            atoms.info["pyscal_unique_vertices"] = _unique_voronoi_vertices(
+                atoms, d["vertex_positions"][:nreal], cutoff
+            )
+
+    else:
+        raise ValueError(
+            f"Unknown method: {method}. Use 'cutoff', 'voronoi', or 'number'."
+        )
+
+    if method != "voronoi":
+        _store_neighbors(atoms, res)
+    atoms.info["pyscal_neighbors_found"] = True
+    atoms.info["pyscal_neighbor_method"] = method
+
+
+def _working_cell(atoms: Atoms, pad):
+    """Positions, cell and periodicity passed to the C++ search.
+
+    Non-periodic directions and zero cell vectors get the vacuum cell vector
+    of :func:`effective_periodic_cell` (which also validates the cell) and
+    stay non-periodic. ``pad`` is the search radius, None if unknown.
+    """
+    if len(atoms) == 0:
+        raise ValueError("Cannot find neighbors of an empty Atoms object.")
+    cell, periodic = effective_periodic_cell(
+        atoms, pad if pad is not None else _NONPERIODIC_PAD
+    )
+    positions = np.ascontiguousarray(atoms.positions, dtype=float)
+    return positions, np.ascontiguousarray(cell, dtype=float), [bool(p) for p in periodic]
+
+
+def _geometry(atoms: Atoms, prefactor):
+    """Working cell for the candidate-based methods (adaptive, SANN, number).
+
+    The C++ code takes the candidate radius as prefactor * (V / N)^(1/3) of
+    this cell, which includes the vacuum added along non-periodic directions.
+    """
+    pad = guess_cutoff(atoms, prefactor) if len(atoms) else 0.0
+    return _working_cell(atoms, pad if pad > 0 else None)
+
+
+_PER_PAIR_KEYS = {
+    "neighbors": "j",
+    "neighbordist": "d",
+    "neighborweight": "weight",
+    "r": "r",
+    "theta": "theta",
+    "phi": "phi",
+}
+
+
+def _store_rows(atoms: Atoms, rows: dict, offsets, vectors=None):
+    """Store per-pair values, one row per atom, under ``pyscal_<key>``.
+
+    Rows of equal length go to ``atoms.arrays`` as (n, k) arrays, with
+    ``vectors`` as an (n, k, 3) array in ``atoms.info``. Rows of different
+    length go to ``atoms.info`` as lists of lists. Empty rows for every atom
+    are stored as (n, 0) float arrays in ``atoms.arrays``.
+    """
+    n = len(atoms)
+    counts = np.diff(offsets)
+    k = int(counts[0]) if n else 0
+    if (counts == k).all():
+        for key, values in rows.items():
+            if k == 0:
+                atoms.arrays["pyscal_" + key] = np.zeros((n, 0))
+            else:
+                atoms.arrays["pyscal_" + key] = values.reshape(n, k)
+        if vectors is not None:
+            if k == 0:
+                atoms.arrays["pyscal_diff"] = np.zeros((n, 0))
+            else:
+                atoms.info["pyscal_diff"] = vectors.reshape(n, k, 3)
+        return
+    bounds = list(zip(offsets[:-1].tolist(), offsets[1:].tolist()))
+    for key, values in rows.items():
+        flat = values.tolist()
+        atoms.info["pyscal_" + key] = [flat[a:b] for a, b in bounds]
+    if vectors is not None:
+        flat = vectors.tolist()
+        atoms.info["pyscal_diff"] = [flat[a:b] for a, b in bounds]
+
+
+def _store_neighbors(atoms: Atoms, res: dict):
+    """Write the result of a pc.nl_* search to ``atoms``."""
+    _store_rows(
+        atoms,
+        {key: res[src] for key, src in _PER_PAIR_KEYS.items()},
+        res["offsets"],
+        vectors=res["diff"],
+    )
+    atoms.arrays["pyscal_cutoff"] = res["cutoff"]
+    if "temp_offsets" in res:
+        _store_rows(
+            atoms,
+            {"temp_neighbors": res["temp_j"], "temp_neighbordist": res["temp_d"]},
+            res["temp_offsets"],
+        )
+    else:
+        _store_rows(
+            atoms,
+            {"temp_neighbors": np.zeros(0), "temp_neighbordist": np.zeros(0)},
+            np.zeros(len(atoms) + 1, dtype=np.int64),
+        )
+
+
+def _legacy_find_neighbors(
+    atoms: Atoms,
+    method="cutoff",
+    cutoff=0,
+    shell_thickness=0,
+    threshold=2,
+    voroexp=1,
+    padding=1.2,
+    nlimit=6,
+    cells=None,
+    nmax=12,
+    assign_neighbor=True,
+):
+    """The previous C++ neighbour search, kept only to cross-check the new
+    backend in tests/test_neighbor_legacy.py. Same arguments and output as
+    find_neighbors. Removed together with the old C++ routines."""
     if threshold < 1:
         raise ValueError("threshold must be >= 1.0")
 
