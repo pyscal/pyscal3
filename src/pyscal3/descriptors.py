@@ -35,6 +35,7 @@ from pyscal3._bridge import (
     padded_supercell,
     periodic_directions,
     guess_cutoff,
+    gc_paused,
 )
 from pyscal3.neighbors import find_neighbors
 
@@ -1728,11 +1729,12 @@ def _reset_and_find_temp_neighbors(d, supercell, periodic, nmax=14):
         2.0,
         nmax,
     )
-    bounds = list(zip(res["temp_offsets"][:-1].tolist(), res["temp_offsets"][1:].tolist()))
-    temp_j = res["temp_j"].tolist()
-    temp_d = res["temp_d"].tolist()
-    d["temp_neighbors"] = [temp_j[a:b] for a, b in bounds]
-    d["temp_neighbordist"] = [temp_d[a:b] for a, b in bounds]
+    with gc_paused():
+        bounds = list(zip(res["temp_offsets"][:-1].tolist(), res["temp_offsets"][1:].tolist()))
+        temp_j = res["temp_j"].tolist()
+        temp_d = res["temp_d"].tolist()
+        d["temp_neighbors"] = [temp_j[a:b] for a, b in bounds]
+        d["temp_neighbordist"] = [temp_d[a:b] for a, b in bounds]
     finished = res["finished"]
     if not finished:
         # Atoms with fewer than `nmax` candidates cannot be classified; the

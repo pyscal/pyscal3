@@ -25,6 +25,7 @@ from pyscal3._bridge import (
     guess_cutoff,
     clear_neighbor_data,
     effective_periodic_cell,
+    gc_paused,
     _NONPERIODIC_PAD,
 )
 
@@ -245,13 +246,14 @@ def _store_rows(atoms: Atoms, rows: dict, offsets, vectors=None):
             else:
                 atoms.info["pyscal_diff"] = vectors.reshape(n, k, 3)
         return
-    bounds = list(zip(offsets[:-1].tolist(), offsets[1:].tolist()))
-    for key, values in rows.items():
-        flat = values.tolist()
-        atoms.info["pyscal_" + key] = [flat[a:b] for a, b in bounds]
-    if vectors is not None:
-        flat = vectors.tolist()
-        atoms.info["pyscal_diff"] = [flat[a:b] for a, b in bounds]
+    with gc_paused():
+        bounds = list(zip(offsets[:-1].tolist(), offsets[1:].tolist()))
+        for key, values in rows.items():
+            flat = values.tolist()
+            atoms.info["pyscal_" + key] = [flat[a:b] for a, b in bounds]
+        if vectors is not None:
+            flat = vectors.tolist()
+            atoms.info["pyscal_diff"] = [flat[a:b] for a, b in bounds]
 
 
 def _store_neighbors(atoms: Atoms, res: dict):

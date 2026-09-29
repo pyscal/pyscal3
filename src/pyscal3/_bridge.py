@@ -10,6 +10,9 @@ All pyscal-computed per-atom data is stored in atoms.arrays
 (numpy arrays) or atoms.info (scalars/metadata).
 """
 
+import contextlib
+import gc
+
 import numpy as np
 from ase import Atoms
 
@@ -43,6 +46,24 @@ NEIGHBOR_DERIVED_KEYS = [
     "neighbor_method",
 ]
 NEIGHBOR_KEYS = [_PREFIX + k for k in NEIGHBOR_DERIVED_KEYS]
+
+
+@contextlib.contextmanager
+def gc_paused():
+    """Pause the cyclic garbage collector while building many small lists.
+
+    Per-atom neighbor rows are millions of list objects that cannot form
+    reference cycles. Allocating them triggers repeated collections, which
+    scan every list created so far and can take most of the time of a
+    neighbor search. The previous state of the collector is restored.
+    """
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if enabled:
+            gc.enable()
 
 
 def clear_neighbor_data(atoms: Atoms):

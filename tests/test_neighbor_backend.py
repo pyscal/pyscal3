@@ -304,3 +304,21 @@ def test_cells_argument_is_ignored():
         pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0, cells=cells)
         np.testing.assert_array_equal(atoms.arrays["pyscal_neighbors"],
                                       ref.arrays["pyscal_neighbors"])
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_garbage_collector_state_is_restored(enabled):
+    """Ragged rows are built with the collector paused, then it is restored."""
+    import gc
+
+    atoms = STRUCTURES["fcc_rattled"].copy()
+    was = gc.isenabled()
+    try:
+        gc.enable() if enabled else gc.disable()
+        pyscal3.find_neighbors(atoms, method="cutoff", cutoff=4.3)
+        assert isinstance(atoms.info["pyscal_neighbors"], list)
+        assert gc.isenabled() == enabled
+        pyscal3.common_neighbor_analysis(atoms)
+        assert gc.isenabled() == enabled
+    finally:
+        gc.enable() if was else gc.disable()
