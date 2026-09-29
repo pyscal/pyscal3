@@ -20,13 +20,6 @@ PYBIND11_MODULE(csystem, m) {
     py::options options;
     options.disable_function_signatures();
     m.def("get_distance_vector", &get_distance_vector);
-    m.def("get_all_neighbors_normal", &get_all_neighbors_normal);
-    m.def("get_all_neighbors_shell_normal", &get_all_neighbors_shell_normal);
-    m.def("get_all_neighbors_cells", &get_all_neighbors_cells);
-    m.def("get_all_neighbors_shell_cells", &get_all_neighbors_shell_cells);
-    m.def("get_all_neighbors_bynumber", &get_all_neighbors_bynumber);
-    m.def("get_all_neighbors_sann", &get_all_neighbors_sann);
-    m.def("get_all_neighbors_adaptive", &get_all_neighbors_adaptive);
     m.def("nl_cutoff", &nl_cutoff);
     m.def("nl_shell", &nl_shell);
     m.def("nl_candidates", &nl_candidates);
