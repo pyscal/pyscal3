@@ -264,6 +264,12 @@ def guess_cutoff(atoms: Atoms, prefactor):
 _NONPERIODIC_PAD = 10.0  # Angstrom, vacuum added when no search radius is known
 
 
+def periodic_directions(atoms: Atoms):
+    """Directions that are periodic and have a non-zero cell vector."""
+    lengths = np.linalg.norm(np.array(atoms.cell, dtype=float), axis=1)
+    return np.array(atoms.pbc, dtype=bool) & (lengths > 0)
+
+
 def effective_periodic_cell(atoms: Atoms, pad):
     """Cell to use for the (always periodic) C++ routines.
 
@@ -282,9 +288,7 @@ def effective_periodic_cell(atoms: Atoms, pad):
         Which directions were genuinely periodic.
     """
     cell = np.array(atoms.cell, dtype=float)
-    pbc = np.array(atoms.pbc, dtype=bool)
-    lengths = np.linalg.norm(cell, axis=1)
-    periodic = pbc & (lengths > 0)
+    periodic = periodic_directions(atoms)
 
     if periodic.all():
         if abs(np.linalg.det(cell)) <= 0:
@@ -316,26 +320,22 @@ def effective_periodic_cell(atoms: Atoms, pad):
     return new_cell, periodic
 
 
-def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
+def padded_supercell(atoms: Atoms, cutoff=None):
     """
-    Build the atom dict for the C++ neighbor search, adding ghost atoms
-    (periodic images created with ASE's ``repeat``) when the cell is too
-    small for the requested search.
+    The periodic cell used by the C++ routines that need one, replicated with
+    ASE's ``repeat`` when it is too small for the requested search.
 
     Non-periodic directions and zero cell vectors are handled by
     :func:`effective_periodic_cell`, which adds enough vacuum that periodic
     images cannot be found within the search radius.
 
-    Padding with ghost atoms is applied along periodic directions when
+    The cell is replicated along periodic directions when
 
     * the cell has fewer than 200 atoms or a perpendicular width below
       10 Angstrom (legacy rule, keeps the adaptive estimates stable), or
     * ``cutoff`` is given and some perpendicular width is not larger than
       ``2 * cutoff`` -- the minimum-image convention would otherwise miss
       neighbors beyond half the box.
-
-    Ghost atoms are marked with ghost=True so results can be trimmed to
-    the original atoms.
 
     Parameters
     ----------
@@ -346,12 +346,9 @@ def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
 
     Returns
     -------
-    d : dict
-        Atom dict (possibly with ghost atoms).
-    box_params : tuple
-        (triclinic, rot, rotinv, boxdims) for the (possibly padded) box.
-    nreal : int
-        Number of real (non-ghost) atoms.
+    ase.Atoms
+        Fully periodic cell whose first ``len(atoms)`` atoms are the original
+        ones. It is ``atoms`` itself when nothing had to change.
     """
     n = len(atoms)
     if n == 0:
@@ -389,16 +386,40 @@ def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
     reps[~periodic] = 1
 
     if np.all(reps == 1):
-        d = atoms_to_dict(work)
-        return d, get_box_params(work), n
+        return work
+    return work.repeat([int(r) for r in reps])
 
-    # Create a repeated supercell using ASE
-    supercell = work.repeat([int(r) for r in reps])
-    nreal = n
+
+def pad_atoms_for_neighbor_finding(atoms: Atoms, cutoff=None):
+    """
+    Build the atom dict for the C++ routines that work on a periodic cell
+    (Voronoi, CNA), adding ghost atoms when the cell is too small.
+
+    The padded cell is the one of :func:`padded_supercell`. Ghost atoms are
+    marked with ghost=True so results can be trimmed to the original atoms.
+
+    Parameters
+    ----------
+    atoms : ase.Atoms
+        The structure.
+    cutoff : float, optional
+        Largest distance the neighbor search has to resolve.
+
+    Returns
+    -------
+    d : dict
+        Atom dict (possibly with ghost atoms).
+    box_params : tuple
+        (triclinic, rot, rotinv, boxdims) for the (possibly padded) box.
+    nreal : int
+        Number of real (non-ghost) atoms.
+    """
+    supercell = padded_supercell(atoms, cutoff=cutoff)
+    nreal = len(atoms)
     total = len(supercell)
-
-    # Build the dict
     d = atoms_to_dict(supercell)
+    if total == nreal:
+        return d, get_box_params(supercell), nreal
 
     # Mark ghost atoms
     d["ghost"] = [False] * nreal + [True] * (total - nreal)

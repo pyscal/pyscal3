@@ -32,7 +32,8 @@ from pyscal3._bridge import (
     dict_to_atoms,
     ensure_neighbors,
     create_attribute,
-    pad_atoms_for_neighbor_finding,
+    padded_supercell,
+    periodic_directions,
     guess_cutoff,
 )
 from pyscal3.neighbors import find_neighbors
@@ -415,16 +416,17 @@ def common_neighbor_analysis(atoms: Atoms, lattice_constant=None):
     dict
         Counts: {"fcc": n, "hcp": n, "bcc": n, "ico": n, "others": n}
     """
-    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(
-        atoms, cutoff=guess_cutoff(atoms, 2)
-    )
+    supercell = padded_supercell(atoms, cutoff=guess_cutoff(atoms, 2))
+    nreal = len(atoms)
+    d = atoms_to_dict(supercell)
+    triclinic, rot, rotinv, boxdims = get_box_params(supercell)
     n = len(d["positions"])
 
     # Create structure attribute
     d["structure"] = [0] * n
 
     # Find temp neighbors (by number, nmax=14)
-    _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14)
+    _reset_and_find_temp_neighbors(d, supercell, periodic_directions(atoms), nmax=14)
 
     if lattice_constant is None:
         # Adaptive CNA
@@ -464,13 +466,14 @@ def diamond_structure(atoms: Atoms):
     dict
         Counts per structure type.
     """
-    d, (triclinic, rot, rotinv, boxdims), nreal = pad_atoms_for_neighbor_finding(
-        atoms, cutoff=guess_cutoff(atoms, 2)
-    )
+    supercell = padded_supercell(atoms, cutoff=guess_cutoff(atoms, 2))
+    nreal = len(atoms)
+    d = atoms_to_dict(supercell)
+    triclinic, rot, rotinv, boxdims = get_box_params(supercell)
     n = len(d["positions"])
 
     d["structure"] = [0] * n
-    _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=4)
+    _reset_and_find_temp_neighbors(d, supercell, periodic_directions(atoms), nmax=4)
 
     pc.identify_diamond_cna(d, triclinic, rot, rotinv, boxdims)
 
@@ -1700,13 +1703,17 @@ def local_density(atoms: Atoms):
 # ---------------------------------------------------------------------------
 
 
-def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
-    """Reset neighbors and find by number (for CNA/diamond)."""
+def _reset_and_find_temp_neighbors(d, supercell, periodic, nmax=14):
+    """Reset neighbors and store the candidates of every atom (for CNA/diamond).
+
+    The candidates are all atoms within 2 * (V / N)^(1/3) of the padded
+    ``supercell``, sorted by distance. Only the ``periodic`` directions of the
+    original structure are periodic; the others carry the vacuum cell vector
+    of the supercell. The C++ classifiers take the first ``nmax`` candidates.
+    """
     n = len(d["positions"])
     d["neighbors"] = [[] for _ in range(n)]
     d["neighbordist"] = [[] for _ in range(n)]
-    d["temp_neighbors"] = [[] for _ in range(n)]
-    d["temp_neighbordist"] = [[] for _ in range(n)]
     d["neighborweight"] = [[] for _ in range(n)]
     d["diff"] = [[] for _ in range(n)]
     d["r"] = [[] for _ in range(n)]
@@ -1714,9 +1721,19 @@ def _reset_and_find_temp_neighbors(d, triclinic, rot, rotinv, boxdims, nmax=14):
     d["phi"] = [[] for _ in range(n)]
     d["cutoff"] = [0.0] * n
 
-    finished = pc.get_all_neighbors_bynumber(
-        d, 0.0, triclinic, rot, rotinv, boxdims, 2, nmax, (n > 250), False
+    res = pc.nl_candidates(
+        np.ascontiguousarray(supercell.positions, dtype=float),
+        np.ascontiguousarray(supercell.cell, dtype=float),
+        [bool(p) for p in periodic],
+        2.0,
+        nmax,
     )
+    bounds = list(zip(res["temp_offsets"][:-1].tolist(), res["temp_offsets"][1:].tolist()))
+    temp_j = res["temp_j"].tolist()
+    temp_d = res["temp_d"].tolist()
+    d["temp_neighbors"] = [temp_j[a:b] for a, b in bounds]
+    d["temp_neighbordist"] = [temp_d[a:b] for a, b in bounds]
+    finished = res["finished"]
     if not finished:
         # Atoms with fewer than `nmax` candidates cannot be classified; the
         # C++ routines skip them, so they end up labelled "others". That is
