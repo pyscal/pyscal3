@@ -78,6 +78,13 @@ pip install .
 
 A C++ compiler with C++17 support is required when building from source.
 
+## Third-party code
+
+pyscal3 includes two C++ libraries in `lib/`, compiled into its extension module:
+
+- [voro++](https://math.lbl.gov/voro++/) by Chris H. Rycroft, for Voronoi tessellation.
+- [matscipy-neighbours](https://github.com/libAtoms/matscipy-neighbours) by the libAtoms developers, for the neighbour search. MIT licence, see `lib/matscipy-neighbours/LICENSE.md` and `VENDORED.md` in the same directory.
+
 ## Citing the work
 
 If you use pyscal in your work, please cite the [following article](https://joss.theoj.org/papers/10.21105/joss.01824):
