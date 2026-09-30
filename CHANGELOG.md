@@ -88,6 +88,10 @@ lists), on one core:
 - `atomic_strain`, `von_mises_strain`, `d2min` and `slip_vector` (32 000 atoms):
   6 ms instead of about 0.9 s (0.19 s instead of about 3 s).
 - `ace` (4000 atoms, 5 A cutoff): 0.37 s instead of 47 s.
+- `common_neighbor_analysis`: 1.84 s instead of 79 s for 1 000 188 atoms (0.45
+  s instead of 10.3 s for 256 000), and 10 to 12 times faster than before for
+  structures with surfaces or liquid. `diamond_structure` improves similarly.
+  CNA no longer builds a padded supercell; the labels are unchanged.
 
 Most results are bitwise the same as before. q_l, the q_lm parts, W_l and
 everything derived from them (disorder, `find_solids`) can differ in the last
