@@ -142,3 +142,23 @@ def test_descriptors_do_not_depend_on_threads(cutoff):
             results.append(_descriptors(atoms, ref))
     for key in results[0]:
         np.testing.assert_array_equal(results[0][key], results[1][key], err_msg=key)
+
+
+@pytest.mark.parametrize("make", [
+    lambda: _crystal(),
+    lambda: bulk("Si", "diamond", a=5.43, cubic=True).repeat(8),
+    lambda: bulk("SiSi", "wurtzite", a=3.84, c=6.27).repeat((10, 10, 8)),
+])
+def test_cna_does_not_depend_on_threads(make):
+    labels = []
+    for n in (1, 4):
+        atoms = make()
+        atoms.rattle(0.2, seed=6)
+        with threads(n):
+            a1, a2, a3 = atoms.copy(), atoms.copy(), atoms.copy()
+            pyscal3.common_neighbor_analysis(a1)
+            pyscal3.common_neighbor_analysis(a2, lattice_constant=3.61)
+            pyscal3.diamond_structure(a3)
+        labels.append([a.arrays["pyscal_structure"] for a in (a1, a2, a3)])
+    for x, y in zip(*labels):
+        np.testing.assert_array_equal(x, y)
