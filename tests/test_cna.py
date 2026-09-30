@@ -1,5 +1,6 @@
 """Tests for Common Neighbor Analysis and Diamond Structure."""
 import numpy as np
+import pytest
 import pyscal3
 from pyscal3.structures import make_crystal
 from ase.build import bulk
@@ -153,3 +154,43 @@ def test_diamond_one_isolated_atom_does_not_relabel_the_rest():
         if key != "others":
             assert res[key] == value
     assert res["others"] == ref["others"] + 1
+
+
+@pytest.mark.parametrize("make", [
+    lambda: bulk("Cu", "fcc", a=3.61),
+    lambda: bulk("Fe", "bcc", a=2.87),
+    lambda: bulk("Ti", "hcp", a=2.95, c=4.68),
+    lambda: bulk("Cu", "fcc", a=3.61, cubic=True),
+])
+def test_cna_labels_do_not_depend_on_repeating_the_cell(make):
+    """Small cells are handled through periodic images, without padding."""
+    small = make()
+    small.rattle(0.03, seed=2)
+    big = small.repeat((3, 3, 3))
+    pyscal3.common_neighbor_analysis(small)
+    pyscal3.common_neighbor_analysis(big)
+    np.testing.assert_array_equal(np.tile(small.arrays["pyscal_structure"], 27),
+                                  big.arrays["pyscal_structure"])
+
+
+@pytest.mark.parametrize("make", [
+    lambda: bulk("Si", "diamond", a=5.43),
+    lambda: bulk("SiSi", "wurtzite", a=3.84, c=6.27),
+])
+def test_diamond_labels_do_not_depend_on_repeating_the_cell(make):
+    small = make()
+    big = small.repeat((4, 4, 4))
+    pyscal3.diamond_structure(small)
+    pyscal3.diamond_structure(big)
+    np.testing.assert_array_equal(np.tile(small.arrays["pyscal_structure"], 64),
+                                  big.arrays["pyscal_structure"])
+    assert big.arrays["pyscal_structure"].min() > 0
+
+
+def test_cna_leaves_the_neighbor_list_alone():
+    atoms = make_crystal("fcc", lattice_constant=4.00, repetitions=(4, 4, 4))
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)
+    before = atoms.arrays["pyscal_neighbors"].copy()
+    pyscal3.common_neighbor_analysis(atoms)
+    pyscal3.diamond_structure(atoms)
+    np.testing.assert_array_equal(atoms.arrays["pyscal_neighbors"], before)

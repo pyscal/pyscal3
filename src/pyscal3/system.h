@@ -94,8 +94,6 @@ py::dict nl_cutoff(const nl_positions& positions, const nl_positions& cell,
     const vector<bool>& pbc, double rc);
 py::dict nl_shell(const nl_positions& positions, const nl_positions& cell,
     const vector<bool>& pbc, double dmin, double dmax);
-py::dict nl_candidates(const nl_positions& positions, const nl_positions& cell,
-    const vector<bool>& pbc, double prefactor, int nmin);
 py::dict nl_number(const nl_positions& positions, const nl_positions& cell,
     const vector<bool>& pbc, double prefactor, int nmax, bool assign);
 py::dict nl_adaptive(const nl_positions& positions, const nl_positions& cell,
@@ -191,76 +189,12 @@ py::array_t<std::int64_t> find_clusters(const nl_index& offsets,
     double clustercutoff);
 
 /*-----------------------------------------------------
-    CNA Methods
+    CNA Methods (cna.cpp)
 -----------------------------------------------------*/
-
-void get_cna_neighbors(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    double lattice_constant,
-    int style);
-
-void get_acna_neighbors_cn12(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void get_acna_neighbors_cn14(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void get_common_neighbors(const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    const int ti,
-    const vector<vector<double>>& positions,
-    const vector<double>& cutoff,
-    const vector<vector<int>>& neighbors,
-    vector<vector<vector<int>>>& cna,
-    vector<vector<vector<int>>>& common);
-
-void get_common_bonds(const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    const int ti,
-    const vector<vector<double>>& positions,
-    const vector<double>& cutoff,
-    const vector<vector<int>>& neighbors,
-    vector<vector<vector<int>>>& cna,
-    vector<vector<vector<int>>>& common,
-    vector<vector<vector<int>>>& bonds);
-
-void identify_cn12(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void identify_cn14(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void get_diamond_neighbors(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    vector<vector<int>>& first_shell);
-
-void identify_diamond_cna(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
+py::tuple cna_structure(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor, double lattice_constant, int nmin);
+py::tuple diamond_structure_cna(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor);
 
 /*-----------------------------------------------------
     Other Methods

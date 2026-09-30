@@ -27,20 +27,16 @@ from scipy.special import sph_harm_y
 
 import pyscal3.csystem as pc
 from pyscal3._bridge import (
-    get_box_params,
     atoms_to_dict,
     dict_to_atoms,
     ensure_neighbors,
     create_attribute,
-    padded_supercell,
-    periodic_directions,
     neighbor_arrays,
     rows_from_flat,
     stored_per_atom,
-    guess_cutoff,
     gc_paused,
 )
-from pyscal3.neighbors import find_neighbors
+from pyscal3.neighbors import find_neighbors, _geometry
 
 
 def _padded(atoms, key, fill, dtype):
@@ -447,31 +443,13 @@ def common_neighbor_analysis(atoms: Atoms, lattice_constant=None):
     dict
         Counts: {"fcc": n, "hcp": n, "bcc": n, "ico": n, "others": n}
     """
-    supercell = padded_supercell(atoms, cutoff=guess_cutoff(atoms, 2))
-    nreal = len(atoms)
-    d = atoms_to_dict(supercell)
-    triclinic, rot, rotinv, boxdims = get_box_params(supercell)
-    n = len(d["positions"])
-
-    # Create structure attribute
-    d["structure"] = [0] * n
-
-    # Find temp neighbors (by number, nmax=14)
-    _reset_and_find_temp_neighbors(d, supercell, periodic_directions(atoms), nmax=14)
-
-    if lattice_constant is None:
-        # Adaptive CNA
-        pc.get_acna_neighbors_cn12(d, triclinic, rot, rotinv, boxdims)
-        pc.identify_cn12(d, triclinic, rot, rotinv, boxdims)
-        pc.get_acna_neighbors_cn14(d, triclinic, rot, rotinv, boxdims)
-        pc.identify_cn14(d, triclinic, rot, rotinv, boxdims)
-    else:
-        pc.get_cna_neighbors(d, triclinic, rot, rotinv, boxdims, lattice_constant, 1)
-        pc.identify_cn12(d, triclinic, rot, rotinv, boxdims)
-        pc.get_cna_neighbors(d, triclinic, rot, rotinv, boxdims, lattice_constant, 2)
-        pc.identify_cn14(d, triclinic, rot, rotinv, boxdims)
-
-    structure = np.array(d["structure"][:nreal])
+    # candidates: all atoms within 2 * (V / N)^(1/3); the 12 or 14 nearest are used
+    structure, finished = pc.cna_structure(
+        *_geometry(atoms, 2), 2.0,
+        0.0 if lattice_constant is None else float(lattice_constant), 14,
+    )
+    if not finished:
+        _warn_few_candidates(14)
     atoms.arrays["pyscal_structure"] = structure
 
     return {
@@ -497,18 +475,9 @@ def diamond_structure(atoms: Atoms):
     dict
         Counts per structure type.
     """
-    supercell = padded_supercell(atoms, cutoff=guess_cutoff(atoms, 2))
-    nreal = len(atoms)
-    d = atoms_to_dict(supercell)
-    triclinic, rot, rotinv, boxdims = get_box_params(supercell)
-    n = len(d["positions"])
-
-    d["structure"] = [0] * n
-    _reset_and_find_temp_neighbors(d, supercell, periodic_directions(atoms), nmax=4)
-
-    pc.identify_diamond_cna(d, triclinic, rot, rotinv, boxdims)
-
-    structure = np.array(d["structure"][:nreal])
+    structure, finished = pc.diamond_structure_cna(*_geometry(atoms, 2), 2.0)
+    if not finished:
+        _warn_few_candidates(4)
     atoms.arrays["pyscal_structure"] = structure
 
     return {
@@ -1621,51 +1590,21 @@ def local_density(atoms: Atoms):
 # ---------------------------------------------------------------------------
 
 
-def _reset_and_find_temp_neighbors(d, supercell, periodic, nmax=14):
-    """Reset neighbors and store the candidates of every atom (for CNA/diamond).
+def _warn_few_candidates(nmax):
+    """Warn that some atoms had fewer than ``nmax`` neighbor candidates.
 
-    The candidates are all atoms within 2 * (V / N)^(1/3) of the padded
-    ``supercell``, sorted by distance. Only the ``periodic`` directions of the
-    original structure are periodic; the others carry the vacuum cell vector
-    of the supercell. The C++ classifiers take the first ``nmax`` candidates.
+    Atoms with fewer than ``nmax`` candidates cannot be classified and are
+    labelled "others". That is the right answer for a surface or a small
+    cluster, so this warns instead of failing the whole analysis.
     """
-    n = len(d["positions"])
-    d["neighbors"] = [[] for _ in range(n)]
-    d["neighbordist"] = [[] for _ in range(n)]
-    d["neighborweight"] = [[] for _ in range(n)]
-    d["diff"] = [[] for _ in range(n)]
-    d["r"] = [[] for _ in range(n)]
-    d["theta"] = [[] for _ in range(n)]
-    d["phi"] = [[] for _ in range(n)]
-    d["cutoff"] = [0.0] * n
-
-    res = pc.nl_candidates(
-        np.ascontiguousarray(supercell.positions, dtype=float),
-        np.ascontiguousarray(supercell.cell, dtype=float),
-        [bool(p) for p in periodic],
-        2.0,
-        nmax,
+    warnings.warn(
+        "Could not find %d neighbor candidates for every atom; those atoms "
+        "are reported as 'others'. The structure may be a small cluster or "
+        "very sparse. If it is meant to be periodic, check that atoms.pbc "
+        "is set and the cell is correct." % nmax,
+        RuntimeWarning,
+        stacklevel=3,
     )
-    with gc_paused():
-        bounds = list(zip(res["temp_offsets"][:-1].tolist(), res["temp_offsets"][1:].tolist()))
-        temp_j = res["temp_j"].tolist()
-        temp_d = res["temp_d"].tolist()
-        d["temp_neighbors"] = [temp_j[a:b] for a, b in bounds]
-        d["temp_neighbordist"] = [temp_d[a:b] for a, b in bounds]
-    finished = res["finished"]
-    if not finished:
-        # Atoms with fewer than `nmax` candidates cannot be classified; the
-        # C++ routines skip them, so they end up labelled "others". That is
-        # the right answer for a surface or a small cluster, so warn instead
-        # of failing the whole analysis.
-        warnings.warn(
-            "Could not find %d neighbor candidates for every atom; those atoms "
-            "are reported as 'others'. The structure may be a small cluster or "
-            "very sparse. If it is meant to be periodic, check that atoms.pbc "
-            "is set and the cell is correct." % nmax,
-            RuntimeWarning,
-            stacklevel=3,
-        )
 
 
 # ---------------------------------------------------------------------------

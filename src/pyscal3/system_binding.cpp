@@ -22,7 +22,6 @@ PYBIND11_MODULE(csystem, m) {
     m.def("get_distance_vector", &get_distance_vector);
     m.def("nl_cutoff", &nl_cutoff);
     m.def("nl_shell", &nl_shell);
-    m.def("nl_candidates", &nl_candidates);
     m.def("nl_number", &nl_number);
     m.def("nl_adaptive", &nl_adaptive);
     m.def("nl_sann", &nl_sann);
@@ -34,12 +33,8 @@ PYBIND11_MODULE(csystem, m) {
     m.def("calculate_bonds", &calculate_bonds);
     m.def("find_clusters", &find_clusters);
     m.def("get_all_neighbors_voronoi", &get_all_neighbors_voronoi);
-    m.def("get_cna_neighbors", &get_cna_neighbors);
-    m.def("get_acna_neighbors_cn12", &get_acna_neighbors_cn12);
-    m.def("get_acna_neighbors_cn14", &get_acna_neighbors_cn14);
-    m.def("identify_cn12", &identify_cn12);
-    m.def("identify_cn14", &identify_cn14);
-    m.def("identify_diamond_cna", &identify_diamond_cna);
+    m.def("cna_structure", &cna_structure);
+    m.def("diamond_structure_cna", &diamond_structure_cna);
     m.def("calculate_centrosymmetry", &calculate_centrosymmetry);
     m.def("calculate_entropy", &calculate_entropy);
     m.def("calculate_average_entropy", &calculate_average_entropy);
