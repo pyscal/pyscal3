@@ -43,41 +43,40 @@ from pyscal3._bridge import (
 from pyscal3.neighbors import find_neighbors
 
 
+def _padded(atoms, key, fill, dtype):
+    """Per-atom rows of a per-bond quantity as a 2-D (N, max_nn) array."""
+    offsets, nb = neighbor_arrays(atoms, key)
+    counts = np.diff(offsets)
+    n = len(atoms)
+    max_nn = int(counts.max()) if n else 0
+    out = np.full((n, max_nn), fill, dtype=dtype)
+    rows = np.repeat(np.arange(n), counts)
+    cols = np.arange(len(nb[key])) - np.repeat(offsets[:-1], counts)
+    out[rows, cols] = nb[key]
+    return out
+
+
 def _get_neighbor_dists_padded(atoms):
     """Return per-atom neighbor distances as a 2-D (N, max_nn) array.
 
-    Falls back to ``atoms.info["pyscal_neighbordist"]`` (ragged list)
-    when neighbor data is not stored as a uniform 2-D array in
-    ``atoms.arrays``.  Padded entries are zero.
+    Uses ``atoms.arrays["pyscal_neighbordist"]`` when the rows are stored
+    there (all atoms have the same number of neighbors), otherwise the flat
+    neighbor data. Padded entries are zero.
     """
     if "pyscal_neighbordist" in atoms.arrays:
         return atoms.arrays["pyscal_neighbordist"]
-    rows = atoms.info["pyscal_neighbordist"]
-    n = len(atoms)
-    max_nn = max((len(r) for r in rows), default=0)
-    out = np.zeros((n, max_nn), dtype=float)
-    for i, r in enumerate(rows):
-        if len(r) > 0:
-            out[i, : len(r)] = r
-    return out
+    return _padded(atoms, "neighbordist", 0.0, float)
 
 
 def _get_neighbor_indices_padded(atoms):
     """Return per-atom neighbor indices as a 2-D (N, max_nn) array.
 
-    Falls back to ``atoms.info["pyscal_neighbors"]`` for ragged data.
-    Padded entries are -1.
+    Uses ``atoms.arrays["pyscal_neighbors"]`` when the rows are stored there,
+    otherwise the flat neighbor data. Padded entries are -1.
     """
     if "pyscal_neighbors" in atoms.arrays:
         return atoms.arrays["pyscal_neighbors"]
-    rows = atoms.info["pyscal_neighbors"]
-    n = len(atoms)
-    max_nn = max((len(r) for r in rows), default=0)
-    out = np.full((n, max_nn), -1, dtype=int)
-    for i, r in enumerate(rows):
-        if len(r) > 0:
-            out[i, : len(r)] = r
-    return out
+    return _padded(atoms, "neighbors", -1, int)
 
 
 # ---------------------------------------------------------------------------
@@ -587,6 +586,10 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
             "Voronoi analysis required. Call find_neighbors(atoms, method='voronoi') first."
         )
 
+    if "neighborweight" not in d:
+        # rows not stored (store_rows=False): rebuild them for the C++ routine
+        offsets, nb = neighbor_arrays(atoms, "neighborweight")
+        d["neighborweight"] = rows_from_flat(offsets, nb["neighborweight"])
     pc.calculate_voronoi_vector(d, edge_cutoff, area_cutoff)
 
     vv = np.array(d["vorovector"])
@@ -801,9 +804,8 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     ``rmax`` and overwrites any existing neighbor data on ``atoms``.
     """
     find_neighbors(atoms, method="cutoff", cutoff=rmax)
-    d = atoms_to_dict(atoms)
 
-    distances = np.concatenate([np.asarray(row) for row in d["neighbordist"]])
+    distances = neighbor_arrays(atoms, "neighbordist")[1]["neighbordist"]
     counts, bin_edges = np.histogram(distances, bins=bins, range=(rmin, rmax))
 
     edgewidth = abs(bin_edges[1] - bin_edges[0])
@@ -1415,10 +1417,11 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
         )
 
     # Multi-dimensional: fall back to Python loop
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
     result = []
     for i in range(len(atoms)):
         vals = [values[i]] if include_self else []
-        for j in d["neighbors"][i]:
+        for j in nb["neighbors"][offsets[i]:offsets[i + 1]]:
             vals.append(values[j])
         result.append(np.mean(vals))
 
@@ -1782,6 +1785,11 @@ def _ace_a_functions(d, nmax, lmax, cutoff):
 
 def _flat_bonds(d, natoms):
     """Atom index, distance and vector of every bond in the atom dict ``d``."""
+    if "bond_offsets" in d:
+        counts = np.diff(np.asarray(d["bond_offsets"]))
+        return (np.repeat(np.arange(natoms), counts),
+                np.asarray(d["bond_distance"], dtype=float),
+                np.asarray(d["bond_vector"], dtype=float).reshape(-1, 3))
     counts = np.array([len(r) for r in d["neighbordist"]], dtype=np.int64) \
         if not isinstance(d["neighbordist"], np.ndarray) else \
         np.full(natoms, d["neighbordist"].shape[1] if d["neighbordist"].ndim == 2 else 0)

@@ -369,3 +369,87 @@ def test_flat_bond_keys_are_cleared_by_a_new_search():
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)
     assert "pyscal_candidate_offsets" not in atoms.info
     assert len(atoms.info["pyscal_bond_neighbors"]) == 12 * len(atoms)
+
+
+def _descriptor_results(atoms, reference):
+    """Every descriptor that reads a stored neighbor list, as flat arrays."""
+    out = {}
+    a = atoms.copy()
+    ref = reference
+    out["q"] = np.concatenate(pyscal3.steinhardt_parameter(a, [4, 6]))
+    out["avg_q"] = np.concatenate(pyscal3.steinhardt_parameter(a, [4, 6], averaged=True))
+    out["w"] = np.concatenate(pyscal3.wigner_w_parameter(a, [4, 6]))
+    out["avg_w"] = np.concatenate(pyscal3.wigner_w_parameter(a, [6], averaged=True))
+    out["disorder"] = pyscal3.disorder(a, averaged=True)
+    b = a.copy()
+    out["solids"] = np.array([pyscal3.find_solids(b, cluster=True) or 0], dtype=float)
+    out["solid"] = np.asarray(b.arrays["pyscal_solid"], float)
+    out["clusters"] = np.asarray(b.arrays["pyscal_cluster"], float)
+    cp, cosines = pyscal3.chi_params(a, angles=True)
+    out["chi"] = np.asarray(cp, float)
+    out["cosines"] = np.concatenate([np.asarray(c, float) for c in cosines])
+    out["angular"] = pyscal3.angular_criteria(a)
+    out["ackland"] = np.asarray(pyscal3.identify_ackland_jones(a)[0], float)
+    out["entropy"] = pyscal3.entropy(a, rm=3.0, average=True)
+    out["entropy_local"] = pyscal3.entropy(a, rm=3.0, local=True)
+    a.arrays["pyscal_prop"] = np.arange(len(a), dtype=float)
+    a.arrays["pyscal_prop3"] = np.arange(3 * len(a), dtype=float).reshape(-1, 3)
+    out["avg1"] = pyscal3.average_over_neighbors(a, "prop")
+    out["avg3"] = np.asarray(pyscal3.average_over_neighbors(a, "prop3"), float)
+    out["cn"] = np.asarray(pyscal3.coordination_number(a), float)
+    out["ecn"] = np.asarray(pyscal3.effective_coordination_number(a), float)
+    out["gcn"] = np.asarray(pyscal3.generalized_coordination_number(a), float)
+    out["density"] = np.asarray(pyscal3.local_density(a), float)
+    out["bld"] = np.concatenate([np.asarray(x, float).ravel() for x in pyscal3.bond_length_distribution(a)])
+    out["strain"] = pyscal3.atomic_strain(a, ref).ravel()
+    out["d2min"] = pyscal3.d2min(a, ref)
+    out["slip"] = pyscal3.slip_vector(a, ref).ravel()
+    out["ace"] = pyscal3.ace(a, nmax=3, lmax=3, nu_max=2)["full"].ravel()
+    return out
+
+
+@pytest.mark.parametrize("cutoff", [3.0, 4.3])
+def test_descriptors_are_the_same_without_rows(cutoff):
+    """store_rows=False gives the same results from the flat keys alone."""
+    base = STRUCTURES["fcc_rattled"]
+    moved = base.copy()
+    moved.positions += np.random.default_rng(3).normal(0, 0.02, moved.positions.shape)
+    results = []
+    for store_rows in (True, False):
+        atoms, ref = moved.copy(), base.copy()
+        pyscal3.find_neighbors(atoms, method="cutoff", cutoff=cutoff, store_rows=store_rows)
+        pyscal3.find_neighbors(ref, method="cutoff", cutoff=cutoff, store_rows=store_rows)
+        if not store_rows:
+            for key in ("neighbors", "neighbordist", "diff", "theta", "temp_neighbors"):
+                assert "pyscal_" + key not in atoms.arrays and "pyscal_" + key not in atoms.info
+        results.append(_descriptor_results(atoms, ref))
+    for key in results[0]:
+        if key == "ace":
+            # numpy's complex products in the ACE B basis can round differently
+            # from run to run, so ACE is compared to the last digits only
+            np.testing.assert_allclose(results[0][key], results[1][key], rtol=1e-12, atol=1e-15)
+        else:
+            np.testing.assert_array_equal(results[0][key], results[1][key], err_msg=key)
+
+
+def test_voronoi_without_rows():
+    atoms = STRUCTURES["fcc_rattled"].copy()
+    pyscal3.find_neighbors(atoms, method="voronoi")
+    q_rows = pyscal3.steinhardt_parameter(atoms, 6)[0]
+    vv_rows = pyscal3.voronoi_vector(atoms)
+    atoms = STRUCTURES["fcc_rattled"].copy()
+    pyscal3.find_neighbors(atoms, method="voronoi", store_rows=False)
+    assert "pyscal_neighbors" not in atoms.info and "pyscal_neighbors" not in atoms.arrays
+    np.testing.assert_array_equal(pyscal3.steinhardt_parameter(atoms, 6)[0], q_rows)
+    np.testing.assert_array_equal(pyscal3.voronoi_vector(atoms), vv_rows)
+
+
+def test_without_rows_ragged_neighbors_can_be_written_to_extxyz(tmp_path):
+    from ase.io import read
+
+    atoms = STRUCTURES["fcc_rattled"].copy()
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=4.3, store_rows=False)
+    atoms.write(tmp_path / "out.extxyz")
+    back = read(tmp_path / "out.extxyz")
+    np.testing.assert_array_equal(back.info["pyscal_bond_neighbors"], atoms.info["pyscal_bond_neighbors"])
+    np.testing.assert_allclose(back.info["pyscal_bond_vector"], atoms.info["pyscal_bond_vector"])
