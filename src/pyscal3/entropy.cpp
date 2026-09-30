@@ -31,7 +31,9 @@
  * atom; otherwise the global density rho is used for all atoms.
  */
 
-void calculate_entropy(py::dict& atoms,
+py::array_t<double> calculate_entropy(const nl_index& offsets,
+    const nl_values& neighbordist,
+    const nl_values& cutoff,
     double sigma,
     double rho,
     double rstart,
@@ -39,13 +41,10 @@ void calculate_entropy(py::dict& atoms,
     double h,
     double kb){
 
-    vector<vector<int>> neighbors =
-        atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<double> cutoff_vec =
-        atoms[py::str("cutoff")].cast<vector<double>>();
-    vector<vector<double>> neighbordist =
-        atoms[py::str("neighbordist")].cast<vector<vector<double>>>();
-    int nop = (int)neighbors.size();
+    const std::int64_t* off = offsets.data();
+    const double* dist = neighbordist.data();
+    const double* cutoff_vec = cutoff.data();
+    const int nop = (int)(offsets.shape(0) - 1);
 
     const bool local = (rho == 0.0);
 
@@ -62,12 +61,13 @@ void calculate_entropy(py::dict& atoms,
     for (int j = 0; j <= nsteps; j++)
         r_grid[j] = rstart + j * h;
 
-    vector<double> entropy_out(nop);
+    py::array_t<double> entropy_array(nop);
+    double* entropy_out = entropy_array.mutable_data();
     vector<double> raw_g(nsteps + 1);   // per-atom, reused
 
     for (int ti = 0; ti < nop; ti++) {
 
-        int nn = (int)neighbordist[ti].size();
+        int nn = (int)(off[ti + 1] - off[ti]);
 
         double rho_i = rho;
         if (local) {
@@ -84,7 +84,7 @@ void calculate_entropy(py::dict& atoms,
         fill(raw_g.begin(), raw_g.end(), 0.0);
 
         for (int i = 0; i < nn; i++) {
-            double rij = neighbordist[ti][i];
+            double rij = dist[off[ti] + i];
             int jmin = max(0,      (int)((rij - gauss_window - rstart) / h));
             int jmax = min(nsteps, (int)((rij + gauss_window - rstart) / h) + 1);
             for (int j = jmin; j <= jmax; j++) {
@@ -122,24 +122,26 @@ void calculate_entropy(py::dict& atoms,
         entropy_out[ti] = -rho_i * kb * h * summ;
     }
 
-    atoms[py::str("entropy")] = entropy_out;
+    return entropy_array;
 }
 
-void calculate_average_entropy(py::dict& atoms){
+py::array_t<double> calculate_average_entropy(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& entropy){
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const double* ent = entropy.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
     double entsum;
-    vector<double> entropy = atoms[py::str("entropy")].cast<vector<double>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-	int nop = neighbors.size();
 
-	vector<double> avg_entropy(nop);
-    
-    for(int ti=0; ti<nop; ti++){
-        entsum = entropy[ti];
-        for(int tj=0; tj<neighbors[ti].size(); tj++){
-            entsum += entropy[neighbors[ti][tj]];
+    py::array_t<double> avg_entropy(nop);
+    double* out = avg_entropy.mutable_data();
+    for (py::ssize_t ti=0; ti<nop; ti++){
+        entsum = ent[ti];
+        for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
+            entsum += ent[nb[ci]];
         }
-        avg_entropy[ti] = entsum/(double(neighbors[ti].size() + 1));
+        out[ti] = entsum/(double(off[ti+1] - off[ti] + 1));
     }
-
-    atoms[py::str("average_entropy")] = avg_entropy;
+    return avg_entropy;
 }

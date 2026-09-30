@@ -26,6 +26,7 @@ from pyscal3._bridge import (
     clear_neighbor_data,
     effective_periodic_cell,
     gc_paused,
+    store_bond_arrays,
     _NONPERIODIC_PAD,
 )
 
@@ -42,6 +43,7 @@ def find_neighbors(
     cells=None,
     nmax=12,
     assign_neighbor=True,
+    store_rows=True,
 ):
     """
     Find neighbors of all atoms.
@@ -75,6 +77,12 @@ def find_neighbors(
         Number of neighbors for 'number' method. Default 12.
     assign_neighbor : bool, optional
         Whether to assign neighbors (for 'number' method). Default True.
+    store_rows : bool, optional
+        Whether to store the per-atom row keys (``pyscal_neighbors``,
+        ``pyscal_neighbordist``, ...). Default True. With False, only the flat
+        ``pyscal_bond_*`` keys and ``pyscal_cutoff`` are stored; all
+        descriptors work from these, and building the per-atom Python lists
+        for atoms with different numbers of neighbors is skipped.
 
     Returns
     -------
@@ -97,6 +105,17 @@ def find_neighbors(
         - ``pyscal_cutoff`` — per-atom cutoff that was used
         - ``pyscal_neighbors_found`` (True) and ``pyscal_neighbor_method`` in
           ``atoms.info``
+
+        The same bonds are also stored flat in ``atoms.info``:
+        ``pyscal_bond_offsets`` (natoms + 1 entries; the bonds of atom ``i``
+        are ``offsets[i]:offsets[i + 1]``), ``pyscal_bond_neighbors``,
+        ``pyscal_bond_distance``, ``pyscal_bond_weight``,
+        ``pyscal_bond_vector`` (nbonds, 3), ``pyscal_bond_theta`` and
+        ``pyscal_bond_phi``. The adaptive, SANN and number methods also store
+        their candidates as ``pyscal_candidate_offsets``,
+        ``pyscal_candidate_neighbors`` and ``pyscal_candidate_distance``.
+        With ``store_rows=False`` only these flat keys and ``pyscal_cutoff``
+        are stored.
 
         The Voronoi method additionally stores ``pyscal_voronoi_volume``,
         ``pyscal_face_vertices``, ``pyscal_face_perimeters``,
@@ -170,6 +189,9 @@ def find_neighbors(
         _reset_neighbors(d)
         pc.get_all_neighbors_voronoi(d, 0.0, triclinic, rot, rotinv, boxdims, voroexp)
         dict_to_atoms(d, atoms, nreal=nreal)
+        store_bond_arrays(atoms)
+        if not store_rows:
+            _drop_rows(atoms)
         if isinstance(cutoff, (int, float)) and cutoff > 0:
             # merge Voronoi vertices closer than `cutoff` into unique sites
             atoms.info["pyscal_unique_vertices"] = _unique_voronoi_vertices(
@@ -182,7 +204,7 @@ def find_neighbors(
         )
 
     if method != "voronoi":
-        _store_neighbors(atoms, res)
+        _store_neighbors(atoms, res, store_rows)
     atoms.info["pyscal_neighbors_found"] = True
     atoms.info["pyscal_neighbor_method"] = method
 
@@ -256,15 +278,40 @@ def _store_rows(atoms: Atoms, rows: dict, offsets, vectors=None):
             atoms.info["pyscal_diff"] = [flat[a:b] for a, b in bounds]
 
 
-def _store_neighbors(atoms: Atoms, res: dict):
+_ROW_KEYS = ("neighbors", "neighbordist", "neighborweight", "diff", "r", "theta",
+             "phi", "temp_neighbors", "temp_neighbordist")
+
+
+def _drop_rows(atoms: Atoms):
+    """Remove the per-atom neighbor row keys (the flat keys stay)."""
+    for key in _ROW_KEYS:
+        atoms.arrays.pop("pyscal_" + key, None)
+        atoms.info.pop("pyscal_" + key, None)
+
+
+def _store_neighbors(atoms: Atoms, res: dict, store_rows=True):
     """Write the result of a pc.nl_* search to ``atoms``."""
+    info = atoms.info
+    info["pyscal_bond_offsets"] = res["offsets"]
+    info["pyscal_bond_neighbors"] = res["j"]
+    info["pyscal_bond_distance"] = res["d"]
+    info["pyscal_bond_weight"] = res["weight"]
+    info["pyscal_bond_vector"] = res["diff"]
+    info["pyscal_bond_theta"] = res["theta"]
+    info["pyscal_bond_phi"] = res["phi"]
+    if "temp_offsets" in res:
+        info["pyscal_candidate_offsets"] = res["temp_offsets"]
+        info["pyscal_candidate_neighbors"] = res["temp_j"]
+        info["pyscal_candidate_distance"] = res["temp_d"]
+    atoms.arrays["pyscal_cutoff"] = res["cutoff"]
+    if not store_rows:
+        return
     _store_rows(
         atoms,
         {key: res[src] for key, src in _PER_PAIR_KEYS.items()},
         res["offsets"],
         vectors=res["diff"],
     )
-    atoms.arrays["pyscal_cutoff"] = res["cutoff"]
     if "temp_offsets" in res:
         _store_rows(
             atoms,
