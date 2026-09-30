@@ -172,7 +172,10 @@ py::array_t<double> calculate_disorder(const nl_index& offsets,
     const nl_values& q_imag,
     const int lm);
 
-void calculate_bonds(py::dict& atoms,
+py::tuple calculate_bonds(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm,
     const double threshold,
     const double avgthreshold,
@@ -180,16 +183,11 @@ void calculate_bonds(py::dict& atoms,
     const int comparecriteria,
     const int criteria);
 
-void extract_cluster(int ti,
-    int clusterindex,
-    vector<bool>& condition,
-    vector<bool>& ghost,
-    vector<vector<int>>& neighbors,
-    vector<vector<double>>& neighbordist,
-    vector<double>& cutoff,
-    vector<int>& cluster);
-
-void find_clusters(py::dict& atoms,
+py::array_t<std::int64_t> find_clusters(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& neighbordist,
+    const nl_values& atom_cutoff,
+    const py::array_t<bool, py::array::c_style | py::array::forcecast>& condition,
     double clustercutoff);
 
 /*-----------------------------------------------------

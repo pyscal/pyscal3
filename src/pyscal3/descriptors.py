@@ -35,6 +35,8 @@ from pyscal3._bridge import (
     padded_supercell,
     periodic_directions,
     neighbor_arrays,
+    rows_from_flat,
+    stored_per_atom,
     guess_cutoff,
     gc_paused,
 )
@@ -1409,7 +1411,7 @@ def find_solids(
     int or None
         Largest cluster size if cluster=True.
     """
-    d = _get_dict_with_neighbors(atoms)
+    d = {}
 
     if isinstance(bonds, int):
         criteria = 0
@@ -1422,9 +1424,14 @@ def find_solids(
 
     # Calculate Steinhardt parameters
     _compute_qlm(atoms, d, q)
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
 
     # Calculate bonds/solid classification
-    pc.calculate_bonds(d, q, threshold, avgthreshold, bonds, compare_criteria, criteria)
+    d["bonds"], sij, d["avg_sij"], d["solid"] = pc.calculate_bonds(
+        offsets, nb["neighbors"], d["q%d_real" % q], d["q%d_imag" % q], q,
+        threshold, avgthreshold, bonds, compare_criteria, criteria,
+    )
+    d["sij"] = rows_from_flat(offsets, sij)
 
     _sync_back(
         d,
@@ -1433,9 +1440,7 @@ def find_solids(
     )
 
     if cluster:
-        return find_clusters(
-            atoms, condition=np.array(d["solid"]) > 0, cutoff=cutoff, d=d
-        )
+        return find_clusters(atoms, condition=np.array(d["solid"]) > 0, cutoff=cutoff)
     return None
 
 
@@ -1454,8 +1459,7 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
     cutoff : float
         Cluster cutoff (0 = use neighbor cutoff).
     d : dict, optional
-        Internal: atom dict already built from ``atoms`` (used by
-        :func:`find_solids` to avoid rebuilding it).
+        Ignored. Kept so that existing calls keep working.
 
     Returns
     -------
@@ -1465,15 +1469,13 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
         not satisfy the condition) and, if largest=True, a boolean mask of
         the largest cluster in ``atoms.arrays["pyscal_largest_cluster"]``.
     """
-    if d is None:
-        d = _get_dict_with_neighbors(atoms)
-
-    condition = np.asarray(condition, dtype=bool)
-    d["condition"] = condition.tolist()
-
-    pc.find_clusters(d, cutoff)
-
-    cluster_ids = np.array(d["cluster"])
+    offsets, nb = neighbor_arrays(atoms, "neighbors", "neighbordist")
+    condition = np.ascontiguousarray(condition, dtype=bool)
+    cluster_ids = pc.find_clusters(
+        offsets, nb["neighbors"], nb["neighbordist"],
+        np.ascontiguousarray(stored_per_atom(atoms, "cutoff"), dtype=float),
+        condition, cutoff,
+    )
     atoms.arrays["pyscal_cluster"] = cluster_ids
 
     if largest:

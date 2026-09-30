@@ -126,6 +126,31 @@ def neighbor_arrays(atoms: Atoms, *keys):
     return offsets, values
 
 
+def rows_from_flat(offsets, flat):
+    """Per-atom rows of a flat per-bond array, in the stored-key format.
+
+    Rows of equal length give an (n, k) array (an (n, 0) float array if every
+    row is empty); rows of different length give a list of lists.
+    """
+    offsets = np.asarray(offsets)
+    n = len(offsets) - 1
+    counts = np.diff(offsets)
+    k = int(counts[0]) if n else 0
+    if (counts == k).all():
+        return np.zeros((n, 0)) if k == 0 else np.asarray(flat).reshape(n, k)
+    with gc_paused():
+        values = np.asarray(flat).tolist()
+        return [values[a:b] for a, b in zip(offsets[:-1].tolist(), offsets[1:].tolist())]
+
+
+def stored_per_atom(atoms: Atoms, key):
+    """A per-atom pyscal array (``pyscal_<key>``) from atoms.arrays or atoms.info."""
+    store = _PREFIX + key
+    if store in atoms.arrays:
+        return np.asarray(atoms.arrays[store])
+    return np.asarray(atoms.info[store])
+
+
 def get_box_params(atoms: Atoms):
     """
     Extract box parameters from ASE cell for the C++ functions.

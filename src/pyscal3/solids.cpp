@@ -16,10 +16,10 @@
 #include <any>
 
 double get_number_from_bond(const int lm,
-	vector<double>& real_qi,
-	vector<double>& imag_qi,
-	vector<double>& real_qj,
-	vector<double>& imag_qj){
+	const double* real_qi,
+	const double* imag_qi,
+	const double* real_qj,
+	const double* imag_qj){
 
     double sum2ti,sum2tj;
     double realdotproduct,imgdotproduct;
@@ -41,111 +41,98 @@ double get_number_from_bond(const int lm,
     return connection;
 }
 
-void calculate_bonds(py::dict& atoms,
+py::tuple calculate_bonds(const nl_index& offsets,
+	const nl_index& neighbors,
+	const nl_values& q_real,
+	const nl_values& q_imag,
 	const int lm,
 	const double threshold,
 	const double avgthreshold,
 	const double minbonds,
 	const int comparecriteria,
 	const int criteria){
-    
+
+    // returns bonds, sij (per bond, in neighbour order), avg_sij and solid
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const double* qr = q_real.data();
+    const double* qi = q_imag.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
+    const int nm = 2*lm + 1;
+
+    py::array_t<double> bonds(nop), avg_sij(nop), solid(nop);
+    py::array_t<double> sij(static_cast<py::ssize_t>(off[nop]));
+    double* bo = bonds.mutable_data();
+    double* av = avg_sij.mutable_data();
+    double* so = solid.mutable_data();
+    double* sj = sij.mutable_data();
+
     int frenkelcons;
-    double scalar;
+    double scalar, tempsij;
 
-    string key1, key2;
-	key1 = "q"+to_string(lm)+"_real";
-	key2 = "q"+to_string(lm)+"_imag";
-
-    vector<vector<double>> q_real = atoms[py::str(key1)].cast<vector<vector<double>>>();
-    vector<vector<double>> q_imag = atoms[py::str(key2)].cast<vector<vector<double>>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<double> bonds;
-    int nop = neighbors.size();
-
-    vector<vector<double>> sij(nop);
-    vector<double> avg_sij;
-
-    double tempsij;
-
-    for (int ti= 0;ti<nop;ti++){
-
+    for (py::ssize_t ti=0; ti<nop; ti++){
         frenkelcons = 0;
         tempsij = 0.0;
-        
-        for (int c = 0; c<neighbors[ti].size(); c++){
-
-            scalar = get_number_from_bond(lm, q_real[ti], q_imag[ti], q_real[neighbors[ti][c]], q_imag[neighbors[ti][c]]);
-            sij[ti].emplace_back(scalar);
-            
+        for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
+            const std::int64_t tj = nb[ci];
+            scalar = get_number_from_bond(lm, qr + ti*nm, qi + ti*nm, qr + tj*nm, qi + tj*nm);
+            sj[ci] = scalar;
             if (comparecriteria == 0){
                 if (scalar > threshold) frenkelcons += 1;
             }
             else{
                 if (scalar < threshold) frenkelcons += 1;
             }
-            
             tempsij += scalar;
         }
-
-        bonds.emplace_back(frenkelcons);
-        tempsij = tempsij/double(neighbors[ti].size());
-        avg_sij.emplace_back(tempsij);
+        bo[ti] = frenkelcons;
+        av[ti] = tempsij/double(off[ti+1] - off[ti]);
     }
 
-    vector<double> solid;
     int issolid;
     double tfrac;
-
-    if (criteria == 0){
-    	for (int ti= 0;ti<nop;ti++){
-    		if (comparecriteria==0){
-    			issolid = ((bonds[ti] > minbonds) && (avg_sij[ti] > avgthreshold));
-    		}
-    		else{
-    			issolid = ((bonds[ti] > minbonds) && (avg_sij[ti] < avgthreshold));
-    		}
-    		solid.emplace_back(issolid);
-    	}
+    for (py::ssize_t ti=0; ti<nop; ti++){
+        if (criteria == 0){
+            if (comparecriteria==0){
+                issolid = ((bo[ti] > minbonds) && (av[ti] > avgthreshold));
+            }
+            else{
+                issolid = ((bo[ti] > minbonds) && (av[ti] < avgthreshold));
+            }
+        }
+        else {
+            tfrac = (bo[ti]/double(off[ti+1] - off[ti]) > minbonds);
+            if (comparecriteria==0){
+                issolid = (tfrac && (av[ti] > avgthreshold));
+            }
+            else{
+                issolid = (tfrac && (av[ti] < avgthreshold));
+            }
+        }
+        so[ti] = issolid;
     }
-    else {
-    	for (int ti= 0;ti<nop;ti++){
-    		tfrac = (bonds[ti]/double(neighbors[ti].size()) > minbonds);
-    		if (comparecriteria==0){
-    			issolid = (tfrac && (avg_sij[ti] > avgthreshold));
-    		}
-    		else{
-    			issolid = (tfrac && (avg_sij[ti] < avgthreshold));	
-    		}
-    		solid.emplace_back(issolid);    		
-    	}
-    }
-
-    atoms[py::str("bonds")] = bonds;
-    atoms[py::str("sij")] = sij;
-    atoms[py::str("avg_sij")] = avg_sij;
-    atoms[py::str("solid")] = solid;
+    return py::make_tuple(bonds, sij, avg_sij, solid);
 }
 
-void extract_cluster(int seed,
+static void extract_cluster(std::int64_t seed,
 	int clusterindex,
-	vector<bool>& condition,
-	vector<bool>& ghost,
-	vector<vector<int>>& neighbors,
-	vector<vector<double>>& neighbordist,
-	vector<double>& cutoff,
-	vector<int>& cluster){
+	const bool* condition,
+	const std::int64_t* off,
+	const std::int64_t* nb,
+	const double* dist,
+	const vector<double>& cutoff,
+	std::int64_t* cluster){
 
 	// depth-first search with an explicit stack: a recursive search
 	// overflowed the call stack for clusters of a few 100 000 atoms
-	vector<int> stack(1, seed);
+	vector<std::int64_t> stack(1, seed);
 	while (!stack.empty()){
-		const int ti = stack.back();
+		const std::int64_t ti = stack.back();
 		stack.pop_back();
-		for(size_t tj=0; tj<neighbors[ti].size(); tj++){
-			const int cc = neighbors[ti][tj];
+		for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
+			const std::int64_t cc = nb[ci];
 			if (!condition[cc]) continue;
-			if (ghost[cc]) continue;
-			if(!(neighbordist[ti][tj] <= cutoff[ti])) continue;
+			if (!(dist[ci] <= cutoff[ti])) continue;
 			if (cluster[cc] == -1){
 				cluster[cc] = clusterindex;
 				stack.push_back(cc);
@@ -154,38 +141,38 @@ void extract_cluster(int seed,
 	}
 }
 
-void find_clusters(py::dict& atoms,
+py::array_t<std::int64_t> find_clusters(const nl_index& offsets,
+	const nl_index& neighbors,
+	const nl_values& neighbordist,
+	const nl_values& atom_cutoff,
+	const py::array_t<bool, py::array::c_style | py::array::forcecast>& condition,
 	double clustercutoff){
 
-    vector<bool> condition = atoms[py::str("condition")].cast<vector<bool>>();
-    vector<bool> ghost = atoms[py::str("ghost")].cast<vector<bool>>();
-    vector<double> cutoff = atoms[py::str("cutoff")].cast<vector<double>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<vector<double>> neighbordist = atoms[py::str("neighbordist")].cast<vector<vector<double>>>();
+    // cluster id of every atom that satisfies condition, -1 otherwise;
+    // a bond is followed if its length is at most the cutoff of the atom
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const double* dist = neighbordist.data();
+    const bool* cond = condition.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
 
-    int nop = neighbors.size();
-    vector<int> cluster;
+    vector<double> cutoff(atom_cutoff.data(), atom_cutoff.data() + nop);
+    if (clustercutoff != 0){
+        fill(cutoff.begin(), cutoff.end(), clustercutoff);
+    }
+
+    py::array_t<std::int64_t> cluster(nop);
+    std::int64_t* cl = cluster.mutable_data();
+    fill(cl, cl + nop, -1);
     int clusterindex = 0;
 
-    if (clustercutoff != 0){
-    	for(int ti=0; ti<nop; ti++){
-        	cutoff[ti] = clustercutoff;
-    	}
-  	}
-
-  	for(int ti=0; ti<nop; ti++){
-  		cluster.emplace_back(-1);
-  	}
-
-  	for(int ti=0; ti<nop; ti++){
-  		if (!condition[ti]) continue;
-  		if (ghost[ti]) continue;
-  		if (cluster[ti] == -1){
-  			clusterindex += 1;
-  			cluster[ti] = clusterindex;
-  			extract_cluster(ti, clusterindex, condition, ghost, neighbors, neighbordist, cutoff, cluster);		
-  		}
-  	}
-
-  	atoms[py::str("cluster")] = cluster;
+    for (py::ssize_t ti=0; ti<nop; ti++){
+        if (!cond[ti]) continue;
+        if (cl[ti] == -1){
+            clusterindex += 1;
+            cl[ti] = clusterindex;
+            extract_cluster(ti, clusterindex, cond, off, nb, dist, cutoff, cl);
+        }
+    }
+    return cluster;
 }
