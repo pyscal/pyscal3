@@ -18,6 +18,11 @@ Quick Start
 >>> fe = make_element("Fe", repetitions=(4, 4, 4))
 """
 
+# Threads
+from pyscal3.threads import set_num_threads, get_num_threads
+
+set_num_threads()
+
 # Neighbor finding
 from pyscal3.neighbors import find_neighbors, get_distance
 
@@ -61,6 +66,9 @@ from pyscal3.trajectory import Trajectory
 __version__ = "4.0.0"
 
 __all__ = [
+    # Threads
+    "set_num_threads",
+    "get_num_threads",
     # Neighbors
     "find_neighbors",
     "get_distance",
