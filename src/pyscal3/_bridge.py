@@ -45,7 +45,31 @@ NEIGHBOR_DERIVED_KEYS = [
     "unique_vertices",
     "neighbors_found",
     "neighbor_method",
+    "bond_offsets",
+    "bond_neighbors",
+    "bond_distance",
+    "bond_weight",
+    "bond_vector",
+    "bond_theta",
+    "bond_phi",
+    "candidate_offsets",
+    "candidate_neighbors",
+    "candidate_distance",
 ]
+
+# Flat per-bond keys (in atoms.info) holding the same data as the per-atom
+# row keys: row key -> (offsets key, flat key)
+BOND_KEYS = {
+    "neighbors": ("bond_offsets", "bond_neighbors"),
+    "neighbordist": ("bond_offsets", "bond_distance"),
+    "r": ("bond_offsets", "bond_distance"),
+    "neighborweight": ("bond_offsets", "bond_weight"),
+    "diff": ("bond_offsets", "bond_vector"),
+    "theta": ("bond_offsets", "bond_theta"),
+    "phi": ("bond_offsets", "bond_phi"),
+    "temp_neighbors": ("candidate_offsets", "candidate_neighbors"),
+    "temp_neighbordist": ("candidate_offsets", "candidate_distance"),
+}
 NEIGHBOR_KEYS = [_PREFIX + k for k in NEIGHBOR_DERIVED_KEYS]
 
 
@@ -83,11 +107,50 @@ def neighbor_arrays(atoms: Atoms, *keys):
     ``pyscal_`` prefix) to a flat array. ``neighbors`` gives int64 indices,
     ``diff`` an (m, 3) array, the other keys float64 arrays.
 
-    The arrays are rebuilt from ``atoms.arrays`` (rows of equal length, which
-    only need a reshape) or ``atoms.info`` (lists of lists), so they always
-    match what is stored.
+    The flat ``pyscal_bond_*`` / ``pyscal_candidate_*`` keys written by
+    find_neighbors are used when present. Otherwise the arrays are rebuilt
+    from the per-atom rows in ``atoms.arrays`` (rows of equal length, which
+    only need a reshape) or ``atoms.info`` (lists of lists).
     """
     ensure_neighbors(atoms)
+    flat = _stored_bond_arrays(atoms, keys)
+    if flat is not None:
+        return flat
+    return _flat_from_rows(atoms, keys)
+
+
+def _stored_bond_arrays(atoms: Atoms, keys):
+    """The requested keys from the flat bond keys, or None if not all are stored."""
+    if not keys:
+        return None
+    offsets_keys = {BOND_KEYS[k][0] for k in keys if k in BOND_KEYS}
+    if len(offsets_keys) != 1 or not all(k in BOND_KEYS for k in keys):
+        return None
+    offsets_key = _PREFIX + offsets_keys.pop()
+    if offsets_key not in atoms.info:
+        return None
+    values = {}
+    for key in keys:
+        store = _PREFIX + BOND_KEYS[key][1]
+        if store not in atoms.info:
+            return None
+        dtype = np.int64 if key in ("neighbors", "temp_neighbors") else np.float64
+        values[key] = np.ascontiguousarray(atoms.info[store], dtype=dtype)
+    return np.ascontiguousarray(atoms.info[offsets_key], dtype=np.int64), values
+
+
+def store_bond_arrays(atoms: Atoms):
+    """Write the flat pyscal_bond_* keys from the per-atom neighbor rows."""
+    offsets, values = _flat_from_rows(
+        atoms, ("neighbors", "neighbordist", "neighborweight", "diff", "theta", "phi")
+    )
+    atoms.info[_PREFIX + "bond_offsets"] = offsets
+    for key in ("neighbors", "neighbordist", "neighborweight", "diff", "theta", "phi"):
+        atoms.info[_PREFIX + BOND_KEYS[key][1]] = values[key]
+
+
+def _flat_from_rows(atoms: Atoms, keys):
+    """Flat arrays rebuilt from the per-atom row keys."""
     n = len(atoms)
     counts = None
     values = {}
@@ -306,6 +369,7 @@ def ensure_neighbors(atoms: Atoms):
     if (
         _PREFIX + "neighbors" not in atoms.info
         and _PREFIX + "neighbors" not in atoms.arrays
+        and _PREFIX + "bond_offsets" not in atoms.info
     ):
         raise ValueError(
             "Neighbors have not been computed. "

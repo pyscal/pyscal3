@@ -203,6 +203,9 @@ py::dict to_dict(Rows &&rows, vector<double> &&cutoff) {
     for (idx k = 0; k < m; k++) {
         const double x = rows.v[3 * k], y = rows.v[3 * k + 1], z = rows.v[3 * k + 2];
         convert_to_spherical_coordinates(x, y, z, r[k], phi[k], theta[k]);
+        // r is the bond length; keep it identical to d, whatever the compiler
+        // does with the two sqrt expressions
+        r[k] = rows.d[k];
     }
     py::dict out;
     out["offsets"] = to_array(std::move(rows.offsets), {py::ssize_t(n + 1)});

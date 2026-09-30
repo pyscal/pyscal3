@@ -322,3 +322,50 @@ def test_garbage_collector_state_is_restored(enabled):
         assert gc.isenabled() == enabled
     finally:
         gc.enable() if was else gc.disable()
+
+
+FLAT_OF_ROW = {"neighbors": "bond_neighbors", "neighbordist": "bond_distance",
+               "r": "bond_distance", "neighborweight": "bond_weight",
+               "diff": "bond_vector", "theta": "bond_theta", "phi": "bond_phi"}
+
+
+@pytest.mark.parametrize("kwargs", [
+    dict(method="cutoff", cutoff=3.0),
+    dict(method="cutoff", cutoff=4.3),
+    dict(method="cutoff", cutoff=2.6, shell_thickness=1.0),
+    dict(method="cutoff", cutoff="adaptive"),
+    dict(method="cutoff", cutoff="sann"),
+    dict(method="number", nmax=12),
+    dict(method="voronoi"),
+])
+def test_flat_bond_keys_match_the_rows(kwargs):
+    """pyscal_bond_* hold the same bonds, in the same order, as the rows."""
+    atoms = STRUCTURES["fcc_rattled"].copy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pyscal3.find_neighbors(atoms, **kwargs)
+    offsets = atoms.info["pyscal_bond_offsets"]
+    assert offsets.dtype == np.int64 and offsets.shape == (len(atoms) + 1,)
+    for row_key, flat_key in FLAT_OF_ROW.items():
+        rows = _rows(atoms, row_key)
+        flat = atoms.info["pyscal_" + flat_key]
+        for i in range(len(atoms)):
+            np.testing.assert_array_equal(np.asarray(rows[i], dtype=float).reshape(-1),
+                                          np.asarray(flat[offsets[i]:offsets[i + 1]], dtype=float).reshape(-1))
+    if kwargs.get("method") == "number" or kwargs.get("cutoff") in ("adaptive", "sann"):
+        c_off = atoms.info["pyscal_candidate_offsets"]
+        tn, td = _rows(atoms, "temp_neighbors"), _rows(atoms, "temp_neighbordist")
+        for i in range(len(atoms)):
+            np.testing.assert_array_equal(tn[i], atoms.info["pyscal_candidate_neighbors"][c_off[i]:c_off[i + 1]])
+            np.testing.assert_array_equal(td[i], atoms.info["pyscal_candidate_distance"][c_off[i]:c_off[i + 1]])
+    else:
+        assert "pyscal_candidate_offsets" not in atoms.info
+
+
+def test_flat_bond_keys_are_cleared_by_a_new_search():
+    atoms = STRUCTURES["fcc_rattled"].copy()
+    pyscal3.find_neighbors(atoms, method="number", nmax=12)
+    assert "pyscal_candidate_offsets" in atoms.info
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)
+    assert "pyscal_candidate_offsets" not in atoms.info
+    assert len(atoms.info["pyscal_bond_neighbors"]) == 12 * len(atoms)

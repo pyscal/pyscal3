@@ -26,6 +26,7 @@ from pyscal3._bridge import (
     clear_neighbor_data,
     effective_periodic_cell,
     gc_paused,
+    store_bond_arrays,
     _NONPERIODIC_PAD,
 )
 
@@ -170,6 +171,7 @@ def find_neighbors(
         _reset_neighbors(d)
         pc.get_all_neighbors_voronoi(d, 0.0, triclinic, rot, rotinv, boxdims, voroexp)
         dict_to_atoms(d, atoms, nreal=nreal)
+        store_bond_arrays(atoms)
         if isinstance(cutoff, (int, float)) and cutoff > 0:
             # merge Voronoi vertices closer than `cutoff` into unique sites
             atoms.info["pyscal_unique_vertices"] = _unique_voronoi_vertices(
@@ -258,6 +260,18 @@ def _store_rows(atoms: Atoms, rows: dict, offsets, vectors=None):
 
 def _store_neighbors(atoms: Atoms, res: dict):
     """Write the result of a pc.nl_* search to ``atoms``."""
+    info = atoms.info
+    info["pyscal_bond_offsets"] = res["offsets"]
+    info["pyscal_bond_neighbors"] = res["j"]
+    info["pyscal_bond_distance"] = res["d"]
+    info["pyscal_bond_weight"] = res["weight"]
+    info["pyscal_bond_vector"] = res["diff"]
+    info["pyscal_bond_theta"] = res["theta"]
+    info["pyscal_bond_phi"] = res["phi"]
+    if "temp_offsets" in res:
+        info["pyscal_candidate_offsets"] = res["temp_offsets"]
+        info["pyscal_candidate_neighbors"] = res["temp_j"]
+        info["pyscal_candidate_distance"] = res["temp_d"]
     _store_rows(
         atoms,
         {key: res[src] for key, src in _PER_PAIR_KEYS.items()},
