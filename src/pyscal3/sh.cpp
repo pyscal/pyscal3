@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 #include "system.h"
 
 void calculate_factors(const int lm, 
@@ -259,73 +260,65 @@ void calculate_q(py::dict& atoms,
 }
 
 /**********************************************************************
-New set of functions that use the old algorithm
+Spherical harmonics of one bond, all m at once
 **********************************************************************/
-double plm(const int l,
-	const int m,
-	const double theta){
+vector<double> ylm_norms(const int l){
+    // sqrt((2l + 1) / (4 pi) * (l - m)! / (l + m)!) for m = 0 .. l
+    vector<double> norm(l + 1);
+    for (int m = 0; m <= l; m++)
+        norm[m] = sqrt(((2.0*double(l) + 1.0)/ (4.0*PI))*dfactorial(l, m));
+    return norm;
+}
 
-	double x = cos(theta);
-    double fact,pll,pmm,pmmp1,somx2;
-    int i,ll;
-    pll = 0.0;
-    if (m < 0 || m > l || fabs(x) > 1.0)
-        cerr << "impossible combination of l and m" << "\n";
-    pmm=1.0;
-    if (m > 0){
-        somx2=sqrt((1.0-x)*(1.0+x));
-        fact=1.0;
-        for (i=1;i<=m;i++){
+void ylm_all_m(const int l,
+    const double theta,
+    const double phi,
+    const vector<double>& norm,
+    double* ylm_real,
+    double* ylm_imag){
+
+    // Y_lm for m = -l .. l, stored at index m + l. For each m the associated
+    // Legendre function P_l^m(cos theta) uses the usual recurrence in l,
+    // cos(m phi) and sin(m phi) follow from the angle-addition formulas.
+    const double x = cos(theta);
+    const double somx2 = sqrt((1.0 - x)*(1.0 + x));
+    const double c1 = cos(phi);
+    const double s1 = sin(phi);
+    double cm = 1.0, sm = 0.0;
+    double pmm = 1.0, fact = 1.0;
+
+    for (int m = 0; m <= l; m++){
+        if (m > 0){
             pmm *= -fact*somx2;
             fact += 2.0;
+            const double c = cm*c1 - sm*s1;
+            sm = sm*c1 + cm*s1;
+            cm = c;
         }
-    }
-
-    if (l == m)
-        return pmm;
-    else{
-        pmmp1=x*(2*m+1)*pmm;
-        if (l == (m+1))
-            return pmmp1;
+        double p;
+        if (l == m){
+            p = pmm;
+        }
         else{
-            for (ll=m+2;ll<=l;ll++){
-            pll=(x*(2*ll-1)*pmmp1-(ll+m-1)*pmm)/(ll-m);
-            pmm=pmmp1;
-            pmmp1=pll;
+            double pa = pmm, pb = x*(2*m + 1)*pmm;
+            for (int ll = m + 2; ll <= l; ll++){
+                const double pc = (x*(2*ll - 1)*pb - (ll + m - 1)*pa)/(ll - m);
+                pa = pb;
+                pb = pc;
             }
-        return pll;
+            p = pb;
         }
-    }	
-}
-
-double sph_legendre(const int l,
-	const int m,
-	const double theta){
-
-	double factor = ((2.0*double(l) + 1.0)/ (4.0*PI))*dfactorial(l,m);
-	double m_plm = plm(l, m, theta);
-	return sqrt(factor)*m_plm;
-
-}
-
-void calculate_qlm(const int l, 
-	const int m, 
-	const double theta, 
-	const double phi, 
-	double &ylm_real, 
-	double &ylm_imag){
-
-    double m_plm;
-
-    m_plm = sph_legendre(l, abs(m), theta);
-    ylm_real = m_plm*cos(double(m)*phi);
-    ylm_imag  = m_plm*sin(double(m)*phi);
-    // Condon-Shortley phase for negative m:  Y_{l,-m} = (-1)^m conj(Y_{lm}).
-    // It cancels in |q_lm|^2 (q_l) but not in the Wigner-3j contraction
-    // used for W_l, which is not rotationally invariant without it.
-    if (m < 0 && (abs(m) % 2 == 1)){
-        ylm_real = -ylm_real;
-        ylm_imag = -ylm_imag;
+        p *= norm[m];
+        ylm_real[l + m] = p*cm;
+        ylm_imag[l + m] = p*sm;
+        if (m > 0){
+            // Condon-Shortley phase for negative m:  Y_{l,-m} = (-1)^m conj(Y_{lm}).
+            // It cancels in |q_lm|^2 (q_l) but not in the Wigner-3j contraction
+            // used for W_l, which is not rotationally invariant without it.
+            const double sign = (m % 2 == 1) ? -1.0 : 1.0;
+            ylm_real[l - m] = sign*p*cm;
+            ylm_imag[l - m] = -sign*p*sm;
+        }
     }
 }
 
@@ -339,39 +332,40 @@ void calculate_q_single(py::dict& atoms,
     vector<vector<double>> weights = atoms[py::str("neighborweight")].cast<vector<vector<double>>>();
     
     int nop = theta.size();
+    int nm = 2*lm + 1;
     vector<vector<double>> qlm_real(nop);
     vector<vector<double>> qlm_img(nop);
     vector<double> q;
 
-    int nn;
+    const vector<double> norm = ylm_norms(lm);
+    vector<double> ylm_real(nm), ylm_imag(nm), sum_real(nm), sum_imag(nm);
     double summ, weightsum;
     double realti, imgti;
-    double realylm, imgylm;
 	
     for (int ti=0; ti<nop; ti++){
+        fill(sum_real.begin(), sum_real.end(), 0.0);
+        fill(sum_imag.begin(), sum_imag.end(), 0.0);
+        weightsum = 0;
+        for(size_t ci=0; ci<theta[ti].size(); ci++){
+            ylm_all_m(lm, theta[ti][ci], phi[ti][ci], norm, ylm_real.data(), ylm_imag.data());
+            const double w = weights[ti][ci];
+            for (int k=0; k<nm; k++){
+                sum_real[k] += w*ylm_real[k];
+                sum_imag[k] += w*ylm_imag[k];
+            }
+            weightsum += w;
+        }
 		summ = 0;
-		for (int mi=-lm; mi<lm+1; mi++){
-            realti = 0.0;
-            imgti = 0.0;
-            weightsum = 0;
-			for(int ci=0; ci<theta[ti].size(); ci++){
-				calculate_qlm(lm, mi, theta[ti][ci], phi[ti][ci], realylm, imgylm);
-				realti += weights[ti][ci]*realylm;
-				imgti += weights[ti][ci]*imgylm;
-				weightsum += weights[ti][ci];
-			}
-			realti = realti/float(weightsum);
-			imgti = imgti/float(weightsum);
+		for (int k=0; k<nm; k++){
+			realti = sum_real[k]/float(weightsum);
+			imgti = sum_imag[k]/float(weightsum);
 
 			qlm_real[ti].emplace_back(realti);
 			qlm_img[ti].emplace_back(imgti);
 
 			summ += realti*realti + imgti*imgti;
 		}
-		//cout<<summ<<endl;
 		summ = pow(((4.0*PI/(2*lm+1))*summ),0.5);
-
-		//cout<<summ<<endl;
 
 		q.emplace_back(summ);
     }
