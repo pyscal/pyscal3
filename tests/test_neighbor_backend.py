@@ -424,12 +424,7 @@ def test_descriptors_are_the_same_without_rows(cutoff):
                 assert "pyscal_" + key not in atoms.arrays and "pyscal_" + key not in atoms.info
         results.append(_descriptor_results(atoms, ref))
     for key in results[0]:
-        if key == "ace":
-            # numpy's complex products in the ACE B basis can round differently
-            # from run to run, so ACE is compared to the last digits only
-            np.testing.assert_allclose(results[0][key], results[1][key], rtol=1e-12, atol=1e-15)
-        else:
-            np.testing.assert_array_equal(results[0][key], results[1][key], err_msg=key)
+        np.testing.assert_array_equal(results[0][key], results[1][key], err_msg=key)
 
 
 def test_voronoi_without_rows():

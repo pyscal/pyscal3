@@ -1864,9 +1864,10 @@ def _ace_b_basis_nu2(A, nmax, lmax):
                 # Sum over m: sum_m A*_{n1,l,m} * A_{n2,l,m}
                 B_desc = np.zeros(natoms)
                 for m in range(-l, l + 1):
-                    B_desc += np.real(
-                        np.conj(A[:, n1, l, m + lmax]) * A[:, n2, l, m + lmax]
-                    )
+                    # Re(conj(a) * b) in real arithmetic: numpy's complex
+                    # product can round differently from run to run
+                    a, b = A[:, n1, l, m + lmax], A[:, n2, l, m + lmax]
+                    B_desc += a.real * b.real + a.imag * b.imag
                 descriptors.append(B_desc)
     
     return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
@@ -1951,11 +1952,14 @@ def _ace_b_basis_nu3(A, nmax, lmax):
                                     if w3j == 0.0:
                                         continue
                                     
-                                    # 3j-coupled product of three A-functions
-                                    prod = (A[:, n1, l1, m1 + lmax] *
-                                            A[:, n2, l2, m2 + lmax] *
-                                            A[:, n3, l3, m3 + lmax])
-                                    B_desc += w3j * np.real(prod)
+                                    # 3j-coupled product of three A-functions,
+                                    # real part in real arithmetic (see nu=2)
+                                    a = A[:, n1, l1, m1 + lmax]
+                                    b = A[:, n2, l2, m2 + lmax]
+                                    c = A[:, n3, l3, m3 + lmax]
+                                    ab_re = a.real * b.real - a.imag * b.imag
+                                    ab_im = a.real * b.imag + a.imag * b.real
+                                    B_desc += w3j * (ab_re * c.real - ab_im * c.imag)
                             
                             # Always append so the descriptor count is a
                             # deterministic function of (nmax, lmax) — needed
