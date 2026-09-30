@@ -1,4 +1,5 @@
 #include "system.h"
+#include "parallel.h"
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -67,10 +68,13 @@ py::tuple calculate_bonds(const nl_index& offsets,
     double* so = solid.mutable_data();
     double* sj = sij.mutable_data();
 
+
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
     int frenkelcons;
     double scalar, tempsij;
-
-    for (py::ssize_t ti=0; ti<nop; ti++){
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         frenkelcons = 0;
         tempsij = 0.0;
         for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
@@ -88,10 +92,15 @@ py::tuple calculate_bonds(const nl_index& offsets,
         bo[ti] = frenkelcons;
         av[ti] = tempsij/double(off[ti+1] - off[ti]);
     }
+    }, 256);
+    }
 
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
     int issolid;
     double tfrac;
-    for (py::ssize_t ti=0; ti<nop; ti++){
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         if (criteria == 0){
             if (comparecriteria==0){
                 issolid = ((bo[ti] > minbonds) && (av[ti] > avgthreshold));
@@ -110,6 +119,8 @@ py::tuple calculate_bonds(const nl_index& offsets,
             }
         }
         so[ti] = issolid;
+    }
+    }, 256);
     }
     return py::make_tuple(bonds, sij, avg_sij, solid);
 }

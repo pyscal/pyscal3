@@ -7,6 +7,7 @@
  */
 
 #include "system.h"
+#include "parallel.h"
 #include <limits>
 #include <iostream>
 #include <algorithm>
@@ -77,7 +78,10 @@ py::tuple calculate_chi_params(const nl_index& offsets, const nl_values& diff) {
     double* cs = cosines.mutable_data();
     fill(chi, chi + 9 * nop, 0);
 
-    for (py::ssize_t ti = 0; ti < nop; ti++) {
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         // all pairwise cosines
         std::int64_t k = co[ti];
         for (std::int64_t i = off[ti]; i < off[ti + 1]; i++) {
@@ -106,6 +110,8 @@ py::tuple calculate_chi_params(const nl_index& offsets, const nl_values& diff) {
             }
         }
     }
+    }, 256);
+    }
     return py::make_tuple(chiparams, cosines, cos_offsets);
 }
 
@@ -127,7 +133,10 @@ py::array_t<double> calculate_angular_criteria(const nl_index& offsets,
     py::array_t<double> angular(nop);
     double* out = angular.mutable_data();
 
-    for (py::ssize_t ti = 0; ti < nop; ti++) {
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         const int nn = (int)(off[ti + 1] - off[ti]);
         if (nn < 4) {
             out[ti] = 0.0;
@@ -155,6 +164,8 @@ py::array_t<double> calculate_angular_criteria(const nl_index& offsets,
             }
         }
         out[ti] = costhetasum;
+    }
+    }, 256);
     }
     return angular;
 }
@@ -275,7 +286,10 @@ py::array_t<double> calculate_short_range_order(const nl_index& offsets,
     double* sro = sro_array.mutable_data();
     fill(sro, sro + nop, nan);
 
-    for (int i = 0; i < nop; i++) {
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    for (py::ssize_t i = begin_; i < end_; i++) {
         if (ty[i] != reference_type) continue;
         int nn = (int)(off[i + 1] - off[i]);
         if (nn == 0 || c_compare <= 0.0) continue;
@@ -287,6 +301,8 @@ py::array_t<double> calculate_short_range_order(const nl_index& offsets,
         }
         double p = (double)cmp_count / (double)nn;
         sro[i] = 1.0 - p / c_compare;
+    }
+    }, 256);
     }
     return sro_array;
 }
@@ -308,12 +324,17 @@ py::array_t<double> calculate_average_disorder(const nl_index& offsets,
 
     py::array_t<double> avg_disorder(nop);
     double* out = avg_disorder.mutable_data();
-    for (py::ssize_t ti = 0; ti < nop; ti++) {
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         double sum = dis[ti];
         for (std::int64_t ci = off[ti]; ci < off[ti+1]; ci++) {
             sum += dis[nb[ci]];
         }
         out[ti] = sum / (double)(off[ti+1] - off[ti] + 1);
+    }
+    }, 256);
     }
     return avg_disorder;
 }
@@ -336,7 +357,10 @@ py::array_t<double> calculate_average_over_neighbors(const nl_index& offsets,
 
     py::array_t<double> result(nop);
     double* out = result.mutable_data();
-    for (py::ssize_t ti = 0; ti < nop; ti++) {
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         double sum = include_self ? val[ti] : 0.0;
         int count  = include_self ? 1 : 0;
         for (std::int64_t j = off[ti]; j < off[ti + 1]; j++) {
@@ -344,6 +368,8 @@ py::array_t<double> calculate_average_over_neighbors(const nl_index& offsets,
             count++;
         }
         out[ti] = count > 0 ? sum / (double)count : 0.0;
+    }
+    }, 256);
     }
     return result;
 }
@@ -415,10 +441,13 @@ py::tuple calculate_local_deformation(const nl_index& offsets_cur,
     double* D = d2min.mutable_data();
     double* S = slip.mutable_data();
 
+
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
     vector<pair<std::int64_t, std::int64_t>> cur, ref;
     vector<pair<std::int64_t, std::int64_t>> pairs;   // (bond in cur, bond in ref)
-
-    for (py::ssize_t ti = 0; ti < nop; ti++) {
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         first_occurrences(nc, oc[ti], oc[ti + 1], cur);
         first_occurrences(nr, orf[ti], orf[ti + 1], ref);
         pairs.clear();
@@ -482,6 +511,8 @@ py::tuple calculate_local_deformation(const nl_index& offsets_cur,
             }
         }
         D[ti] = d2 / double(np);
+    }
+    }, 256);
     }
     return py::make_tuple(strain, d2min, slip);
 }

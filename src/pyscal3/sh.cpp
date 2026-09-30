@@ -3,6 +3,7 @@
 #include <vector>
 #include <algorithm>
 #include "system.h"
+#include "parallel.h"
 
 void calculate_factors(const int lm, 
 	vector<vector<double>>& alm,
@@ -345,11 +346,14 @@ py::tuple calculate_q_single(const nl_index& offsets,
     double* qi = qlm_img.mutable_data();
 
     const vector<double> norm = ylm_norms(lm);
+
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
     vector<double> ylm_real(nm), ylm_imag(nm), sum_real(nm), sum_imag(nm);
     double summ, weightsum;
     double realti, imgti;
-
-    for (py::ssize_t ti=0; ti<nop; ti++){
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         fill(sum_real.begin(), sum_real.end(), 0.0);
         fill(sum_imag.begin(), sum_imag.end(), 0.0);
         weightsum = 0;
@@ -371,6 +375,8 @@ py::tuple calculate_q_single(const nl_index& offsets,
         }
         qo[ti] = pow(((4.0*PI/(2*lm+1))*summ),0.5);
     }
+    }, 256);
+    }
     return py::make_tuple(q, qlm_real, qlm_img);
 }
 
@@ -390,10 +396,13 @@ py::array_t<double> calculate_aq_single(const nl_index& offsets,
 
     py::array_t<double> q(nop);
     double* qo = q.mutable_data();
+
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
     double realti, imgti, summ;
     int nns;
-
-    for (py::ssize_t ti=0; ti<nop; ti++){
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         summ = 0;
         for (int mi=0; mi<nm; mi++){
             realti = qr[ti*nm + mi];
@@ -409,6 +418,8 @@ py::array_t<double> calculate_aq_single(const nl_index& offsets,
             summ += realti*realti + imgti*imgti;
         }
         qo[ti] = pow(((4.0*PI/(2*lm+1)) * summ),0.5);
+    }
+    }, 256);
     }
     return q;
 }
@@ -541,7 +552,10 @@ py::tuple calculate_w_single(const nl_values& q_real,
 
     const vector<vector<double>> w3j_table = wigner3j_table(lm);
 
-    for (py::ssize_t ti = 0; ti < nop; ti++) {
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         const double* re = qr + ti*nm;
         const double* im = qi + ti*nm;
         wv[ti] = wigner_w(lm, re, im, w3j_table);
@@ -552,6 +566,8 @@ py::tuple calculate_w_single(const nl_values& q_real,
         // Normalized: W-hat_l = W_l / (sum |q_lm|^2)^(3/2)
         double norm_cubed = pow(norm_sq, 1.5);
         wb[ti] = (norm_cubed > 1e-30) ? wv[ti] / norm_cubed : 0.0;
+    }
+    }, 256);
     }
     return py::make_tuple(w_values, wbar_values);
 }
@@ -581,9 +597,12 @@ py::tuple calculate_aw_single(const nl_index& offsets,
     }
 
     const vector<vector<double>> w3j_table = wigner3j_table(lm);
-    vector<double> avg_real(nm), avg_imag(nm);
 
-    for (py::ssize_t ti = 0; ti < nop; ti++) {
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    vector<double> avg_real(nm), avg_imag(nm);
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         const std::int64_t nns = off[ti+1] - off[ti];
         for (int mi = 0; mi < nm; mi++) {
             avg_real[mi] = qr[ti*nm + mi];
@@ -604,6 +623,8 @@ py::tuple calculate_aw_single(const nl_index& offsets,
         double norm_cubed = pow(norm_sq, 1.5);
         wb[ti] = (norm_cubed > 1e-30) ? wv[ti] / norm_cubed : 0.0;
     }
+    }, 256);
+    }
     return py::make_tuple(w_values, wbar_values);
 }
 
@@ -621,15 +642,17 @@ py::array_t<double> calculate_disorder(const nl_index& offsets,
     const py::ssize_t nop = offsets.shape(0) - 1;
     const int nm = 2*lm + 1;
 
-    double sum2ti, sum2tj;
-    double realdotproduct, imgdotproduct;
-    double connection;
-    double dis;
     vector<double> sii(nop);
     py::array_t<double> disorder(nop);
     double* dout = disorder.mutable_data();
 
-    for (py::ssize_t ti=0; ti<nop; ti++){
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    double sum2ti;
+    double realdotproduct, imgdotproduct;
+    double connection;
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         sum2ti = 0.0;
         realdotproduct = 0.0;
         imgdotproduct = 0.0;
@@ -642,8 +665,17 @@ py::array_t<double> calculate_disorder(const nl_index& offsets,
         connection = (realdotproduct+imgdotproduct)/(sqrt(sum2ti)*sqrt(sum2ti));
         sii[ti] = connection;
     }
+    }, 256);
+    }
 
-    for (py::ssize_t ti=0; ti<nop; ti++){
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    double sum2ti, sum2tj;
+    double realdotproduct, imgdotproduct;
+    double connection;
+    double dis;
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         dis = 0;
         for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
             const std::int64_t tj = nb[ci];
@@ -662,6 +694,8 @@ py::array_t<double> calculate_disorder(const nl_index& offsets,
         }
         const std::int64_t nn = off[ti+1] - off[ti];
         dout[ti] = (nn > 0) ? dis/double(nn) : 0.0;
+    }
+    }, 256);
     }
     return disorder;
 }

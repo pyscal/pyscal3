@@ -1,4 +1,5 @@
 #include "system.h"
+#include "parallel.h"
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -23,12 +24,15 @@ py::array_t<double> calculate_centrosymmetry(const nl_index& offsets,
     const std::int64_t* off = offsets.data();
     const double* v = diff.data();
     const py::ssize_t nop = offsets.shape(0) - 1;
-    double dx, dy, dz, weight;
-    vector<datom> temp;
     py::array_t<double> centrosymmetry(nop);
     double* out = centrosymmetry.mutable_data();
 
-    for (py::ssize_t ti=0; ti<nop; ti++){
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    double dx, dy, dz, weight;
+    vector<datom> temp;
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         temp.clear();
         int count = 0;
         for (std::int64_t i=off[ti]; i<off[ti+1]; i++){
@@ -49,6 +53,8 @@ py::array_t<double> calculate_centrosymmetry(const nl_index& offsets,
             csym += temp[i].dist*temp[i].dist;
         }
         out[ti] = csym;
+    }
+    }, 256);
     }
     return centrosymmetry;
 }
