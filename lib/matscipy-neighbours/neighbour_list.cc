@@ -19,6 +19,10 @@
 
 #include "neighbour_list.hh"
 
+/* pyscal3: the two pair loops of build_pairs run on the threads of
+   pyscal3's parallel.h instead of OpenMP (see VENDORED.md). */
+#include "parallel.h"
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -41,15 +45,14 @@ template <typename Query>
 void build_pairs(const NeighbourContext &ctx, const Query &q, index_t nat,
                  int quantities, NeighbourList &out) {
     std::vector<index_t> offset(nat + 1, 0);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(dynamic, 256)
-#endif
-    for (index_t si = 0; si < nat; si++) {
+    pyscal::parallel_for(nat, [&](index_t begin, index_t end) {
+    for (index_t si = begin; si < end; si++) {
         index_t count = 0;
         visit_neighbours(ctx, q, si, [&count](index_t, const real_t *, real_t,
                                               const index_t *) { count++; });
         offset[ctx.sorted_atom[si] + 1] = count;
     }
+    });
 
     for (index_t i = 0; i < nat; i++) offset[i + 1] += offset[i];
     const index_t npairs = offset[nat];
@@ -66,10 +69,8 @@ void build_pairs(const NeighbourContext &ctx, const Query &q, index_t nat,
     if (want_absdist) out.absdist.resize(npairs);
     if (want_shift) out.shift.resize(3 * npairs);
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(dynamic, 256)
-#endif
-    for (index_t si = 0; si < nat; si++) {
+    pyscal::parallel_for(nat, [&](index_t begin, index_t end) {
+    for (index_t si = begin; si < end; si++) {
         const index_t i = ctx.sorted_atom[si];
         index_t w = offset[i];
         visit_neighbours(
@@ -92,6 +93,7 @@ void build_pairs(const NeighbourContext &ctx, const Query &q, index_t nat,
                 w++;
             });
     }
+    });
 }
 
 }  // namespace
