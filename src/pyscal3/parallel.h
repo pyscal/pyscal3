@@ -17,8 +17,11 @@ first exception thrown by body is rethrown on the calling thread.
 #include <atomic>
 #include <cstdint>
 #include <exception>
+#include <memory>
 #include <mutex>
+#include <new>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace pyscal {
@@ -61,6 +64,31 @@ void parallel_for(std::int64_t n, Body &&body, std::int64_t grain = 256) {
     for (auto &t : threads) t.join();
     if (error) std::rethrow_exception(error);
 }
+
+// An allocator whose resize() leaves new numbers uninitialised, so that
+// large arrays are first written (and their pages touched) by the parallel
+// loops that fill them, instead of being zeroed by one thread beforehand.
+template <typename T>
+struct uninit_allocator : std::allocator<T> {
+    template <typename U>
+    struct rebind {
+        using other = uninit_allocator<U>;
+    };
+    uninit_allocator() = default;
+    template <typename U>
+    uninit_allocator(const uninit_allocator<U> &) noexcept {}
+    template <typename U>
+    void construct(U *p) noexcept {
+        ::new (static_cast<void *>(p)) U;
+    }
+    template <typename U, typename... Args>
+    void construct(U *p, Args &&...args) {
+        ::new (static_cast<void *>(p)) U(std::forward<Args>(args)...);
+    }
+};
+
+template <typename T>
+using buffer = std::vector<T, uninit_allocator<T>>;
 
 }  // namespace pyscal
 

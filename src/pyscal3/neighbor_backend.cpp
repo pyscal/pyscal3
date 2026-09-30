@@ -28,6 +28,7 @@ neighbour index.
 #include <new>
 #include <numeric>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace nlb {
@@ -77,8 +78,8 @@ Geometry make_geometry(const darray &positions, const darray &cell,
 // all pairs (i, j) with |r_i - r_j| up to about rmax, sorted by i;
 // v holds r_i - r_j and d = |v|
 struct Pairs {
-    vector<idx> i, j;
-    vector<double> d, v;
+    buffer<idx> i, j;
+    buffer<double> d, v;
 };
 
 // radii, if given, are per-atom radii: the pair i, j is searched up to
@@ -101,13 +102,13 @@ Pairs query(const Geometry &g, double rmax, const double *radii = nullptr) {
     const idx m = nl.npairs;
     p.i = std::move(nl.first);
     p.j = std::move(nl.secnd);
-    p.v.resize(3 * m);
+    p.v = std::move(nl.distvec);
     p.d.resize(m);
     parallel_for(m, [&](idx begin, idx end) {
         for (idx k = begin; k < end; k++) {
-            const double x = -nl.distvec[3 * k];
-            const double y = -nl.distvec[3 * k + 1];
-            const double z = -nl.distvec[3 * k + 2];
+            const double x = -p.v[3 * k];
+            const double y = -p.v[3 * k + 1];
+            const double z = -p.v[3 * k + 2];
             p.v[3 * k] = x;
             p.v[3 * k + 1] = y;
             p.v[3 * k + 2] = z;
@@ -119,16 +120,23 @@ Pairs query(const Geometry &g, double rmax, const double *radii = nullptr) {
 
 // start of the pairs of each atom in p, which is sorted by i
 vector<idx> pair_offsets(const Pairs &p, idx n) {
-    vector<idx> off(n + 1, 0);
-    for (size_t k = 0; k < p.i.size(); k++) off[p.i[k] + 1]++;
-    for (idx a = 0; a < n; a++) off[a + 1] += off[a];
+    const idx m = static_cast<idx>(p.i.size());
+    vector<idx> off(n + 1);
+    parallel_for(n + 1, [&](idx begin, idx end) {
+        idx k = std::lower_bound(p.i.begin(), p.i.end(), begin) - p.i.begin();
+        for (idx a = begin; a < end; a++) {
+            while (k < m && p.i[k] < a) k++;
+            off[a] = k;
+        }
+    }, ATOM_GRAIN);
     return off;
 }
 
 // rows of the pairs k of each atom a for which keep(a, k) holds, in the
-// order of p: count per atom, then fill each atom's slice
+// order of p: count per atom, then fill each atom's slice. If every pair is
+// kept, the distances and vectors of p are moved into the rows.
 template <typename Keep>
-Rows filter(const Pairs &p, idx n, Keep keep) {
+Rows filter(Pairs &&p, idx n, Keep keep) {
     const vector<idx> off = pair_offsets(p, n);
     Rows rows(n);
     parallel_for(n, [&](idx begin, idx end) {
@@ -141,6 +149,12 @@ Rows filter(const Pairs &p, idx n, Keep keep) {
     }, ATOM_GRAIN);
     for (idx a = 0; a < n; a++) rows.offsets[a + 1] += rows.offsets[a];
     const idx total = rows.offsets[n];
+    if (total == static_cast<idx>(p.j.size())) {
+        rows.j = std::move(p.j);
+        rows.d = std::move(p.d);
+        rows.v = std::move(p.v);
+        return rows;
+    }
     rows.j.resize(total);
     rows.d.resize(total);
     rows.v.resize(3 * total);
@@ -162,8 +176,8 @@ Rows filter(const Pairs &p, idx n, Keep keep) {
 
 // rows of the pairs of p that satisfy keep(d), in the order of p
 template <typename Keep>
-Rows select(const Pairs &p, idx n, Keep keep) {
-    return filter(p, n, [&](idx, idx k) { return keep(p.d[k]); });
+Rows select(Pairs &&p, idx n, Keep keep) {
+    return filter(std::move(p), n, [&](idx, idx k) { return keep(p.d[k]); });
 }
 
 // distances closer than this count as equal when candidate rows are sorted,
@@ -204,8 +218,7 @@ Rows sort_rows(const Rows &unsorted, idx n) {
 }
 
 Rows candidates(const Geometry &g, double guess) {
-    const Pairs p = query(g, guess);
-    return sort_rows(select(p, g.n, [guess](double d) { return d <= guess; }), g.n);
+    return sort_rows(select(query(g, guess), g.n, [guess](double d) { return d <= guess; }), g.n);
 }
 
 Rows nearest_candidates(const Geometry &g, double r_small, double r_full, int nneed) {
@@ -225,8 +238,8 @@ Rows nearest_candidates(const Geometry &g, double r_small, double r_full, int nn
     // and r_small / 2, R_i + R_j is at least r_i for every pair
     vector<double> radii(g.n);
     for (idx a = 0; a < g.n; a++) radii[a] = full[a] ? r_full - 0.5 * r_small : 0.5 * r_small;
-    const Pairs p = query(g, 2.0 * r_full - r_small, radii.data());
-    const Rows rows = filter(p, g.n, [&](idx a, idx k) {
+    Pairs p = query(g, 2.0 * r_full - r_small, radii.data());
+    const Rows rows = filter(std::move(p), g.n, [&](idx a, idx k) {
         return p.d[k] <= (full[a] ? r_full : r_small);
     });
     return sort_rows(rows, g.n);
@@ -256,17 +269,20 @@ double guess_radius(const Geometry &g, double prefactor) {
     return prefactor * cbrt(g.volume / double(g.n));
 }
 
-template <typename T>
-py::array_t<T> to_array(vector<T> &&values, vector<py::ssize_t> shape) {
-    auto *owned = new vector<T>(std::move(values));
-    py::capsule release(owned, [](void *ptr) { delete reinterpret_cast<vector<T> *>(ptr); });
-    return py::array_t<T>(shape, owned->data(), release);
+// a numpy array that owns the vector values
+template <typename V>
+py::array_t<typename V::value_type> to_array(V &&values, vector<py::ssize_t> shape) {
+    static_assert(!std::is_reference<V>::value, "pass the vector with std::move");
+    auto *owned = new V(std::move(values));
+    py::capsule release(owned, [](void *ptr) { delete reinterpret_cast<V *>(ptr); });
+    return py::array_t<typename V::value_type>(shape, owned->data(), release);
 }
 
 // the neighbour data of find_neighbors, computed without the GIL
 struct Result {
     Rows rows{0};
-    vector<double> cutoff, r, theta, phi;
+    vector<double> cutoff;
+    buffer<double> r, theta, phi, weight;
     Rows candidates{0};
     bool has_candidates = false;
     bool finished = true;
@@ -278,7 +294,9 @@ void add_angles(Result &res) {
     res.r.resize(m);
     res.theta.resize(m);
     res.phi.resize(m);
+    res.weight.resize(m);
     parallel_for(m, [&](idx begin, idx end) {
+        std::fill(&res.weight[begin], &res.weight[begin] + (end - begin), 1.0);
         for (idx k = begin; k < end; k++) {
             const double x = rows.v[3 * k], y = rows.v[3 * k + 1], z = rows.v[3 * k + 2];
             convert_to_spherical_coordinates(x, y, z, res.r[k], res.phi[k], res.theta[k]);
@@ -289,8 +307,8 @@ void add_angles(Result &res) {
     }, PAIR_GRAIN);
 }
 
-py::dict to_dict(Rows &&rows, vector<double> &&cutoff, vector<double> &&r,
-                 vector<double> &&theta, vector<double> &&phi) {
+py::dict to_dict(Rows &&rows, vector<double> &&cutoff, buffer<double> &&r,
+                 buffer<double> &&theta, buffer<double> &&phi, buffer<double> &&weight) {
     const idx n = static_cast<idx>(rows.offsets.size()) - 1;
     const idx m = static_cast<idx>(rows.j.size());
     py::dict out;
@@ -301,7 +319,7 @@ py::dict to_dict(Rows &&rows, vector<double> &&cutoff, vector<double> &&r,
     out["r"] = to_array(std::move(r), {py::ssize_t(m)});
     out["theta"] = to_array(std::move(theta), {py::ssize_t(m)});
     out["phi"] = to_array(std::move(phi), {py::ssize_t(m)});
-    out["weight"] = to_array(vector<double>(m, 1.0), {py::ssize_t(m)});
+    out["weight"] = to_array(std::move(weight), {py::ssize_t(m)});
     out["cutoff"] = to_array(std::move(cutoff), {py::ssize_t(n)});
     out["finished"] = true;
     return out;
@@ -339,7 +357,7 @@ py::dict run(Compute compute) {
         return out;
     }
     py::dict out = to_dict(std::move(res.rows), std::move(res.cutoff), std::move(res.r),
-                           std::move(res.theta), std::move(res.phi));
+                           std::move(res.theta), std::move(res.phi), std::move(res.weight));
     if (res.has_candidates) add_candidates(out, std::move(res.candidates));
     return out;
 }

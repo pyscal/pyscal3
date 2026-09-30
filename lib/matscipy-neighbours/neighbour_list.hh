@@ -16,6 +16,7 @@
 
 #include "cell_list.hh"
 #include "types.hh"
+#include "parallel.h"
 
 namespace matscipy {
 
@@ -49,11 +50,12 @@ struct Vec3 {
    .data(); distvec_at()/shift_at() read one pair's 3-vector. For each pair the
    distance vector satisfies D == r[j] - r[i] + S @ cell, where S is the shift. */
 struct NeighbourList {
-    std::vector<index_t> first;    /* [npairs]      i indices */
-    std::vector<index_t> secnd;    /* [npairs]      j indices */
-    std::vector<real_t> distvec;   /* [3 * npairs]  distance vectors */
-    std::vector<real_t> absdist;   /* [npairs]      absolute distances */
-    std::vector<index_t> shift;    /* [3 * npairs]  cell shifts */
+    /* pyscal3: buffers that build_pairs fills without zeroing them first */
+    pyscal::buffer<index_t> first;    /* [npairs]      i indices */
+    pyscal::buffer<index_t> secnd;    /* [npairs]      j indices */
+    pyscal::buffer<real_t> distvec;   /* [3 * npairs]  distance vectors */
+    pyscal::buffer<real_t> absdist;   /* [npairs]      absolute distances */
+    pyscal::buffer<index_t> shift;    /* [3 * npairs]  cell shifts */
     index_t npairs = 0;
 
     Span<const index_t> first_view() const { return {first.data(), first.size()}; }
