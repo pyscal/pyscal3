@@ -96,3 +96,49 @@ def test_neighbors_do_not_depend_on_threads(kwargs):
             pyscal3.find_neighbors(atoms, **kwargs)
         results.append(_stored(atoms))
     _assert_same(*results)
+
+
+def _descriptors(atoms, reference):
+    a = atoms.copy()
+    out = {}
+    out["q"] = np.concatenate(pyscal3.steinhardt_parameter(a, [4, 6]))
+    out["avg_q"] = np.concatenate(pyscal3.steinhardt_parameter(a, [4, 6], averaged=True))
+    out["w"] = np.concatenate(pyscal3.wigner_w_parameter(a, [4, 6]))
+    out["avg_w"] = np.concatenate(pyscal3.wigner_w_parameter(a, [6], averaged=True))
+    out["disorder"] = pyscal3.disorder(a, averaged=True)
+    b = a.copy()
+    pyscal3.find_solids(b, cluster=True)
+    out["sij"] = np.concatenate([np.ravel(r) for r in b.arrays.get("pyscal_sij", b.info.get("pyscal_sij"))])
+    out["solid"] = b.arrays["pyscal_solid"]
+    out["cluster"] = b.arrays["pyscal_cluster"]
+    cp, cos = pyscal3.chi_params(a, angles=True)
+    out["chi"] = cp
+    out["cosines"] = np.concatenate([np.asarray(c) for c in cos])
+    out["angular"] = pyscal3.angular_criteria(a)
+    out["entropy"] = pyscal3.entropy(a, rm=3.0, average=True)
+    numbers = a.get_atomic_numbers()
+    numbers[::3] = 28
+    a.set_atomic_numbers(numbers)
+    out["sro"] = np.asarray(pyscal3.short_range_order(a, average=False))
+    a.arrays["pyscal_prop"] = np.arange(len(a), dtype=float)
+    out["avg"] = pyscal3.average_over_neighbors(a, "prop")
+    out["strain"] = pyscal3.atomic_strain(a, reference)
+    out["d2min"] = pyscal3.d2min(a, reference)
+    out["slip"] = pyscal3.slip_vector(a, reference)
+    c = atoms.copy()
+    out["centro"] = pyscal3.centrosymmetry(c, nmax=12)
+    return out
+
+
+@pytest.mark.parametrize("cutoff", [3.0, 4.3])
+def test_descriptors_do_not_depend_on_threads(cutoff):
+    results = []
+    for n in (1, 4):
+        with threads(n):
+            atoms, ref = _crystal(), _crystal()
+            atoms.positions += np.random.default_rng(1).normal(0, 0.02, atoms.positions.shape)
+            pyscal3.find_neighbors(atoms, method="cutoff", cutoff=cutoff)
+            pyscal3.find_neighbors(ref, method="cutoff", cutoff=cutoff)
+            results.append(_descriptors(atoms, ref))
+    for key in results[0]:
+        np.testing.assert_array_equal(results[0][key], results[1][key], err_msg=key)
