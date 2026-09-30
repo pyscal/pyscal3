@@ -310,6 +310,13 @@ py::array_t<double> calculate_average_disorder(const nl_index& offsets,
     const nl_index& neighbors,
     const nl_values& disorder);
 
+py::tuple calculate_local_deformation(const nl_index& offsets_cur,
+    const nl_index& neighbors_cur,
+    const nl_values& diff_cur,
+    const nl_index& offsets_ref,
+    const nl_index& neighbors_ref,
+    const nl_values& diff_ref);
+
 py::array_t<double> calculate_average_over_neighbors(const nl_index& offsets,
     const nl_index& neighbors,
     const nl_values& values,

@@ -347,3 +347,141 @@ py::array_t<double> calculate_average_over_neighbors(const nl_index& offsets,
     }
     return result;
 }
+
+
+/* =======================================================================
+ *  Local deformation: atomic strain, D^2_min and slip vector
+ *
+ *  For each atom, the neighbours that appear in both the current and the
+ *  reference neighbour list are paired (first occurrence of each index in
+ *  either list). With X the reference and Y the current neighbour vectors
+ *  of the pairs, the affine fit is F^T = (X^T X)^-1 X^T Y. Returns
+ *    strain (n, 3, 3)  E = (F^T F - I) / 2, NaN for fewer than 3 pairs or
+ *                      a singular X^T X
+ *    d2min  (n,)       mean |Y - X F^T|^2 over the pairs, NaN likewise
+ *    slip   (n, 3)     mean of Y - X over the pairs, NaN without pairs
+ * ======================================================================= */
+static void first_occurrences(const std::int64_t* nb, std::int64_t lo, std::int64_t hi,
+                              vector<pair<std::int64_t, std::int64_t>>& out) {
+    // (neighbour index, bond index) sorted by neighbour index, first bond only
+    out.clear();
+    for (std::int64_t c = lo; c < hi; c++) out.emplace_back(nb[c], c);
+    stable_sort(out.begin(), out.end(),
+                [](const pair<std::int64_t, std::int64_t>& a,
+                   const pair<std::int64_t, std::int64_t>& b) { return a.first < b.first; });
+    out.erase(unique(out.begin(), out.end(),
+                     [](const pair<std::int64_t, std::int64_t>& a,
+                        const pair<std::int64_t, std::int64_t>& b) { return a.first == b.first; }),
+              out.end());
+}
+
+static bool invert3(const double m[9], double inv[9]) {
+    const double c00 = m[4]*m[8] - m[5]*m[7];
+    const double c01 = m[5]*m[6] - m[3]*m[8];
+    const double c02 = m[3]*m[7] - m[4]*m[6];
+    const double det = m[0]*c00 + m[1]*c01 + m[2]*c02;
+    if (det == 0.0 || !std::isfinite(det)) return false;
+    inv[0] = c00 / det;
+    inv[1] = (m[2]*m[7] - m[1]*m[8]) / det;
+    inv[2] = (m[1]*m[5] - m[2]*m[4]) / det;
+    inv[3] = c01 / det;
+    inv[4] = (m[0]*m[8] - m[2]*m[6]) / det;
+    inv[5] = (m[2]*m[3] - m[0]*m[5]) / det;
+    inv[6] = c02 / det;
+    inv[7] = (m[1]*m[6] - m[0]*m[7]) / det;
+    inv[8] = (m[0]*m[4] - m[1]*m[3]) / det;
+    return true;
+}
+
+py::tuple calculate_local_deformation(const nl_index& offsets_cur,
+                                      const nl_index& neighbors_cur,
+                                      const nl_values& diff_cur,
+                                      const nl_index& offsets_ref,
+                                      const nl_index& neighbors_ref,
+                                      const nl_values& diff_ref) {
+    const std::int64_t* oc = offsets_cur.data();
+    const std::int64_t* nc = neighbors_cur.data();
+    const double* vc = diff_cur.data();
+    const std::int64_t* orf = offsets_ref.data();
+    const std::int64_t* nr = neighbors_ref.data();
+    const double* vr = diff_ref.data();
+    const py::ssize_t nop = offsets_cur.shape(0) - 1;
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+
+    py::array_t<double> strain(vector<py::ssize_t>{nop, 3, 3});
+    py::array_t<double> d2min(nop);
+    py::array_t<double> slip(vector<py::ssize_t>{nop, 3});
+    double* E = strain.mutable_data();
+    double* D = d2min.mutable_data();
+    double* S = slip.mutable_data();
+
+    vector<pair<std::int64_t, std::int64_t>> cur, ref;
+    vector<pair<std::int64_t, std::int64_t>> pairs;   // (bond in cur, bond in ref)
+
+    for (py::ssize_t ti = 0; ti < nop; ti++) {
+        first_occurrences(nc, oc[ti], oc[ti + 1], cur);
+        first_occurrences(nr, orf[ti], orf[ti + 1], ref);
+        pairs.clear();
+        size_t a = 0, b = 0;
+        while (a < cur.size() && b < ref.size()) {
+            if (cur[a].first < ref[b].first) a++;
+            else if (ref[b].first < cur[a].first) b++;
+            else { pairs.emplace_back(cur[a].second, ref[b].second); a++; b++; }
+        }
+        const size_t np = pairs.size();
+
+        // slip vector
+        if (np == 0) {
+            for (int k = 0; k < 3; k++) S[3*ti + k] = nan;
+        } else {
+            double s[3] = {0.0, 0.0, 0.0};
+            for (const auto& p : pairs)
+                for (int k = 0; k < 3; k++) s[k] += vc[3*p.first + k] - vr[3*p.second + k];
+            for (int k = 0; k < 3; k++) S[3*ti + k] = s[k] / double(np);
+        }
+
+        // affine fit
+        double xtx[9] = {0}, xty[9] = {0}, inv[9];
+        for (const auto& p : pairs) {
+            const double* x = vr + 3*p.second;
+            const double* y = vc + 3*p.first;
+            for (int r = 0; r < 3; r++)
+                for (int c = 0; c < 3; c++) {
+                    xtx[3*r + c] += x[r]*x[c];
+                    xty[3*r + c] += x[r]*y[c];
+                }
+        }
+        if (np < 3 || !invert3(xtx, inv)) {
+            for (int k = 0; k < 9; k++) E[9*ti + k] = nan;
+            D[ti] = nan;
+            continue;
+        }
+        double ft[9];   // F^T = (X^T X)^-1 X^T Y
+        for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++) {
+                double v = 0.0;
+                for (int k = 0; k < 3; k++) v += inv[3*r + k]*xty[3*k + c];
+                ft[3*r + c] = v;
+            }
+        // C = F^T F, with F = (F^T)^T: C_rc = sum_k F_kr F_kc = sum_k ft[r][k] ft[c][k]
+        for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++) {
+                double v = 0.0;
+                for (int k = 0; k < 3; k++) v += ft[3*r + k]*ft[3*c + k];
+                E[9*ti + 3*r + c] = 0.5*(v - (r == c ? 1.0 : 0.0));
+            }
+        // D^2_min: residuals Y - X F^T
+        double d2 = 0.0;
+        for (const auto& p : pairs) {
+            const double* x = vr + 3*p.second;
+            const double* y = vc + 3*p.first;
+            for (int c = 0; c < 3; c++) {
+                double pred = x[0]*ft[c] + x[1]*ft[3 + c] + x[2]*ft[6 + c];
+                double res = y[c] - pred;
+                d2 += res*res;
+            }
+        }
+        D[ti] = d2 / double(np);
+    }
+    return py::make_tuple(strain, d2min, slip);
+}

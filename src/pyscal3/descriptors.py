@@ -1096,55 +1096,23 @@ def identify_ackland_jones(atoms: Atoms):
 # Deformation Descriptors (require reference configuration)
 # ---------------------------------------------------------------------------
 
-def _get_neighbor_diff_padded(atoms):
-    """Return per-atom neighbor displacement vectors as (N, max_nn, 3).
+def _local_deformation(atoms_cur, atoms_ref):
+    """Strain tensor, D^2_min and slip vector of every atom.
 
-    Falls back to ragged ``atoms.info["pyscal_diff"]`` if necessary.
-    Padded entries are zero.
+    Neighbors that appear in the neighbor lists of an atom in both
+    configurations are paired (the first entry of each neighbor index in
+    either list); the affine deformation gradient is fitted to the paired
+    neighbor vectors.
     """
-    if "pyscal_diff" in atoms.arrays:
-        return atoms.arrays["pyscal_diff"]
-    rows = atoms.info["pyscal_diff"]
-    n = len(atoms)
-    max_nn = max((len(r) for r in rows), default=0)
-    out = np.zeros((n, max_nn, 3), dtype=float)
-    for i, r in enumerate(rows):
-        if len(r) > 0:
-            out[i, : len(r)] = np.asarray(r)
-    return out
-
-
-def _match_neighbor_indices(atoms_cur, atoms_ref):
-    """
-    Match atoms across deformed/reference configs and return neighbor mapping.
-
-    Returns dict mapping atom index → list of (neighbor_index_cur, neighbor_index_ref)
-    for atoms that appear in both neighbor lists.
-    """
-    # Get current neighbor data
-    neighbors_cur = _get_neighbor_indices_padded(atoms_cur)
-    neighbors_ref = _get_neighbor_indices_padded(atoms_ref)
-    diff_cur = _get_neighbor_diff_padded(atoms_cur)
-    diff_ref = _get_neighbor_diff_padded(atoms_ref)
-
-    n = len(atoms_cur)
-    mapping = {}
-
-    for i in range(n):
-        nbrs_cur = neighbors_cur[i]
-        nbrs_ref = neighbors_ref[i]
-        valid_cur = nbrs_cur[nbrs_cur >= 0]
-        valid_ref = nbrs_ref[nbrs_ref >= 0]
-        # Find common neighbors
-        common = set(valid_cur) & set(valid_ref)
-        pairs = []
-        for j in common:
-            j_cur_idx = np.where(nbrs_cur == j)[0][0]
-            j_ref_idx = np.where(nbrs_ref == j)[0][0]
-            pairs.append((j_cur_idx, j_ref_idx))
-        mapping[i] = pairs
-
-    return mapping, diff_cur, diff_ref
+    ensure_neighbors(atoms_cur)
+    ensure_neighbors(atoms_ref)
+    off_cur, cur = neighbor_arrays(atoms_cur, "neighbors", "diff")
+    off_ref, ref = neighbor_arrays(atoms_ref, "neighbors", "diff")
+    if len(off_cur) != len(off_ref):
+        raise ValueError("atoms and reference must have the same number of atoms")
+    return pc.calculate_local_deformation(
+        off_cur, cur["neighbors"], cur["diff"], off_ref, ref["neighbors"], ref["diff"]
+    )
 
 
 def atomic_strain(atoms: Atoms, reference: Atoms):
@@ -1175,38 +1143,7 @@ def atomic_strain(atoms: Atoms, reference: Atoms):
     Reference: Falk & Langer, PRE 57 (1998) 7192 (D^2_min);
     Shimizu, Ogata, Li, Mat. Trans. 48 (2007) 2923 (atomic strain).
     """
-    ensure_neighbors(atoms)
-    ensure_neighbors(reference)
-
-    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
-    n = len(atoms)
-    strain = np.zeros((n, 3, 3))
-
-    for i in range(n):
-        pairs = mapping[i]
-        if len(pairs) < 3:
-            strain[i] = np.nan
-            continue
-
-        # Build matrices: rows = neighbor displacement vectors
-        X = np.array([diff_ref[i, j_ref] for (_, j_ref) in pairs])  # reference
-        Y = np.array([diff_cur[i, j_cur] for (j_cur, _) in pairs])  # current
-
-        # Deformation gradient F via least squares: Y = X @ F^T
-        # => F^T = (X^T X)^-1 X^T Y
-        XtX = X.T @ X
-        try:
-            XtX_inv = np.linalg.inv(XtX)
-        except np.linalg.LinAlgError:
-            strain[i] = np.nan
-            continue
-        F = (XtX_inv @ X.T @ Y).T
-
-        # Green-Lagrange strain E = (F^T F - I) / 2
-        C = F.T @ F
-        E = 0.5 * (C - np.eye(3))
-        strain[i] = E
-
+    strain, _, _ = _local_deformation(atoms, reference)
     atoms.arrays["pyscal_strain"] = strain
     return strain
 
@@ -1238,20 +1175,13 @@ def von_mises_strain(atoms: Atoms, reference: Atoms):
         Also stored as ``atoms.arrays["pyscal_von_mises"]``.
     """
     E = atomic_strain(atoms, reference)
-    n = len(atoms)
-    vm = np.zeros(n)
-
-    for i in range(n):
-        if np.any(np.isnan(E[i])):
-            vm[i] = np.nan
-            continue
-        exx, eyy, ezz = E[i, 0, 0], E[i, 1, 1], E[i, 2, 2]
-        exy, eyz, exz = E[i, 0, 1], E[i, 1, 2], E[i, 0, 2]
-        vm[i] = np.sqrt(
-            0.5 * ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2)
-            + exy**2 + eyz**2 + exz**2
-        )
-
+    exx, eyy, ezz = E[:, 0, 0], E[:, 1, 1], E[:, 2, 2]
+    exy, eyz, exz = E[:, 0, 1], E[:, 1, 2], E[:, 0, 2]
+    vm = np.sqrt(
+        0.5 * ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2)
+        + exy**2 + eyz**2 + exz**2
+    )
+    vm[np.isnan(E).any(axis=(1, 2))] = np.nan
     atoms.arrays["pyscal_von_mises"] = vm
     return vm
 
@@ -1276,35 +1206,7 @@ def d2min(atoms: Atoms, reference: Atoms):
         D^2_min per atom (Angstrom^2).
         Also stored as ``atoms.arrays["pyscal_d2min"]``.
     """
-    ensure_neighbors(atoms)
-    ensure_neighbors(reference)
-
-    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
-    n = len(atoms)
-    d2 = np.zeros(n)
-
-    for i in range(n):
-        pairs = mapping[i]
-        if len(pairs) < 3:
-            d2[i] = np.nan
-            continue
-
-        X = np.array([diff_ref[i, j_ref] for (_, j_ref) in pairs])
-        Y = np.array([diff_cur[i, j_cur] for (j_cur, _) in pairs])
-
-        XtX = X.T @ X
-        try:
-            XtX_inv = np.linalg.inv(XtX)
-        except np.linalg.LinAlgError:
-            d2[i] = np.nan
-            continue
-        F = (XtX_inv @ X.T @ Y).T
-
-        # Predicted positions from affine: Y_pred = X @ F^T
-        Y_pred = X @ F.T
-        residuals = Y - Y_pred
-        d2[i] = np.mean(np.sum(residuals**2, axis=1))
-
+    _, d2, _ = _local_deformation(atoms, reference)
     atoms.arrays["pyscal_d2min"] = d2
     return d2
 
@@ -1343,27 +1245,7 @@ def slip_vector(atoms: Atoms, reference: Atoms):
     -----
     Ref: Zimmerman, Kelchner, Klein, Hamilton, Foiles, PRL 87 (2001) 165507.
     """
-    ensure_neighbors(atoms)
-    ensure_neighbors(reference)
-
-    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
-    n = len(atoms)
-    slip = np.zeros((n, 3))
-
-    for i in range(n):
-        pairs = mapping[i]
-        if len(pairs) == 0:
-            slip[i] = np.nan
-            continue
-
-        deltas = []
-        for j_cur, j_ref in pairs:
-            d_cur = diff_cur[i, j_cur]
-            d_ref = diff_ref[i, j_ref]
-            deltas.append(d_cur - d_ref)
-
-        slip[i] = np.mean(deltas, axis=0)
-
+    _, _, slip = _local_deformation(atoms, reference)
     atoms.arrays["pyscal_slip_vector"] = slip
     return slip
 
