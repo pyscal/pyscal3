@@ -34,6 +34,7 @@ from pyscal3._bridge import (
     create_attribute,
     padded_supercell,
     periodic_directions,
+    neighbor_arrays,
     guess_cutoff,
     gc_paused,
 )
@@ -123,6 +124,23 @@ def _as_int_list(l):
     return [int(v) for v in l]
 
 
+def _compute_qlm(atoms: Atoms, d: dict, l: int, bonds=None):
+    """Compute q_l and the q_lm parts of every atom into ``d``.
+
+    ``bonds`` is the result of neighbor_arrays with theta, phi and
+    neighborweight; pass it when computing several l to flatten only once.
+    """
+    if bonds is None:
+        bonds = neighbor_arrays(atoms, "theta", "phi", "neighborweight")
+    offsets, nb = bonds
+    q, real, imag = pc.calculate_q_single(
+        offsets, nb["theta"], nb["phi"], nb["neighborweight"], l
+    )
+    d["q%d" % l] = q
+    d["q%d_real" % l] = real
+    d["q%d_imag" % l] = imag
+
+
 # ---------------------------------------------------------------------------
 # Steinhardt Parameters
 # ---------------------------------------------------------------------------
@@ -148,18 +166,18 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     """
     ll = _as_int_list(l)
 
-    d = _get_dict_with_neighbors(atoms)
-
+    d = {}
+    bonds = neighbor_arrays(atoms, "theta", "phi", "neighborweight")
+    for val in ll:
+        _compute_qlm(atoms, d, val, bonds)
     if averaged:
-        # Need base q values first
+        offsets, nb = neighbor_arrays(atoms, "neighbors")
         for val in ll:
-            pc.calculate_q_single(d, val)
-        for val in ll:
-            pc.calculate_aq_single(d, val)
+            d["avg_q%d" % val] = pc.calculate_aq_single(
+                offsets, nb["neighbors"], d["q%d_real" % val], d["q%d_imag" % val], val
+            )
         result_keys = ["avg_q%d" % v for v in ll]
     else:
-        for val in ll:
-            pc.calculate_q_single(d, val)
         result_keys = ["q%d" % v for v in ll]
 
     # Sync all q-related keys back
@@ -227,22 +245,28 @@ def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
     """
     ll = _as_int_list(l)
 
-    d = _get_dict_with_neighbors(atoms)
+    d = {}
 
     # Ensure q_lm are computed first (W_l requires them)
+    bonds = neighbor_arrays(atoms, "theta", "phi", "neighborweight")
     for val in ll:
-        pc.calculate_q_single(d, val)
+        _compute_qlm(atoms, d, val, bonds)
 
     if averaged:
+        offsets, nb = neighbor_arrays(atoms, "neighbors")
         for val in ll:
-            pc.calculate_aw_single(d, val)
+            d["avg_w%d" % val], d["avg_what%d" % val] = pc.calculate_aw_single(
+                offsets, nb["neighbors"], d["q%d_real" % val], d["q%d_imag" % val], val
+            )
         if normalized:
             result_keys = ["avg_what%d" % v for v in ll]
         else:
             result_keys = ["avg_w%d" % v for v in ll]
     else:
         for val in ll:
-            pc.calculate_w_single(d, val)
+            d["w%d" % val], d["what%d" % val] = pc.calculate_w_single(
+                d["q%d_real" % val], d["q%d_imag" % val], val
+            )
         if normalized:
             result_keys = ["what%d" % v for v in ll]
         else:
@@ -378,15 +402,20 @@ def disorder(atoms: Atoms, q=6, averaged=False):
             need_calc = True
             break
     if need_calc:
-        pc.calculate_q_single(d, q)
+        _compute_qlm(atoms, d, q)
 
-    pc.calculate_disorder(d, q)
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
+    real = np.ascontiguousarray(d["q%d_real" % q], dtype=float)
+    imag = np.ascontiguousarray(d["q%d_imag" % q], dtype=float)
+    d["disorder"] = pc.calculate_disorder(offsets, nb["neighbors"], real, imag, q)
 
     sync_keys = ["disorder", "q%d" % q, "q%d_real" % q, "q%d_imag" % q]
 
     if averaged:
         # Average disorder over neighbors in C++
-        pc.calculate_average_disorder(d)
+        d["avg_disorder"] = pc.calculate_average_disorder(
+            offsets, nb["neighbors"], d["disorder"]
+        )
         sync_keys.append("avg_disorder")
 
     _sync_back(d, atoms, sync_keys)
@@ -1392,7 +1421,7 @@ def find_solids(
     compare_criteria = 0 if right else 1
 
     # Calculate Steinhardt parameters
-    pc.calculate_q_single(d, q)
+    _compute_qlm(atoms, d, q)
 
     # Calculate bonds/solid classification
     pc.calculate_bonds(d, q, threshold, avgthreshold, bonds, compare_criteria, criteria)

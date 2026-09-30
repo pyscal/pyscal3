@@ -12,6 +12,7 @@ All pyscal-computed per-atom data is stored in atoms.arrays
 
 import contextlib
 import gc
+import itertools
 
 import numpy as np
 from ase import Atoms
@@ -71,6 +72,58 @@ def clear_neighbor_data(atoms: Atoms):
     for key in NEIGHBOR_KEYS:
         atoms.arrays.pop(key, None)
         atoms.info.pop(key, None)
+
+
+def neighbor_arrays(atoms: Atoms, *keys):
+    """Flat arrays of stored per-bond neighbor data, for the C++ routines.
+
+    Returns ``(offsets, values)``: ``offsets`` has ``len(atoms) + 1`` entries,
+    and the bonds of atom ``i`` are ``offsets[i]:offsets[i + 1]`` in each
+    array of ``values``, which maps every requested key (without the
+    ``pyscal_`` prefix) to a flat array. ``neighbors`` gives int64 indices,
+    ``diff`` an (m, 3) array, the other keys float64 arrays.
+
+    The arrays are rebuilt from ``atoms.arrays`` (rows of equal length, which
+    only need a reshape) or ``atoms.info`` (lists of lists), so they always
+    match what is stored.
+    """
+    ensure_neighbors(atoms)
+    n = len(atoms)
+    counts = None
+    values = {}
+    for key in keys:
+        store = _PREFIX + key
+        if store in atoms.arrays:
+            rows = atoms.arrays[store]
+        elif store in atoms.info:
+            rows = atoms.info[store]
+        else:
+            raise ValueError("No %s stored; call pyscal3.find_neighbors first." % store)
+        dtype = np.int64 if key == "neighbors" else np.float64
+        if isinstance(rows, np.ndarray):
+            k = rows.shape[1] if rows.ndim >= 2 else 0
+            c = np.full(n, k, dtype=np.int64)
+            flat = rows.reshape((n * k, 3) if key == "diff" else (n * k,))
+        else:
+            c = np.fromiter(map(len, rows), dtype=np.int64, count=n)
+            m = int(c.sum())
+            if key == "diff":
+                flat = np.fromiter(
+                    itertools.chain.from_iterable(itertools.chain.from_iterable(rows)),
+                    dtype=np.float64, count=3 * m,
+                ).reshape(m, 3)
+            else:
+                flat = np.fromiter(itertools.chain.from_iterable(rows), dtype=dtype, count=m)
+        if counts is None:
+            counts = c
+        elif not np.array_equal(counts, c):
+            raise ValueError("Stored neighbor keys have different lengths: %s" % (keys,))
+        values[key] = np.ascontiguousarray(flat, dtype=dtype)
+    if counts is None:
+        counts = np.zeros(n, dtype=np.int64)
+    offsets = np.zeros(n + 1, dtype=np.int64)
+    np.cumsum(counts, out=offsets[1:])
+    return offsets, values
 
 
 def get_box_params(atoms: Atoms):

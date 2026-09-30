@@ -9,6 +9,7 @@
 #include <sstream>
 #include <time.h>
 #include <vector>
+#include <cstdint>
 #include <vector>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -20,6 +21,11 @@ const double PI = 3.141592653589793;
 
 namespace py = pybind11;
 using namespace std;
+
+// Flat neighbour data passed from Python: offsets (n + 1) into per-bond
+// arrays, neighbour indices, and per-bond or per-atom values.
+using nl_index = py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>;
+using nl_values = py::array_t<double, py::array::c_style | py::array::forcecast>;
 
 /*-----------------------------------------------------
     Some utility objects
@@ -138,19 +144,32 @@ void ylm_all_m(const int l,
     double* ylm_real,
     double* ylm_imag);
 
-void calculate_q_single(py::dict& atoms,
+py::tuple calculate_q_single(const nl_index& offsets,
+    const nl_values& theta,
+    const nl_values& phi,
+    const nl_values& weights,
     const int lm);
 
-void calculate_aq_single(py::dict& atoms,
+py::array_t<double> calculate_aq_single(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm);
 
-void calculate_w_single(py::dict& atoms,
+py::tuple calculate_w_single(const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm);
 
-void calculate_aw_single(py::dict& atoms,
+py::tuple calculate_aw_single(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm);
 
-void calculate_disorder(py::dict& atoms,
+py::array_t<double> calculate_disorder(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm);
 
 void calculate_bonds(py::dict& atoms,
@@ -282,7 +301,9 @@ void calculate_average_entropy(py::dict& atoms);
 /*-----------------------------------------------------
     Neighbor-averaging helpers (puremath.cpp)
 -----------------------------------------------------*/
-void calculate_average_disorder(py::dict& atoms);
+py::array_t<double> calculate_average_disorder(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& disorder);
 
 py::list calculate_average_over_neighbors(py::dict& atoms,
     const vector<double>& values,

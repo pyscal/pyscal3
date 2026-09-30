@@ -291,23 +291,24 @@ void calculate_short_range_order(py::dict& atoms,
  *  Same pattern as calculate_average_entropy:
  *  avg_disorder[i] = mean( disorder[i], disorder[j] for j in neighbors[i] )
  * ======================================================================= */
-void calculate_average_disorder(py::dict& atoms) {
-    vector<double> disorder =
-        atoms[py::str("disorder")].cast<vector<double>>();
-    vector<vector<int>> neighbors =
-        atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    int nop = (int)neighbors.size();
+py::array_t<double> calculate_average_disorder(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& disorder) {
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const double* dis = disorder.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
 
-    vector<double> avg_disorder(nop);
-    for (int ti = 0; ti < nop; ti++) {
-        double sum = disorder[ti];
-        int nn = (int)neighbors[ti].size();
-        for (int j = 0; j < nn; j++) {
-            sum += disorder[neighbors[ti][j]];
+    py::array_t<double> avg_disorder(nop);
+    double* out = avg_disorder.mutable_data();
+    for (py::ssize_t ti = 0; ti < nop; ti++) {
+        double sum = dis[ti];
+        for (std::int64_t ci = off[ti]; ci < off[ti+1]; ci++) {
+            sum += dis[nb[ci]];
         }
-        avg_disorder[ti] = sum / (double)(nn + 1);
+        out[ti] = sum / (double)(off[ti+1] - off[ti] + 1);
     }
-    atoms[py::str("avg_disorder")] = avg_disorder;
+    return avg_disorder;
 }
 
 
