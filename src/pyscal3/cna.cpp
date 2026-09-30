@@ -208,8 +208,10 @@ py::tuple diamond_structure_cna(const nl_positions &positions, const nl_position
         double ssum = 0;
         for (int i = 0; i < 12; i++) ssum += d2[i];
         signatures(v2, nn, 1.207 * ssum / 12.00, sig);
+        // cubic (fcc-like second shell) or hexagonal (hcp-like) diamond;
+        // any other second shell, icosahedral included, is not a diamond site
         const int s = classify_cn12(sig, nn);
-        structure[ti] = (s == 1) ? 5 : (s == 2) ? 8 : s;
+        structure[ti] = (s == 1) ? 5 : (s == 2) ? 8 : 0;
     }
 
     // first neighbours of a diamond site

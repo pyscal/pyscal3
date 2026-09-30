@@ -194,3 +194,36 @@ def test_cna_leaves_the_neighbor_list_alone():
     pyscal3.common_neighbor_analysis(atoms)
     pyscal3.diamond_structure(atoms)
     np.testing.assert_array_equal(atoms.arrays["pyscal_neighbors"], before)
+
+
+def test_diamond_icosahedral_second_shell_is_not_hex_diamond():
+    """An icosahedral second shell used to come out as label 4 (hex diamond).
+
+    Four first neighbours sit towards four vertex-disjoint faces of an
+    icosahedron, so the twelve second neighbours of the central atom are the
+    vertices of the icosahedron.
+    """
+    import itertools
+    import warnings
+    from ase import Atoms as ASEAtoms
+
+    phi = (1 + 5 ** 0.5) / 2
+    verts = []
+    for a, b in itertools.product((-1, 1), repeat=2):
+        verts += [(0, a, b * phi), (a, b * phi, 0), (b * phi, 0, a)]
+    verts = np.array(verts, float)
+    verts *= 3.0 / np.linalg.norm(verts[0])
+    edge = min(np.linalg.norm(verts[i] - verts[j]) for i in range(12) for j in range(i))
+    faces = [f for f in itertools.combinations(range(12), 3)
+             if all(abs(np.linalg.norm(verts[i] - verts[j]) - edge) < 1e-9
+                    for i, j in itertools.combinations(f, 2))]
+    four = next(c for c in itertools.combinations(faces, 4) if len(set(sum(c, ()))) == 12)
+    first = [1.8 * verts[list(f)].mean(axis=0) / np.linalg.norm(verts[list(f)].mean(axis=0))
+             for f in four]
+    atoms = ASEAtoms("Si17", positions=np.vstack([[0, 0, 0], first, verts]) + 20.0,
+                     cell=[40, 40, 40], pbc=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = pyscal3.diamond_structure(atoms)
+    assert atoms.arrays["pyscal_structure"][0] == 0
+    assert res["hex diamond"] == 0

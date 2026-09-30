@@ -108,6 +108,9 @@ relative for badly conditioned fits.
   recursive and overflowed the stack).
 - `ace` returns bitwise the same descriptors on repeated calls; complex
   products in the B basis could round differently from call to call.
+- `diamond_structure` no longer labels an atom as hexagonal diamond when
+  its second shell has the icosahedral CNA signature; such an atom is now
+  treated like any other non-diamond site.
 - Cell lists are built on fractional coordinates: triclinic, hexagonal and
   rotated cells (primitive fcc, hcp, ASE `fcc111` slabs, LAMMPS triclinic
   boxes) gave wrong neighbors or hung above 250 atoms.
