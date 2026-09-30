@@ -280,22 +280,28 @@ void calculate_voronoi_vector(py::dict& atoms,
     double edge_cutoff,
     double area_cutoff);
 
-void calculate_short_range_order(py::dict& atoms,
+py::array_t<double> calculate_short_range_order(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_index& types,
     int reference_type,
     int compare_type);
 
 /*-----------------------------------------------------
     Entropy Methods
 -----------------------------------------------------*/
-void calculate_entropy(py::dict& atoms, 
-    double sigma, 
-    double rho, 
-    double rstart, 
-    double rstop, 
-    double h, 
+py::array_t<double> calculate_entropy(const nl_index& offsets,
+    const nl_values& neighbordist,
+    const nl_values& cutoff,
+    double sigma,
+    double rho,
+    double rstart,
+    double rstop,
+    double h,
     double kb);
 
-void calculate_average_entropy(py::dict& atoms);
+py::array_t<double> calculate_average_entropy(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& entropy);
 
 /*-----------------------------------------------------
     Neighbor-averaging helpers (puremath.cpp)
@@ -304,6 +310,7 @@ py::array_t<double> calculate_average_disorder(const nl_index& offsets,
     const nl_index& neighbors,
     const nl_values& disorder);
 
-py::list calculate_average_over_neighbors(py::dict& atoms,
-    const vector<double>& values,
+py::array_t<double> calculate_average_over_neighbors(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& values,
     bool include_self);

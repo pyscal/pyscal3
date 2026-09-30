@@ -642,13 +642,14 @@ def entropy(
     if averaged is not None:
         average = averaged
 
-    d = _get_dict_with_neighbors(atoms)
+    offsets, nb = neighbor_arrays(atoms, "neighbors", "neighbordist")
+    d = {}
 
     n = len(atoms)
     volume = _periodic_volume(atoms, "entropy")
     kb = 1
 
-    cutoffs = np.asarray(d.get("cutoff", []), dtype=float)
+    cutoffs = np.ascontiguousarray(stored_per_atom(atoms, "cutoff"), dtype=float)
     if cutoffs.size > 0 and np.max(cutoffs) > 0 and rm > np.max(cutoffs) * (1 + 1e-9):
         warnings.warn(
             "entropy: rm=%.3f is larger than the neighbor cutoff (%.3f). "
@@ -663,12 +664,16 @@ def entropy(
     else:
         rho = n / volume
 
-    pc.calculate_entropy(d, sigma, rho, rstart, rm, h, kb)
+    d["entropy"] = pc.calculate_entropy(
+        offsets, nb["neighbordist"], cutoffs, sigma, rho, rstart, rm, h, kb
+    )
 
     sync_keys = ["entropy"]
 
     if average:
-        pc.calculate_average_entropy(d)
+        d["average_entropy"] = pc.calculate_average_entropy(
+            offsets, nb["neighbors"], d["entropy"]
+        )
         sync_keys.append("average_entropy")
 
     _sync_back(d, atoms, sync_keys)
@@ -731,7 +736,7 @@ def short_range_order(atoms: Atoms, reference_type=None, compare_type=None, aver
         the reference type). Per-atom values are stored in
         ``atoms.arrays["pyscal_sro"]``.
     """
-    d = _get_dict_with_neighbors(atoms)
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
 
     numbers = atoms.get_atomic_numbers()
     unique, counts = np.unique(numbers, return_counts=True)
@@ -755,9 +760,9 @@ def short_range_order(atoms: Atoms, reference_type=None, compare_type=None, aver
     if cmp not in unique:
         raise ValueError(f"No atoms of compare type {cmp} in the structure")
 
-    pc.calculate_short_range_order(d, ref, cmp)
-
-    sro = np.array(d["sro"], dtype=float)
+    sro = pc.calculate_short_range_order(
+        offsets, nb["neighbors"], np.ascontiguousarray(numbers, dtype=np.int64), ref, cmp
+    )
     atoms.arrays["pyscal_sro"] = sro
 
     if average:
@@ -1522,8 +1527,10 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     # 1-D values: use fast C++ averaging
     values = np.asarray(values)
     if values.ndim == 1:
-        result = pc.calculate_average_over_neighbors(d, values.tolist(), include_self)
-        return np.array(result)
+        offsets, nb = neighbor_arrays(atoms, "neighbors")
+        return pc.calculate_average_over_neighbors(
+            offsets, nb["neighbors"], np.ascontiguousarray(values, dtype=float), include_self
+        )
 
     # Multi-dimensional: fall back to Python loop
     result = []

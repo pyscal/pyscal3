@@ -252,42 +252,43 @@ void calculate_voronoi_vector(py::dict& atoms,
  *  (compare_type) and c_B is the global concentration of B.  Atoms that are
  *  not of the reference type (or have no neighbours) get NaN.
  * ======================================================================= */
-void calculate_short_range_order(py::dict& atoms,
+py::array_t<double> calculate_short_range_order(const nl_index& offsets,
+                                 const nl_index& neighbors,
+                                 const nl_index& types,
                                  int reference_type,
                                  int compare_type) {
 
-    vector<int> types =
-        atoms[py::str("types")].cast<vector<int>>();
-    vector<vector<int>> neighbors =
-        atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-
-    int nop = (int)types.size();
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const std::int64_t* ty = types.data();
+    const int nop = (int)(offsets.shape(0) - 1);
     const double nan = std::numeric_limits<double>::quiet_NaN();
 
     // global concentration of the compare type
     int n_compare = 0;
     for (int i = 0; i < nop; i++) {
-        if (types[i] == compare_type) n_compare++;
+        if (ty[i] == compare_type) n_compare++;
     }
     double c_compare = (nop > 0) ? (double)n_compare / (double)nop : 0.0;
 
-    vector<double> sro(nop, nan);
+    py::array_t<double> sro_array(nop);
+    double* sro = sro_array.mutable_data();
+    fill(sro, sro + nop, nan);
 
     for (int i = 0; i < nop; i++) {
-        if (types[i] != reference_type) continue;
-        int nn = (int)neighbors[i].size();
+        if (ty[i] != reference_type) continue;
+        int nn = (int)(off[i + 1] - off[i]);
         if (nn == 0 || c_compare <= 0.0) continue;
 
         int cmp_count = 0;
-        for (int j = 0; j < nn; j++) {
-            if (types[neighbors[i][j]] == compare_type)
+        for (std::int64_t j = off[i]; j < off[i + 1]; j++) {
+            if (ty[nb[j]] == compare_type)
                 cmp_count++;
         }
         double p = (double)cmp_count / (double)nn;
         sro[i] = 1.0 - p / c_compare;
     }
-
-    atoms[py::str("sro")] = sro;
+    return sro_array;
 }
 
 
@@ -324,23 +325,25 @@ py::array_t<double> calculate_average_disorder(const nl_index& offsets,
  *  Returns a py::list of averaged values rather than writing to a fixed key,
  *  so the Python caller can store under whatever key it wants.
  * ======================================================================= */
-py::list calculate_average_over_neighbors(py::dict& atoms,
-                                          const vector<double>& values,
+py::array_t<double> calculate_average_over_neighbors(const nl_index& offsets,
+                                          const nl_index& neighbors,
+                                          const nl_values& values,
                                           bool include_self) {
-    vector<vector<int>> neighbors =
-        atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    int nop = (int)neighbors.size();
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const double* val = values.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
 
-    py::list result(nop);
-    for (int ti = 0; ti < nop; ti++) {
-        double sum = include_self ? values[ti] : 0.0;
+    py::array_t<double> result(nop);
+    double* out = result.mutable_data();
+    for (py::ssize_t ti = 0; ti < nop; ti++) {
+        double sum = include_self ? val[ti] : 0.0;
         int count  = include_self ? 1 : 0;
-        int nn = (int)neighbors[ti].size();
-        for (int j = 0; j < nn; j++) {
-            sum += values[neighbors[ti][j]];
+        for (std::int64_t j = off[ti]; j < off[ti + 1]; j++) {
+            sum += val[nb[j]];
             count++;
         }
-        result[ti] = count > 0 ? sum / (double)count : 0.0;
+        out[ti] = count > 0 ? sum / (double)count : 0.0;
     }
     return result;
 }
