@@ -106,6 +106,17 @@ def find_neighbors(
         - ``pyscal_neighbors_found`` (True) and ``pyscal_neighbor_method`` in
           ``atoms.info``
 
+        The same bonds are also stored flat in ``atoms.info``:
+        ``pyscal_bond_offsets`` (natoms + 1 entries; the bonds of atom ``i``
+        are ``offsets[i]:offsets[i + 1]``), ``pyscal_bond_neighbors``,
+        ``pyscal_bond_distance``, ``pyscal_bond_weight``,
+        ``pyscal_bond_vector`` (nbonds, 3), ``pyscal_bond_theta`` and
+        ``pyscal_bond_phi``. The adaptive, SANN and number methods also store
+        their candidates as ``pyscal_candidate_offsets``,
+        ``pyscal_candidate_neighbors`` and ``pyscal_candidate_distance``.
+        With ``store_rows=False`` only these flat keys and ``pyscal_cutoff``
+        are stored.
+
         The Voronoi method additionally stores ``pyscal_voronoi_volume``,
         ``pyscal_face_vertices``, ``pyscal_face_perimeters``,
         ``pyscal_vertex_vectors``, ``pyscal_vertex_numbers`` and

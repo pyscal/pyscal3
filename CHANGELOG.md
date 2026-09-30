@@ -62,6 +62,14 @@ and ACE descriptors up to body order four.
   `atoms.arrays` for any cell size. Small cells used to put them in
   `atoms.info` as lists.
 - The `cells` argument of `find_neighbors` is ignored.
+- The bonds are also stored as flat arrays in `atoms.info`
+  (`pyscal_bond_offsets`, `pyscal_bond_neighbors`, `pyscal_bond_distance`,
+  `pyscal_bond_weight`, `pyscal_bond_vector`, `pyscal_bond_theta`,
+  `pyscal_bond_phi`, and `pyscal_candidate_*` for the candidate methods), which
+  the descriptors read. `find_neighbors(..., store_rows=False)` stores only
+  these and skips the per-atom row keys: for 131 072 atoms with a 5 A cutoff
+  the search takes 0.31 s instead of 1.33 s, and the atoms can be written to
+  extxyz.
 
 ### Descriptor speed
 
@@ -94,6 +102,8 @@ relative for badly conditioned fits.
 - `find_clusters` and `find_solids` no longer crash with a segmentation fault
   for clusters of a few hundred thousand atoms (the cluster search was
   recursive and overflowed the stack).
+- `ace` returns bitwise the same descriptors on repeated calls; complex
+  products in the B basis could round differently from call to call.
 - Cell lists are built on fractional coordinates: triclinic, hexagonal and
   rotated cells (primitive fcc, hcp, ASE `fcc111` slabs, LAMMPS triclinic
   boxes) gave wrong neighbors or hung above 250 atoms.
