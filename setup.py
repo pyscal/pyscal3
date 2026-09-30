@@ -45,7 +45,8 @@ setup(
             ],
             language="c++",
             cxx_std=17,
-            include_dirs=["lib/voro++", "lib/matscipy-neighbours"],
+            # src/pyscal3 for parallel.h, which the vendored neighbour search uses
+            include_dirs=["lib/voro++", "lib/matscipy-neighbours", "src/pyscal3"],
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
         ),
