@@ -1,7 +1,13 @@
-"""The thread-count setting of pyscal3."""
+"""The thread-count setting of pyscal3, and results that must not depend on it."""
+import contextlib
 import os
 import subprocess
 import sys
+import warnings
+
+import numpy as np
+import pytest
+from ase.build import bulk
 
 import pyscal3
 
@@ -33,14 +39,6 @@ def test_default_from_environment():
     assert _threads_at_import({"OMP_NUM_THREADS": "3"}) == 3
     assert _threads_at_import({"PYSCAL_NUM_THREADS": "2", "OMP_NUM_THREADS": "3"}) == 2
     assert _threads_at_import({}) >= 1
-
-
-import contextlib
-import warnings
-
-import numpy as np
-import pytest
-from ase.build import bulk
 
 
 @contextlib.contextmanager
@@ -162,3 +160,15 @@ def test_cna_does_not_depend_on_threads(make):
         labels.append([a.arrays["pyscal_structure"] for a in (a1, a2, a3)])
     for x, y in zip(*labels):
         np.testing.assert_array_equal(x, y)
+
+
+@pytest.mark.parametrize("n", [2, 20])
+def test_non_finite_positions_raise_on_threads(n):
+    # 32 atoms run on one thread, 32 000 in several blocks
+    atoms = bulk("Cu", "fcc", a=3.61, cubic=True).repeat(n)
+    positions = atoms.positions.copy()
+    positions[-1, 1] = np.nan
+    atoms.positions = positions
+    with threads(4):
+        with pytest.raises(ValueError, match="finite"):
+            pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)

@@ -15,6 +15,12 @@ which pyscal3 uses for its neighbour search. It is compiled into
     `#pragma omp parallel for schedule(dynamic, 256)`, with the same block
     size. The loop bodies are unchanged; each iteration writes only the pairs
     of its own atom, so the output does not depend on the number of threads.
+  - In `neighbour_list.cc`, the two per-atom loops of `neighbour_list_body`
+    that compute the cell of each atom and then its position relative to
+    the cell run on pyscal3's threads instead of `#pragma omp parallel for
+    schedule(static)`. The loop bodies are unchanged; the check for
+    non-finite positions, an OpenMP reduction before, is collected in an
+    `std::atomic<bool>`.
   - In `neighbour_list.hh`, the five arrays of `NeighbourList` are
     `pyscal::buffer` instead of `std::vector`: a `std::vector` with an
     allocator that does not zero new elements. `build_pairs` sizes them and
@@ -41,7 +47,8 @@ copied headers is behind `MATSCIPY_ENABLE_CUDA` and `MATSCIPY_ENABLE_HIP`,
 which pyscal3 does not define.
 
 pyscal3 builds these files without OpenMP, so the remaining `#pragma omp`
-lines are ignored; those loops are cheap passes over the atoms.
+lines are ignored: the binning of the atoms in `cell_list.cc` runs
+serially, and so does `neighbour_matrix`, which pyscal3 does not call.
 
 ## Updating
 

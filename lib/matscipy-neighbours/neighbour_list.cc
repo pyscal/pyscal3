@@ -24,6 +24,7 @@
 #include "parallel.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cmath>
 
@@ -182,17 +183,18 @@ static error_t neighbour_list_body(int quantities, const real_t cell_origin[3],
        non-finite position would bin to garbage and (as NaN) defeat the
        distance test, so reject it here. */
     std::vector<index_t> raw(3 * nat);
+    std::atomic<bool> all_finite_atoms(true);
+    pyscal::parallel_for(nat, [&](index_t begin, index_t end) {
     bool all_finite = true;
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : all_finite)
-#endif
-    for (index_t a = 0; a < nat; a++) {
+    for (index_t a = begin; a < end; a++) {
         all_finite = all_finite && std::isfinite(r[3 * a]) &&
                      std::isfinite(r[3 * a + 1]) && std::isfinite(r[3 * a + 2]);
         position_to_cell_index(cell_origin, inv_cell, &r[3 * a], n1, n2, n3,
                                &raw[3 * a], &raw[3 * a + 1], &raw[3 * a + 2]);
     }
-    if (!all_finite) {
+    if (!all_finite) all_finite_atoms.store(false);
+    }, 4096);
+    if (!all_finite_atoms.load()) {
         return set_invalid_argument("Positions must be finite.");
     }
 
@@ -205,10 +207,8 @@ static error_t neighbour_list_body(int quantities, const real_t cell_origin[3],
     std::vector<real_t> rel_pos(3 * nat);
     std::vector<real_t> per_atom_s(per_atom_cutoff ? nat : 0);
     std::vector<index_t> types_s(types ? nat : 0);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-    for (index_t s = 0; s < nat; s++) {
+    pyscal::parallel_for(nat, [&](index_t begin, index_t end) {
+    for (index_t s = begin; s < end; s++) {
         const index_t a = cg.sorted_atom[s];
         const index_t c1 = raw[3 * a + 0], c2 = raw[3 * a + 1],
                       c3 = raw[3 * a + 2];
@@ -229,6 +229,7 @@ static error_t neighbour_list_body(int quantities, const real_t cell_origin[3],
         if (per_atom_cutoff) per_atom_s[s] = per_atom_cutoff[a];
         if (types) types_s[s] = types[a];
     }
+    }, 4096);
 
     NeighbourContext ctx;
     ctx.pbc0 = pbc[0];
