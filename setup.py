@@ -9,11 +9,13 @@ import sys
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 
-# MSVC uses /O2; GCC/Clang use -O3
+# MSVC uses /O2; GCC/Clang use -O3 (and -pthread for std::thread, see parallel.h)
 if sys.platform == "win32":
     extra_compile_args = ["/O2"]
+    extra_link_args = []
 else:
-    extra_compile_args = ["-O3"]
+    extra_compile_args = ["-O3", "-pthread"]
+    extra_link_args = ["-pthread"]
 
 setup(
     ext_modules=[
@@ -30,6 +32,7 @@ setup(
                 "src/pyscal3/entropy.cpp",
                 "src/pyscal3/puremath.cpp",
                 "src/pyscal3/system_binding.cpp",
+                "src/pyscal3/parallel.cpp",
                 "lib/voro++/voro++.cc",
                 # neighbour search, see lib/matscipy-neighbours/VENDORED.md
                 "lib/matscipy-neighbours/error.cc",
@@ -44,6 +47,7 @@ setup(
             cxx_std=17,
             include_dirs=["lib/voro++", "lib/matscipy-neighbours"],
             extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args,
         ),
     ],
     cmdclass={"build_ext": build_ext},
