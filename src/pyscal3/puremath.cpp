@@ -26,8 +26,8 @@ using namespace std;
  *  Helper: cosine of angle between two 3-vectors stored as flat sub-arrays
  *  in diff[atom][neighbor_idx] = {dx, dy, dz}
  * ----------------------------------------------------------------------- */
-static inline double cosine_angle(const vector<double>& v1,
-                                  const vector<double>& v2) {
+static inline double cosine_angle(const double* v1,
+                                  const double* v2) {
     double dot = v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2];
     double m1  = sqrt(v1[0]*v1[0] + v1[1]*v1[1] + v1[2]*v1[2]);
     double m2  = sqrt(v2[0]*v2[0] + v2[1]*v2[1] + v2[2]*v2[2]);
@@ -50,58 +50,63 @@ static inline double cosine_angle(const vector<double>& v1,
  *  bins = [-1.0, -0.945, -0.915, -0.755, -0.705, -0.195,
  *           0.195, 0.245, 0.795, 1.0]
  * ======================================================================= */
-void calculate_chi_params(py::dict& atoms) {
+py::tuple calculate_chi_params(const nl_index& offsets, const nl_values& diff) {
 
-    vector<vector<int>> neighbors =
-        atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<vector<vector<double>>> diff =
-        atoms[py::str("diff")].cast<vector<vector<vector<double>>>>();
-
-    int nop = (int)neighbors.size();
+    // diff holds the neighbour vectors, (bonds, 3); bonds of atom i are
+    // offsets[i] .. offsets[i + 1]. Returns the (n, 9) chi counts, the
+    // cosines of all neighbour pairs of each atom, and offsets into them.
+    const std::int64_t* off = offsets.data();
+    const double* v = diff.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
 
     // 10 bin edges → 9 bins
     const double bins[10] = {-1.0, -0.945, -0.915, -0.755, -0.705,
                              -0.195, 0.195, 0.245, 0.795, 1.0};
 
-    vector<vector<int>> chiparams(nop, vector<int>(9, 0));
-    vector<vector<double>> cosines(nop);
+    py::array_t<std::int64_t> cos_offsets(nop + 1);
+    std::int64_t* co = cos_offsets.mutable_data();
+    co[0] = 0;
+    for (py::ssize_t ti = 0; ti < nop; ti++) {
+        const std::int64_t nn = off[ti + 1] - off[ti];
+        co[ti + 1] = co[ti] + nn * (nn - 1) / 2;
+    }
 
-    for (int ti = 0; ti < nop; ti++) {
-        int nn = (int)diff[ti].size();
-        // Reserve space for C(nn,2) cosine values
-        int npairs = nn * (nn - 1) / 2;
-        cosines[ti].reserve(npairs);
+    py::array_t<std::int64_t> chiparams(vector<py::ssize_t>{nop, 9});
+    py::array_t<double> cosines(static_cast<py::ssize_t>(co[nop]));
+    std::int64_t* chi = chiparams.mutable_data();
+    double* cs = cosines.mutable_data();
+    fill(chi, chi + 9 * nop, 0);
 
-        // Compute all pairwise cosines
-        for (int i = 0; i < nn; i++) {
-            for (int j = i + 1; j < nn; j++) {
-                double ct = cosine_angle(diff[ti][i], diff[ti][j]);
-                cosines[ti].push_back(ct);
+    for (py::ssize_t ti = 0; ti < nop; ti++) {
+        // all pairwise cosines
+        std::int64_t k = co[ti];
+        for (std::int64_t i = off[ti]; i < off[ti + 1]; i++) {
+            for (std::int64_t j = i + 1; j < off[ti + 1]; j++) {
+                cs[k++] = cosine_angle(v + 3 * i, v + 3 * j);
             }
         }
 
         // Histogram into bins
         // Match numpy behavior: bins 0..7 are [left, right), bin 8 is [left, right]
-        for (double ct : cosines[ti]) {
+        for (std::int64_t p = co[ti]; p < co[ti + 1]; p++) {
+            const double ct = cs[p];
             for (int b = 0; b < 9; b++) {
                 if (b < 8) {
                     if (ct >= bins[b] && ct < bins[b + 1]) {
-                        chiparams[ti][b]++;
+                        chi[9 * ti + b]++;
                         break;
                     }
                 } else {
                     // Last bin: closed on both sides [0.795, 1.0]
                     if (ct >= bins[b] && ct <= bins[b + 1]) {
-                        chiparams[ti][b]++;
+                        chi[9 * ti + b]++;
                         break;
                     }
                 }
             }
         }
     }
-
-    atoms[py::str("chiparams")] = chiparams;
-    atoms[py::str("cosines")]   = cosines;
+    return py::make_tuple(chiparams, cosines, cos_offsets);
 }
 
 
@@ -111,20 +116,21 @@ void calculate_chi_params(py::dict& atoms) {
  *  For each atom, take the 4 closest neighbors (by distance), compute
  *  C(4,2)=6 pairwise cosines, and sum (cos(theta) + 1/3)^2.
  * ======================================================================= */
-void calculate_angular_criteria(py::dict& atoms) {
+py::array_t<double> calculate_angular_criteria(const nl_index& offsets,
+    const nl_values& neighbordist,
+    const nl_values& diff) {
 
-    vector<vector<double>> neighbordist =
-        atoms[py::str("neighbordist")].cast<vector<vector<double>>>();
-    vector<vector<vector<double>>> diff =
-        atoms[py::str("diff")].cast<vector<vector<vector<double>>>>();
+    const std::int64_t* off = offsets.data();
+    const double* dist = neighbordist.data();
+    const double* v = diff.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
+    py::array_t<double> angular(nop);
+    double* out = angular.mutable_data();
 
-    int nop = (int)neighbordist.size();
-    vector<double> angular(nop, 0.0);
-
-    for (int ti = 0; ti < nop; ti++) {
-        int nn = (int)neighbordist[ti].size();
+    for (py::ssize_t ti = 0; ti < nop; ti++) {
+        const int nn = (int)(off[ti + 1] - off[ti]);
         if (nn < 4) {
-            angular[ti] = 0.0;
+            out[ti] = 0.0;
             continue;
         }
 
@@ -132,25 +138,25 @@ void calculate_angular_criteria(py::dict& atoms) {
         // (matches numpy's argsort which is stable)
         vector<datom> dv(nn);
         for (int i = 0; i < nn; i++) {
-            dv[i].dist  = neighbordist[ti][i];
+            dv[i].dist  = dist[off[ti] + i];
             dv[i].index = i;
         }
         stable_sort(dv.begin(), dv.end(), by_dist());
 
-        int top4[4] = { dv[0].index, dv[1].index, dv[2].index, dv[3].index };
+        const std::int64_t top4[4] = { off[ti] + dv[0].index, off[ti] + dv[1].index,
+                                       off[ti] + dv[2].index, off[ti] + dv[3].index };
 
         double costhetasum = 0.0;
         for (int i = 0; i < 4; i++) {
             for (int j = i + 1; j < 4; j++) {
-                double ct = cosine_angle(diff[ti][top4[i]], diff[ti][top4[j]]);
+                double ct = cosine_angle(v + 3 * top4[i], v + 3 * top4[j]);
                 double term = ct + 1.0 / 3.0;
                 costhetasum += term * term;
             }
         }
-        angular[ti] = costhetasum;
+        out[ti] = costhetasum;
     }
-
-    atoms[py::str("angular")] = angular;
+    return angular;
 }
 
 

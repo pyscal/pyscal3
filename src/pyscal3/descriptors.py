@@ -551,12 +551,8 @@ def centrosymmetry(atoms: Atoms, nmax=12):
 
     # Find neighbors by number
     find_neighbors(atoms, method="number", nmax=nmax, assign_neighbor=True)
-    d = _get_dict_with_neighbors(atoms)
-    d["centrosymmetry"] = [0.0] * len(atoms)
-
-    pc.calculate_centrosymmetry(d, nmax)
-
-    cs = np.array(d["centrosymmetry"])
+    offsets, nb = neighbor_arrays(atoms, "diff")
+    cs = pc.calculate_centrosymmetry(offsets, nb["diff"], nmax)
     atoms.arrays["pyscal_centrosymmetry"] = cs
     return cs
 
@@ -931,11 +927,8 @@ def angular_criteria(atoms: Atoms):
     numpy array
         Per-atom angular parameter A values.
     """
-    d = _get_dict_with_neighbors(atoms)
-
-    pc.calculate_angular_criteria(d)
-
-    ang = np.array(d["angular"])
+    offsets, nb = neighbor_arrays(atoms, "neighbordist", "diff")
+    ang = pc.calculate_angular_criteria(offsets, nb["neighbordist"], nb["diff"])
     atoms.arrays["pyscal_angular"] = ang
     return ang
 
@@ -961,15 +954,16 @@ def chi_params(atoms: Atoms, angles=False):
     numpy array of shape (natoms, 9)
         Chi parameter vectors.
     """
-    d = _get_dict_with_neighbors(atoms)
-
-    pc.calculate_chi_params(d)
-
-    cp = np.array(d["chiparams"])
+    offsets, nb = neighbor_arrays(atoms, "diff")
+    cp, cosines, cos_offsets = pc.calculate_chi_params(offsets, nb["diff"])
     atoms.arrays["pyscal_chiparams"] = cp
 
     if angles:
-        cosines_list = d["cosines"]
+        with gc_paused():
+            values = cosines.tolist()
+            cosines_list = [
+                values[a:b] for a, b in zip(cos_offsets[:-1].tolist(), cos_offsets[1:].tolist())
+            ]
         atoms.info["pyscal_cosines"] = cosines_list
         return cp, cosines_list
     return cp

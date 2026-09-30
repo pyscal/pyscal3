@@ -265,15 +265,16 @@ void identify_diamond_cna(py::dict& atoms,
 /*-----------------------------------------------------
     Other Methods
 -----------------------------------------------------*/
-void calculate_centrosymmetry(py::dict& atoms,
-    const int nmax);
+py::array_t<double> calculate_centrosymmetry(const nl_index& offsets,
+    const nl_values& diff, const int nmax);
 
 /*-----------------------------------------------------
     Pure-math descriptors (chi, angular, voronoi-vec, SRO)
 -----------------------------------------------------*/
-void calculate_chi_params(py::dict& atoms);
+py::tuple calculate_chi_params(const nl_index& offsets, const nl_values& diff);
 
-void calculate_angular_criteria(py::dict& atoms);
+py::array_t<double> calculate_angular_criteria(const nl_index& offsets,
+    const nl_values& neighbordist, const nl_values& diff);
 
 void calculate_voronoi_vector(py::dict& atoms,
     double edge_cutoff,
