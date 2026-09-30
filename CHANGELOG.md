@@ -63,11 +63,37 @@ and ACE descriptors up to body order four.
   `atoms.info` as lists.
 - The `cells` argument of `find_neighbors` is ignored.
 
+### Descriptor speed
+
+The C++ descriptor routines take the neighbor data as flat arrays instead of
+nested lists, and the spherical harmonics of a bond are evaluated for all m at
+once. For 131 072 atoms with 12 neighbors each (5 A cutoff: ragged neighbor
+lists), on one core:
+
+- `steinhardt_parameter(atoms, [4, 6])`: 0.09 s instead of 1.27 s (0.53 s
+  instead of 2.26 s); averaged q_l, `wigner_w_parameter` and `disorder`
+  improve similarly.
+- `find_solids` with clustering: 0.08 s instead of 0.57 s.
+- `chi_params`: 0.03 s instead of 0.88 s; `angular_criteria`: 0.015 s instead
+  of 0.61 s; `short_range_order` and `average_over_neighbors`: a few ms instead
+  of 0.08 s.
+- `atomic_strain`, `von_mises_strain`, `d2min` and `slip_vector` (32 000 atoms):
+  6 ms instead of about 0.9 s (0.19 s instead of about 3 s).
+- `ace` (4000 atoms, 5 A cutoff): 0.37 s instead of 47 s.
+
+Most results are bitwise the same as before. q_l, the q_lm parts, W_l and
+everything derived from them (disorder, `find_solids`) can differ in the last
+digit (at most about 1e-15), and the strain family by up to about 1e-12
+relative for badly conditioned fits.
+
 ### Fixes
 
 - `common_neighbor_analysis` and `diamond_structure` no longer label every
   atom as "others" when a single atom, for example an isolated atom next to a
   surface, has too few neighbor candidates.
+- `find_clusters` and `find_solids` no longer crash with a segmentation fault
+  for clusters of a few hundred thousand atoms (the cluster search was
+  recursive and overflowed the stack).
 - Cell lists are built on fractional coordinates: triclinic, hexagonal and
   rotated cells (primitive fcc, hcp, ASE `fcc111` slabs, LAMMPS triclinic
   boxes) gave wrong neighbors or hung above 250 atoms.
