@@ -1750,36 +1750,55 @@ def _ace_a_functions(d, nmax, lmax, cutoff):
     # Complex array to hold A coefficients
     # Index mapping: m ranges from -l to +l, stored at index m + lmax
     A = np.zeros((natoms, nmax, lmax + 1, 2 * lmax + 1), dtype=np.complex128)
-    
-    for i in range(natoms):
-        neighbors_i = d["neighbors"][i]
-        if not hasattr(neighbors_i, '__len__') or len(neighbors_i) == 0:
-            continue
-            
-        dists = d["neighbordist"][i]
-        diffs = d["diff"][i]
-        
-        for j_idx in range(len(neighbors_i)):
-            rij = dists[j_idx]
-            if rij < 1e-10 or rij >= cutoff:
-                continue
-            
-            vec = np.array(diffs[j_idx])
-            # Spherical coordinates
-            # theta = polar angle from z axis
-            # phi = azimuthal angle in xy plane
-            theta = np.arccos(np.clip(vec[2] / rij, -1, 1))
-            phi = np.arctan2(vec[1], vec[0])
-            
+
+    # all bonds, flat and in the order of the neighbor lists
+    atom, dists, diffs = _flat_bonds(d, natoms)
+    keep = ~((dists < 1e-10) | (dists >= cutoff))
+    atom, rij, vec = atom[keep], dists[keep], diffs[keep]
+    if len(rij) == 0:
+        return A
+
+    # Spherical coordinates
+    # theta = polar angle from z axis
+    # phi = azimuthal angle in xy plane
+    theta = np.arccos(np.clip(vec[:, 2] / rij, -1, 1))
+    phi = np.arctan2(vec[:, 1], vec[:, 0])
+
+    radial = [_ace_radial_basis(n, rij, cutoff) for n in range(nmax)]
+    for l in range(lmax + 1):
+        for m in range(-l, l + 1):
+            # scipy sph_harm_y(l, m, theta, phi) uses physics convention
+            Y_lm = sph_harm_y(l, m, theta, phi)
             for n in range(nmax):
-                R_n = _ace_radial_basis(n, rij, cutoff)
-                for l in range(lmax + 1):
-                    for m in range(-l, l + 1):
-                        # scipy sph_harm_y(l, m, theta, phi) uses physics convention
-                        Y_lm = sph_harm_y(l, m, theta, phi)
-                        A[i, n, l, m + lmax] += R_n * Y_lm
-    
+                # per-atom sums in bond order, as a loop over the bonds would do
+                term = radial[n] * Y_lm
+                A[:, n, l, m + lmax] = (
+                    np.bincount(atom, weights=term.real, minlength=natoms)
+                    + 1j * np.bincount(atom, weights=term.imag, minlength=natoms)
+                )
+
     return A
+
+
+def _flat_bonds(d, natoms):
+    """Atom index, distance and vector of every bond in the atom dict ``d``."""
+    counts = np.array([len(r) for r in d["neighbordist"]], dtype=np.int64) \
+        if not isinstance(d["neighbordist"], np.ndarray) else \
+        np.full(natoms, d["neighbordist"].shape[1] if d["neighbordist"].ndim == 2 else 0)
+    atom = np.repeat(np.arange(natoms), counts)
+    if isinstance(d["neighbordist"], np.ndarray):
+        dists = np.asarray(d["neighbordist"], dtype=float).reshape(-1)
+    else:
+        dists = np.fromiter(itertools.chain.from_iterable(d["neighbordist"]), dtype=float,
+                            count=int(counts.sum()))
+    if isinstance(d["diff"], np.ndarray):
+        diffs = np.asarray(d["diff"], dtype=float).reshape(-1, 3)
+    else:
+        diffs = np.fromiter(
+            itertools.chain.from_iterable(itertools.chain.from_iterable(d["diff"])),
+            dtype=float, count=3 * int(counts.sum()),
+        ).reshape(-1, 3)
+    return atom, dists, diffs
 
 
 def _ace_b_basis_nu1(A, lmax):
