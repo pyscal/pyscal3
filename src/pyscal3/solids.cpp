@@ -126,7 +126,7 @@ void calculate_bonds(py::dict& atoms,
     atoms[py::str("solid")] = solid;
 }
 
-void extract_cluster(int ti,
+void extract_cluster(int seed,
 	int clusterindex,
 	vector<bool>& condition,
 	vector<bool>& ghost,
@@ -135,16 +135,22 @@ void extract_cluster(int ti,
 	vector<double>& cutoff,
 	vector<int>& cluster){
 
-	int cc;
-	for(int tj=0; tj<neighbors[ti].size(); tj++){
-		cc = neighbors[ti][tj];
-  		if (!condition[cc]) continue;
-  		if (ghost[cc]) continue;
-  		if(!(neighbordist[ti][tj] <= cutoff[ti])) continue;
-  		if (cluster[cc] == -1){
-  			cluster[cc] = clusterindex;
-  			extract_cluster(cc, clusterindex, condition, ghost, neighbors, neighbordist, cutoff, cluster);
-  		}
+	// depth-first search with an explicit stack: a recursive search
+	// overflowed the call stack for clusters of a few 100 000 atoms
+	vector<int> stack(1, seed);
+	while (!stack.empty()){
+		const int ti = stack.back();
+		stack.pop_back();
+		for(size_t tj=0; tj<neighbors[ti].size(); tj++){
+			const int cc = neighbors[ti][tj];
+			if (!condition[cc]) continue;
+			if (ghost[cc]) continue;
+			if(!(neighbordist[ti][tj] <= cutoff[ti])) continue;
+			if (cluster[cc] == -1){
+				cluster[cc] = clusterindex;
+				stack.push_back(cc);
+			}
+		}
 	}
 }
 
