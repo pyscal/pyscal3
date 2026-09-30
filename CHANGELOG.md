@@ -98,6 +98,29 @@ everything derived from them (disorder, `find_solids`) can differ in the last
 digit (at most about 1e-15), and the strain family by up to about 1e-12
 relative for badly conditioned fits.
 
+### Threads
+
+The neighbor search, CNA and `diamond_structure`, and the per-atom loops of
+the C++ descriptors run on all CPUs available to the process, with the GIL
+released. `pyscal.set_num_threads(n)` and `pyscal.get_num_threads()` set and
+return the number of threads; the default can also be set with the
+environment variable `PYSCAL_NUM_THREADS`, or else `OMP_NUM_THREADS`. Results
+are bitwise the same for any number of threads. The Voronoi tessellation, the
+cluster search of `find_clusters` and `ace` stay serial. The two pair loops of
+the included matscipy-neighbours code run on pyscal's threads instead of
+OpenMP (see `lib/matscipy-neighbours/VENDORED.md`).
+
+For 1 000 188 fcc atoms (3 A cutoff), 14 threads compared with one:
+
+- `find_neighbors`: 0.22 s instead of 0.74 s.
+- `steinhardt_parameter(atoms, [4, 6])`: 0.08 s instead of 0.77 s; W_6: 0.06 s
+  instead of 0.58 s.
+- `common_neighbor_analysis`: 0.35 s instead of 1.81 s; `diamond_structure`
+  (512 000 atoms): 0.08 s instead of 0.46 s.
+- `chi_params`: 0.04 s instead of 0.27 s; `atomic_strain`: 0.017 s instead of
+  0.17 s; `entropy`: 3.8 s instead of 39 s; `find_solids` with clustering:
+  0.21 s instead of 0.68 s.
+
 ### Fixes
 
 - `common_neighbor_analysis` and `diamond_structure` no longer label every

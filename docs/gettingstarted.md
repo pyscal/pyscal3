@@ -23,6 +23,17 @@ Once a conda distribution is available, the following steps will help set up an 
 ```
 ````
 
+# Threads
+
+pyscal uses all CPUs available to the process for the neighbor search and the descriptors. To use fewer, for example when several analyses run side by side with `multiprocessing`, set the number of threads:
+
+``` python
+import pyscal
+pyscal.set_num_threads(4)
+```
+
+or set the environment variable `PYSCAL_NUM_THREADS` (or `OMP_NUM_THREADS`) before starting Python. The results do not depend on the number of threads.
+
 # Reading structures
 
 pyscal works on [ASE](https://wiki.fysik.dtu.dk/ase/) `Atoms` objects, so any file format that ASE can read is available without conversion:
