@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include "system.h"
+#include "parallel.h"
 #include <map>
 #include <string>
 #include <any>
@@ -20,6 +21,8 @@ PYBIND11_MODULE(csystem, m) {
     py::options options;
     options.disable_function_signatures();
     m.def("get_distance_vector", &get_distance_vector);
+    m.def("set_num_threads", &pyscal::set_num_threads);
+    m.def("get_num_threads", &pyscal::num_threads);
     m.def("nl_cutoff", &nl_cutoff);
     m.def("nl_shell", &nl_shell);
     m.def("nl_number", &nl_number);

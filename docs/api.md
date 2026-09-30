@@ -177,6 +177,16 @@ Results are stored on the ASE `Atoms` object with the `pyscal_` prefix.
 .. autofunction:: pyscal3.average_over_neighbors
 ```
 
+### Threads
+
+```{eval-rst}
+.. autofunction:: pyscal3.set_num_threads
+```
+
+```{eval-rst}
+.. autofunction:: pyscal3.get_num_threads
+```
+
 ## Structure Creation
 
 ```{eval-rst}

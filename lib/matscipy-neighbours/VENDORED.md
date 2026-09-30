@@ -8,7 +8,24 @@ which pyscal3 uses for its neighbour search. It is compiled into
 - Upstream: https://github.com/libAtoms/matscipy-neighbours
 - Commit: `1d38a67` (2026-09-28)
 - Licence: MIT, see `LICENSE.md`. Authors are listed in `AUTHORS`.
-- Local changes: none.
+- Local changes, all using pyscal3's `src/pyscal3/parallel.h`, which is found
+  through the include path set in `setup.py`:
+  - In `neighbour_list.cc`, the two pair loops of `build_pairs` (count, then
+    fill) run on pyscal3's threads (`pyscal::parallel_for`) instead of
+    `#pragma omp parallel for schedule(dynamic, 256)`, with the same block
+    size. The loop bodies are unchanged; each iteration writes only the pairs
+    of its own atom, so the output does not depend on the number of threads.
+  - In `neighbour_list.cc`, the two per-atom loops of `neighbour_list_body`
+    that compute the cell of each atom and then its position relative to
+    the cell run on pyscal3's threads instead of `#pragma omp parallel for
+    schedule(static)`. The loop bodies are unchanged; the check for
+    non-finite positions, an OpenMP reduction before, is collected in an
+    `std::atomic<bool>`.
+  - In `neighbour_list.hh`, the five arrays of `NeighbourList` are
+    `pyscal::buffer` instead of `std::vector`: a `std::vector` with an
+    allocator that does not zero new elements. `build_pairs` sizes them and
+    then writes every element, so the output is unchanged, but the arrays
+    are no longer zeroed by one thread before the parallel fill.
 
 ## Files
 
@@ -29,8 +46,9 @@ The GPU sources (`memory_space_gpu.cc`, `device_primitives.cc`,
 copied headers is behind `MATSCIPY_ENABLE_CUDA` and `MATSCIPY_ENABLE_HIP`,
 which pyscal3 does not define.
 
-pyscal3 builds these files without OpenMP, so the `#pragma omp` lines are
-ignored and the search runs on one thread.
+pyscal3 builds these files without OpenMP, so the remaining `#pragma omp`
+lines are ignored: the binning of the atoms in `cell_list.cc` runs
+serially, and so does `neighbour_matrix`, which pyscal3 does not call.
 
 ## Updating
 
@@ -39,6 +57,6 @@ ignored and the search runs on one thread.
    and `AUTHORS` from the repository root. If upstream adds a source file to
    the CPU `neighbours` target in `src/libneighbours/CMakeLists.txt`, add it
    here and to `setup.py`.
-3. Update the commit and date above.
+3. Re-apply the local changes listed above, and update the commit and date.
 4. Rebuild and run the test suite, in particular `tests/test_neighbor_backend.py`,
-   which compares the search with stored reference results.
+   which checks the search against ASE and the definition of each method.

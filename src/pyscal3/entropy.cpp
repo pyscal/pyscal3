@@ -1,4 +1,5 @@
 #include "system.h"
+#include "parallel.h"
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -63,9 +64,12 @@ py::array_t<double> calculate_entropy(const nl_index& offsets,
 
     py::array_t<double> entropy_array(nop);
     double* entropy_out = entropy_array.mutable_data();
-    vector<double> raw_g(nsteps + 1);   // per-atom, reused
 
-    for (int ti = 0; ti < nop; ti++) {
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    vector<double> raw_g(nsteps + 1);   // per-atom, reused
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
 
         int nn = (int)(off[ti + 1] - off[ti]);
 
@@ -121,6 +125,8 @@ py::array_t<double> calculate_entropy(const nl_index& offsets,
 
         entropy_out[ti] = -rho_i * kb * h * summ;
     }
+    }, 64);
+    }
 
     return entropy_array;
 }
@@ -136,12 +142,17 @@ py::array_t<double> calculate_average_entropy(const nl_index& offsets,
 
     py::array_t<double> avg_entropy(nop);
     double* out = avg_entropy.mutable_data();
-    for (py::ssize_t ti=0; ti<nop; ti++){
+    {
+    py::gil_scoped_release release_gil;
+    pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
+    for (py::ssize_t ti = begin_; ti < end_; ti++) {
         entsum = ent[ti];
         for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
             entsum += ent[nb[ci]];
         }
         out[ti] = entsum/(double(off[ti+1] - off[ti] + 1));
+    }
+    }, 256);
     }
     return avg_entropy;
 }

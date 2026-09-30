@@ -19,6 +19,7 @@ Labels: 0 others, 1 fcc, 2 hcp, 3 bcc, 4 ico.
 */
 #include "system.h"
 #include "neighbor_backend.h"
+#include "parallel.h"
 
 #include <cmath>
 #include <cstdint>
@@ -120,12 +121,15 @@ py::tuple cna_structure(const nl_positions &positions, const nl_positions &cell,
     const nlb::Geometry g = nlb::make_geometry(positions, cell, pbc);
     // only the 14 nearest candidates are used, so most atoms are searched
     // with a smaller radius (the result is the same)
+    std::vector<std::int64_t> structure(g.n, 0);
+    bool enough;
+    {
+    py::gil_scoped_release release_gil;
     const double guess = nlb::guess_radius(g, prefactor);
     const Rows c = nlb::nearest_candidates(g, 0.85 * guess, guess, 14);
-    std::vector<std::int64_t> structure(g.n, 0);
+    pyscal::parallel_for(g.n, [&](idx begin_, idx end_) {
     int sig[MAXNB][4];
-
-    for (idx ti = 0; ti < g.n; ti++) {
+    for (idx ti = begin_; ti < end_; ti++) {
         const idx lo = c.offsets[ti];
         const idx cnt = c.offsets[ti + 1] - lo;
         const double *v = &c.v[3 * lo];
@@ -157,7 +161,10 @@ py::tuple cna_structure(const nl_positions &positions, const nl_positions &cell,
             structure[ti] = classify_cn14(sig, 14);
         }
     }
-    return py::make_tuple(to_array(structure), enough_candidates(c, g.n, nmin));
+    }, 256);
+    enough = enough_candidates(c, g.n, nmin);
+    }
+    return py::make_tuple(to_array(structure), enough);
 }
 
 py::tuple diamond_structure_cna(const nl_positions &positions, const nl_positions &cell,
@@ -169,16 +176,20 @@ py::tuple diamond_structure_cna(const nl_positions &positions, const nl_position
     // 5 and 6 its first and second neighbours.
     const nlb::Geometry g = nlb::make_geometry(positions, cell, pbc);
     // only the 4 nearest candidates are used (see cna_structure)
-    const double guess = nlb::guess_radius(g, prefactor);
-    const Rows c = nlb::nearest_candidates(g, 0.65 * guess, guess, 4);
     const idx n = g.n;
     std::vector<std::int64_t> structure(n, 0);
+    bool enough;
+    {
+    py::gil_scoped_release release_gil;
+    const double guess = nlb::guess_radius(g, prefactor);
+    const Rows c = nlb::nearest_candidates(g, 0.65 * guess, guess, 4);
     // second-shell neighbour indices of each atom, at most MAXNB
     std::vector<idx> second(n * MAXNB);
     std::vector<int> nsecond(n, 0);
-    int sig[MAXNB][4];
 
-    for (idx ti = 0; ti < n; ti++) {
+    pyscal::parallel_for(n, [&](idx begin_, idx end_) {
+    int sig[MAXNB][4];
+    for (idx ti = begin_; ti < end_; ti++) {
         const idx lo = c.offsets[ti];
         if (c.offsets[ti + 1] - lo < 4) continue;
         double v2[3 * MAXNB], d2[MAXNB];
@@ -213,30 +224,37 @@ py::tuple diamond_structure_cna(const nl_positions &positions, const nl_position
         const int s = classify_cn12(sig, nn);
         structure[ti] = (s == 1) ? 5 : (s == 2) ? 8 : 0;
     }
+    }, 256);
 
-    // first neighbours of a diamond site
-    for (idx ti = 0; ti < n; ti++) {
-        if (structure[ti] >= 5) continue;
+    // The next two passes only look for the diamond sites (5 and 8) found
+    // above, and only mark atoms that are not diamond sites, so they read
+    // the labels of this first pass and each atom is written by one thread.
+    const std::vector<std::int64_t> sites(structure);
+    pyscal::parallel_for(n, [&](idx begin_, idx end_) {
+    for (idx ti = begin_; ti < end_; ti++) {
+        if (sites[ti] >= 5) continue;
+        // first neighbours of a diamond site
         const idx lo = c.offsets[ti];
         // an atom with fewer than four candidates has no first shell
         const idx nf = (c.offsets[ti + 1] - lo >= 4) ? 4 : 0;
         for (idx i = 0; i < nf; i++) {
-            const std::int64_t sj = structure[c.j[lo + i]];
+            const std::int64_t sj = sites[c.j[lo + i]];
             if (sj == 5) { structure[ti] = 6; break; }
             if (sj == 8) { structure[ti] = 9; break; }
         }
-    }
-    // second neighbours of a diamond site
-    for (idx ti = 0; ti < n; ti++) {
         if (structure[ti] >= 5) continue;
+        // second neighbours of a diamond site
         for (int k = 0; k < nsecond[ti]; k++) {
-            const std::int64_t sk = structure[second[ti * MAXNB + k]];
+            const std::int64_t sk = sites[second[ti * MAXNB + k]];
             if (sk == 5) { structure[ti] = 7; break; }
             if (sk == 8) { structure[ti] = 10; break; }
         }
     }
-    for (idx ti = 0; ti < n; ti++) {
+    for (idx ti = begin_; ti < end_; ti++) {
         if (structure[ti] >= 5) structure[ti] -= 4;
     }
-    return py::make_tuple(to_array(structure), enough_candidates(c, n, 4));
+    }, 256);
+    enough = enough_candidates(c, n, 4);
+    }
+    return py::make_tuple(to_array(structure), enough);
 }
