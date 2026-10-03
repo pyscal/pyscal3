@@ -35,7 +35,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 14. [Wigner $W_l$ parameters](docs/descriptors/wigner_w.md): third-order bond-orientational invariants.
 15. [Minkowski structure metrics](docs/descriptors/minkowski.md): Voronoi-area-weighted Steinhardt parameters.
 16. [Ackland-Jones classification](docs/descriptors/ackland_jones.md): fcc/bcc/hcp/icosahedral labels from angular histograms.
-17. [Coordination variants](examples/17_coordination_variants.ipynb): coordination number, effective and generalized coordination, local density.
+17. [Coordination variants](docs/descriptors/coordination.md): coordination number, effective and generalized coordination, local density.
 18. [Angular and bond-length distributions](examples/18_angular_bond_distributions.ipynb): ADF and BLDF as local fingerprints.
 19. [Deformation descriptors](docs/descriptors/deformation.md): atomic strain, von Mises invariant, $D^2_{\min}$ and slip vector.
 20. [Wigner-Seitz defect analysis](docs/descriptors/wigner_seitz.md): vacancies, interstitials and antisites against a reference.

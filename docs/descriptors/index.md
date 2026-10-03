@@ -40,7 +40,7 @@ Most need the neighbors to be found first with `find_neighbors`. The tables mark
 | Descriptor | Function | Result |
 |---|---|---|
 | [Short range order](../methods/18_sro) | `short_range_order` | Warren–Cowley parameters |
-| [Coordination](../methods/12_coordination) | `coordination_number`, `effective_coordination_number`, `generalized_coordination_number`, `local_density` | coordination per atom |
+| [Coordination](coordination) | `coordination_number`, `effective_coordination_number`, `generalized_coordination_number`, `local_density` | coordination per atom |
 | [Distribution functions](../methods/13_distributions) | `radial_distribution_function`, `angular_distribution_function`, `bond_length_distribution` | $g(r)$, bond angle and bond length histograms |
 
 ## Machine learning

@@ -29,7 +29,7 @@ parts:
     - file: docs/descriptors/minkowski
     - file: docs/descriptors/wigner_w
     - file: docs/descriptors/ackland_jones
-    - file: docs/methods/12_coordination.md
+    - file: docs/descriptors/coordination
     - file: docs/methods/13_distributions.md
     - file: docs/descriptors/deformation
     - file: docs/descriptors/wigner_seitz
@@ -40,7 +40,6 @@ parts:
     - file: docs/examples.md
       sections:
       - file: examples/11_short_range_order
-      - file: examples/17_coordination_variants
       - file: examples/18_angular_bond_distributions
   - caption: Reference
     chapters:
