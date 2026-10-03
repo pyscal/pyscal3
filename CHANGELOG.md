@@ -124,6 +124,10 @@ neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
 
 ### Fixes
 
+- `effective_coordination_number` iterates the weighted mean bond length to
+  self-consistency, as Hoppe defines it and as its docstring said. It used
+  to stop after one step, so values were too low when bond lengths differ:
+  11.28 instead of 11.63 for perfect bcc with 14 neighbors.
 - `von_mises_strain` uses the definition of Shimizu, Ogata and Li, with a
   factor 1/6 on the differences of the normal strains. With the factor 1/2
   used before, the value depended on the orientation of the axes: a pure

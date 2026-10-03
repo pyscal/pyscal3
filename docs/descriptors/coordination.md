@@ -42,13 +42,14 @@ $$
 \mathrm{ECoN}(i) = \sum_{j=1}^{N(i)} \exp\left[ 1 - \left( \frac{r_{ij}}{\bar{r}(i)} \right)^6 \right],
 $$
 
-where $r_{ij}$ is the distance between atom $i$ and its neighbor $j$, and $\bar{r}(i)$ is a weighted mean bond length.
-pyscal computes $\bar{r}(i)$ with weights relative to the shortest bond $r_\mathrm{min}(i)$ of atom $i$:
+where $r_{ij}$ is the distance between atom $i$ and its neighbor $j$, and $\bar{r}(i)$ is a weighted mean bond length, defined with the same weights:
 
 $$
 \bar{r}(i) = \frac{\sum_{j} r_{ij}\, w_{ij}}{\sum_{j} w_{ij}}, \qquad
-w_{ij} = \exp\left[ 1 - \left( \frac{r_{ij}}{r_\mathrm{min}(i)} \right)^6 \right].
+w_{ij} = \exp\left[ 1 - \left( \frac{r_{ij}}{\bar{r}(i)} \right)^6 \right].
 $$
+
+pyscal solves this equation for $\bar{r}(i)$ by iteration, starting from the shortest bond of atom $i$, until $\bar{r}(i)$ changes by less than one part in $10^{12}$.
 
 A neighbor at the distance $\bar{r}(i)$ counts 1.
 A neighbor 10 % farther away counts 0.46, and one 20 % farther away counts 0.14.
@@ -184,7 +185,7 @@ for k, (title, ylabel) in enumerate([("(a)  CN", "Mean CN"), ("(b)  ECoN", "Mean
     ax.set_ylabel(ylabel)
 for n in (12, 14):
     mp[0, 0].axhline(n, ls=":", color=DARK, lw=0.8)
-mp[0, 1].set_ylim(0, 10)
+mp[0, 1].set_ylim(0, 12)
 handles, labels = mp[0, 0].get_legend_handles_labels()
 mp.fig.legend(handles, labels, frameon=False, ncol=3, loc="upper center",
               bbox_to_anchor=(0.5, -0.1));
@@ -204,8 +205,8 @@ ECoN (b) stops changing once the cutoff passes the first shell, because distant 
 A cutoff that is too large does not change ECoN, and a cutoff after the first minimum of $g(r)$ is enough.
 
 At finite temperature, ECoN is much lower than the coordination number: {glue}`econ_plateau_fcc` in fcc, {glue}`econ_plateau_bcc` in bcc and {glue}`econ_plateau_liquid` in the liquid.
-Thermal motion spreads the bond lengths, and the weights $w_{ij}$ are taken relative to the shortest bond, so $\bar{r}(i)$ is shorter than the mean bond length.
-Neighbors beyond $\bar{r}(i)$ then count less than 1.
+Thermal motion spreads the bond lengths.
+The weights favour short bonds, so $\bar{r}(i)$ is shorter than the mean bond length, and the neighbors beyond $\bar{r}(i)$ count less than 1.
 Compare ECoN values only between structures at similar temperatures.
 
 ## Surface sites of a nanoparticle
@@ -314,7 +315,7 @@ glue("gcn_twelve_fcc", round(pyscal.generalized_coordination_number(atoms, cn_ma
 ## Things to watch
 
 - **The neighbor list sets the values.** All four measures count the atoms in the neighbor list. The adaptive cutoff gives 14 neighbors in perfect bcc, a fixed cutoff between the shells gives 8. Compare values only for the same neighbor method.
-- **ECoN at finite temperature.** The weights of ECoN are taken relative to the shortest bond of each atom. Thermal motion makes some bonds short, and ECoN drops well below the coordination number, as shown above.
+- **ECoN at finite temperature.** Thermal motion spreads the bond lengths, and ECoN drops well below the coordination number, as shown above.
 - **The default of `cn_max`.** Without `cn_max`, `generalized_coordination_number` divides by the largest coordination number in the structure. At finite temperature some atoms have more neighbors than in the perfect crystal, and this default is larger than the bulk value. In the fcc snapshot with a cutoff of 3.5 Å, the largest coordination number is {glue}`cn_max_fcc`, and the mean GCN without `cn_max` is {glue}`gcn_default_fcc` instead of {glue}`gcn_twelve_fcc`. Pass `cn_max` explicitly.
 - **The local density is not $N/V$.** The sphere of radius $\langle r \rangle_i$ is smaller than the volume per atom times $\mathrm{CN}(i)$, so $\rho$ is about twice the number density in close packed crystals. Use it to compare atoms within one structure, for example to find compressed or expanded regions.
 

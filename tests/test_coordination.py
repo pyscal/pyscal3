@@ -136,3 +136,19 @@ def test_local_density_stores_in_arrays():
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
     pyscal3.local_density(atoms)
     assert "pyscal_local_density" in atoms.arrays
+
+
+def test_econ_is_self_consistent_in_bcc():
+    # 8 neighbors at d1 and 6 at 2 d1 / sqrt(3): iterate Hoppe's weighted
+    # mean distance by hand and compare
+    atoms = make_crystal("bcc", lattice_constant=2.87, repetitions=(4, 4, 4))
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)
+    d = np.array([2.87 * np.sqrt(3) / 2] * 8 + [2.87] * 6)
+    dav = d.min()
+    for _ in range(200):
+        w = np.exp(1 - (d / dav) ** 6)
+        dav = (w * d).sum() / w.sum()
+    expected = np.exp(1 - (d / dav) ** 6).sum()
+    econ = pyscal3.effective_coordination_number(atoms)
+    assert np.allclose(econ, expected, rtol=1e-10)
+    assert 11.6 < expected < 11.7

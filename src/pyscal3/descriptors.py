@@ -1396,17 +1396,24 @@ def effective_coordination_number(atoms: Atoms):
     """
     Calculate the effective coordination number (ECoN).
 
-    ECoN weights each neighbor by a continuous function of distance
-    relative to the average neighbor distance, converging iteratively:
+    ECoN weights each neighbor by a continuous function of its distance
+    relative to a weighted mean distance (Hoppe 1979):
 
     .. math::
 
         \\mathrm{ECoN}_i = \\sum_j \\exp\\!\\left[
             1 - \\left(\\frac{d_{ij}}{d_{\\mathrm{av},i}}\\right)^6
-        \\right]
+        \\right],
+        \\qquad
+        d_{\\mathrm{av},i} = \\frac{\\sum_j d_{ij}\\, w_{ij}}{\\sum_j w_{ij}},
+        \\quad
+        w_{ij} = \\exp\\!\\left[
+            1 - \\left(\\frac{d_{ij}}{d_{\\mathrm{av},i}}\\right)^6
+        \\right].
 
-    where :math:`d_{\\mathrm{av},i}` is the weighted average distance
-    that is itself computed from the weights (self-consistent iteration).
+    :math:`d_{\\mathrm{av},i}` is found by iteration, starting from the
+    shortest neighbor distance, until it changes by less than one part in
+    :math:`10^{12}`. The sums run over the stored neighbors of atom i.
 
     Parameters
     ----------
@@ -1416,8 +1423,8 @@ def effective_coordination_number(atoms: Atoms):
     Returns
     -------
     numpy.ndarray, shape (natoms,)
-        Per-atom ECoN values.  Also stored in
-        ``atoms.arrays["pyscal_econ"]``.
+        Per-atom ECoN values (0 for atoms without neighbors).  Also stored
+        in ``atoms.arrays["pyscal_econ"]``.
 
     References
     ----------
@@ -1425,35 +1432,30 @@ def effective_coordination_number(atoms: Atoms):
     ionic radii (MEFIR)", *Z. Kristallogr.* **150**, 23 (1979).
     """
     ensure_neighbors(atoms)
-    dists = _get_neighbor_dists_padded(atoms)   # (N, max_nn)
-    mask = dists > 0  # valid neighbors
+    dists = _get_neighbor_dists_padded(atoms)   # (N, max_nn), 0 where padded
+    mask = dists > 0
+    has_neighbors = mask.any(axis=1)
 
-    n = len(atoms)
-    econ = np.zeros(n, dtype=float)
+    def weights(dav):
+        return np.where(mask, np.exp(1.0 - (dists / dav[:, None]) ** 6), 0.0)
 
-    for _ in range(10):  # iterate to self-consistency
-        # weighted average distance
-        weights = np.where(mask, np.exp(1.0 - (dists / np.where(
-            econ[:, None] > 0,
-            _weighted_avg_dist(dists, mask, econ),
-            np.where(mask, dists, np.inf).min(axis=1, keepdims=True)
-        ))**6), 0.0)
-        econ_new = weights.sum(axis=1)
-        if np.allclose(econ, econ_new, atol=1e-8):
+    # start from the shortest distance and iterate the weighted mean
+    dav = np.where(has_neighbors, np.where(mask, dists, np.inf).min(axis=1), 1.0)
+    for _ in range(200):
+        w = weights(dav)
+        wsum = w.sum(axis=1)
+        new = np.where(wsum > 0, (w * dists).sum(axis=1) / np.where(wsum > 0, wsum, 1.0), dav)
+        converged = np.all(np.abs(new - dav) <= 1e-12 * dav)
+        dav = new
+        if converged:
             break
-        econ = econ_new
+    else:
+        warnings.warn("effective_coordination_number: the mean distance did not "
+                      "converge in 200 iterations", stacklevel=2)
 
+    econ = np.where(has_neighbors, weights(dav).sum(axis=1), 0.0)
     atoms.arrays["pyscal_econ"] = econ
     return econ
-
-
-def _weighted_avg_dist(dists, mask, econ):
-    """Weighted average distance for ECoN iteration."""
-    weights = np.where(mask, np.exp(1.0 - (dists / np.where(
-        mask, dists, np.inf).min(axis=1, keepdims=True))**6), 0.0)
-    wsum = weights.sum(axis=1, keepdims=True)
-    wsum = np.where(wsum > 0, wsum, 1.0)
-    return (weights * dists).sum(axis=1, keepdims=True) / wsum
 
 
 def coordination_number(atoms: Atoms):
