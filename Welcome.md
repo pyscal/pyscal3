@@ -29,7 +29,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 8. [Angular and $\chi$ parameters](docs/descriptors/angular.md): angular criteria for tetrahedral ordering and $\chi$ parameters.
 9. [Centrosymmetry parameter](docs/descriptors/centrosymmetry.md): detecting defects and broken symmetry in crystals.
 10. [Entropy parameter](docs/descriptors/entropy.md): pair-entropy fingerprint for distinguishing solid and liquid.
-11. [Short-range order](examples/11_short_range_order.ipynb): Warren-Cowley parameters for alloys.
+11. [Short-range order](docs/descriptors/sro.md): Warren-Cowley parameters for alloys.
 12. [Solid/liquid clustering](docs/descriptors/solid_liquid.md): identifying solid atoms in a melt and clustering by arbitrary conditions.
 13. [Trajectory module](docs/guide/files.md): lazy access to multi-frame LAMMPS dump files.
 14. [Wigner $W_l$ parameters](docs/descriptors/wigner_w.md): third-order bond-orientational invariants.
