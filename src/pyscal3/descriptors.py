@@ -1511,17 +1511,19 @@ def generalized_coordination_number(atoms: Atoms, cn_max=None):
 
 def local_density(atoms: Atoms):
     """
-    Estimate the local atomic number density.
+    Estimate a local density from the neighbors of each atom.
 
-    For each atom, the local density is estimated from the mean neighbor
-    distance:
+    For each atom, the number of neighbors is divided by the volume of a
+    sphere whose radius is the mean neighbor distance:
 
     .. math::
 
         \\rho_i = \\frac{N_i}{\\frac{4}{3}\\pi \\bar{d}_i^3}
 
     where :math:`N_i` is the coordination number and :math:`\\bar{d}_i`
-    is the mean neighbor distance.
+    is the mean neighbor distance. This is a relative measure, for
+    comparing atoms within one structure: it is not the number density
+    N/V (in a perfect fcc crystal with 12 neighbors it is about twice N/V).
 
     Parameters
     ----------
@@ -1531,7 +1533,7 @@ def local_density(atoms: Atoms):
     Returns
     -------
     numpy.ndarray, shape (natoms,)
-        Per-atom local density (atoms per unit volume).  Also stored in
+        Per-atom local density.  Also stored in
         ``atoms.arrays["pyscal_local_density"]``.
     """
     ensure_neighbors(atoms)
