@@ -33,7 +33,7 @@ Most need the neighbors to be found first with `find_neighbors`. The tables mark
 |---|---|---|
 | [Centrosymmetry](centrosymmetry) | `centrosymmetry` | deviation from inversion symmetry (finds its own neighbors) |
 | [Atomic deformation](deformation) | `atomic_strain`, `von_mises_strain`, `d2min`, `slip_vector` | strain, von Mises strain, non-affine displacement, slip vector, relative to a reference |
-| [Wigner–Seitz analysis](../methods/15_wigner_seitz) | `wigner_seitz_analysis`, `identify_defect_atoms` | vacancies, interstitials and antisites relative to a reference |
+| [Wigner–Seitz analysis](wigner_seitz) | `wigner_seitz_analysis`, `identify_defect_atoms` | vacancies, interstitials and antisites relative to a reference |
 
 ## Chemistry, coordination and distributions
 

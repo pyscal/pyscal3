@@ -61,15 +61,6 @@ Bond-angle distribution functions for characterizing local environments.
 :::
 
 :::{grid-item-card}
-:link: ../examples/22_wigner_seitz_defects
-:link-type: doc
-:class-header: bg-light
-Wigner-Seitz defects
-^^^
-Vacancy and interstitial detection via Wigner-Seitz cell analysis.
-:::
-
-:::{grid-item-card}
 :link: ../examples/28_ace_descriptors
 :link-type: doc
 :class-header: bg-light

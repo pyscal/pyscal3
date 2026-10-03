@@ -38,5 +38,5 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 17. [Coordination variants](examples/17_coordination_variants.ipynb): coordination number, effective and generalized coordination, local density.
 18. [Angular and bond-length distributions](examples/18_angular_bond_distributions.ipynb): ADF and BLDF as local fingerprints.
 19. [Deformation descriptors](docs/descriptors/deformation.md): atomic strain, von Mises invariant, $D^2_{\min}$ and slip vector.
-20. [Wigner-Seitz defect analysis](examples/22_wigner_seitz_defects.ipynb): vacancies, interstitials and antisites against a reference.
+20. [Wigner-Seitz defect analysis](docs/descriptors/wigner_seitz.md): vacancies, interstitials and antisites against a reference.
 21. [ACE descriptors](examples/28_ace_descriptors.ipynb): Atomic Cluster Expansion descriptors.
