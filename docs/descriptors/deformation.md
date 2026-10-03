@@ -14,7 +14,7 @@ kernelspec:
 The deformation descriptors compare each atom and its neighbors in a deformed structure with the same atoms in a reference structure.
 pyscal computes four of them: the atomic strain tensor, the von Mises shear strain, the non-affine displacement $D^2_\mathrm{min}$ and the slip vector.
 They are used to find shear bands and plastic events in glasses, to follow slip and stacking faults in crystals, and to measure local strain near defects.
-Unlike [common neighbor analysis](cna) or the [centrosymmetry parameter](centrosymmetry), which look at one structure, they need a reference structure with the same atoms.
+Unlike [common neighbor analysis](cna) or the [centrosymmetry parameter](centrosymmetry.md), which look at one structure, they need a reference structure with the same atoms.
 [Wigner–Seitz defect analysis](wigner_seitz) also uses a reference, but counts atoms per lattice site instead of comparing neighbors.
 
 ```{code-cell} ipython3

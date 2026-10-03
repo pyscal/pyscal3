@@ -191,7 +191,7 @@ See also [Coordination](descriptors/coordination).
 
 ## Machine learning
 
-See also [ACE descriptors](descriptors/ace).
+See also [ACE descriptors](descriptors/ace.md).
 
 ```{eval-rst}
 .. autofunction:: pyscal3.ace

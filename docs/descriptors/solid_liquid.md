@@ -16,7 +16,7 @@ It compares the orientation of the neighbor shell of an atom with those of its n
 In a crystal, neighboring atoms have similar neighbor shells, and in a liquid they do not.
 `find_clusters` then groups the solid atoms, or any other selection of atoms, into connected clusters.
 Together they are used to follow crystal nucleation and growth, for example by measuring the size of the largest crystalline cluster in a liquid.
-The [disorder parameter](disorder) is built from the same comparison, and the [entropy parameter](entropy) and the [averaged Steinhardt parameters](steinhardt) are other ways to separate solid from liquid.
+The [disorder parameter](disorder.md) is built from the same comparison, and the [entropy parameter](entropy.md) and the [averaged Steinhardt parameters](steinhardt) are other ways to separate solid from liquid.
 
 ```{code-cell} ipython3
 :tags: [remove-cell]
