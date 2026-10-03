@@ -205,7 +205,7 @@ def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
     W_l is the third-order rotational invariant of the bond-orientational
     order parameters, constructed by contracting q_lm with Wigner 3j
     symbols. It distinguishes crystal structures that have similar q_l
-    values (e.g., FCC vs HCP via the sign of W_6).
+    values (e.g., FCC and HCP, which differ in the sign of W_4).
 
     Parameters
     ----------
@@ -218,8 +218,8 @@ def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
         If True, compute neighbor-averaged W_l (Lechner-Dellago).
         Default False.
     normalized : bool, optional
-        If True (default), return the normalized hat{W}_l =
-        W_l / (sum |q_lm|^2)^(3/2). If False, return raw W_l.
+        If True (default), return the normalized
+        ``hat{W}_l = W_l / (sum_m |q_lm|^2)^(3/2)``. If False, return raw W_l.
 
     Returns
     -------
