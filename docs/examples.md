@@ -6,15 +6,6 @@ These notebooks show the descriptors that do not have their own page yet. Findin
 :class-container: text-center
 :gutter: 3
 
-:::{grid-item-card}
-:link: ../examples/11_short_range_order
-:link-type: doc
-:class-header: bg-light
-Short-range order
-^^^
-Warren-Cowley chemical short-range order parameter for multi-component alloys.
-:::
-
 ::::
 
 

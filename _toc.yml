@@ -34,12 +34,11 @@ parts:
     - file: docs/descriptors/deformation
     - file: docs/descriptors/wigner_seitz
     - file: docs/descriptors/ace
-    - file: docs/methods/18_sro.md
+    - file: docs/descriptors/sro
   - caption: Examples
     chapters:
     - file: docs/examples.md
       sections:
-      - file: examples/11_short_range_order
   - caption: Reference
     chapters:
     - file: docs/api.md
