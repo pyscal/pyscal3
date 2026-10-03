@@ -57,4 +57,5 @@ parts:
   - caption: Reference
     chapters:
     - file: docs/api.md
-    - file: docs/epilogue.md
+    - file: docs/contributing
+    - file: docs/about
