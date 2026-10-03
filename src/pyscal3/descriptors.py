@@ -524,9 +524,12 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
     atoms : ase.Atoms
         Structure (must have Voronoi neighbors computed).
     edge_cutoff : float, optional
-        Minimum edge length fraction. Default 0.05.
+        Edges shorter than this fraction of the face perimeter are not
+        counted. Default 0.05.
     area_cutoff : float, optional
-        Minimum face area fraction. Default 0.01.
+        Faces whose area is at most this fraction of the surface of the
+        Voronoi cell are not counted. It does not depend on the ``voroexp``
+        used in :func:`find_neighbors`. Default 0.01.
 
     Returns
     -------
@@ -540,10 +543,6 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
             "Voronoi analysis required. Call find_neighbors(atoms, method='voronoi') first."
         )
 
-    if "neighborweight" not in d:
-        # rows not stored (store_rows=False): rebuild them for the C++ routine
-        offsets, nb = neighbor_arrays(atoms, "neighborweight")
-        d["neighborweight"] = rows_from_flat(offsets, nb["neighborweight"])
     pc.calculate_voronoi_vector(d, edge_cutoff, area_cutoff)
 
     vv = np.array(d["vorovector"])

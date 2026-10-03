@@ -124,6 +124,11 @@ neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
 
 ### Fixes
 
+- `voronoi_vector` compares `area_cutoff` with the share of each face in the
+  surface of the Voronoi cell, as documented. It used to compare it with the
+  neighbor weight, which depends on `voroexp`: with `voroexp=3`, the square
+  faces of perfect bcc were dropped. Results with the default `voroexp=1`
+  are unchanged.
 - `average_over_neighbors` averages each column of a property with several
   values per atom, such as `pyscal_ace`, and returns an array of the same
   shape. It used to return the mean over all values of each atom.
