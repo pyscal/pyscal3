@@ -1,42 +1,39 @@
 # pyscal
 
-pyscal is a Python library for the calculation of local atomic structural
-environments, including Steinhardt bond-orientational order parameters, from
-atomistic simulation data. Any [ASE](https://wiki.fysik.dtu.dk/ase/) `Atoms`
-object can be analysed directly; results are written back to the `Atoms`
-object. The core routines are written in C++ and exposed through pybind11.
+pyscal computes descriptors of the local atomic structure from atomistic simulation data.
+It works on [ASE](https://wiki.fysik.dtu.dk/ase/) `Atoms` objects, and stores its results on the same object.
+The complete documentation is at [pyscal.org](https://pyscal.org).
 
-```python
-import pyscal
-from ase.build import bulk
+The pages below are the documentation as runnable notebooks.
+Open one with a right click and *Open With → Jupytext Notebook*, then run its cells.
 
-atoms = bulk("Cu", "fcc", cubic=True).repeat(4)
-pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)   # adaptive cutoff
-q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
-```
+## Get started
 
-Complete documentation is available at [pyscal.org](https://pyscal.org).
+- [A first analysis](docs/tour.md): read a structure, find neighbors, compute descriptors, plot and save the results.
 
-## Examples
+## User guide
 
-1. [Getting started](docs/tour.md): loading structures with ASE, the pyscal workflow, and where results are stored.
-2. [Creating structures](docs/guide/structures.md): built-in crystal types, elements by name, custom lattices and grain boundaries.
-3. [Finding neighbors](docs/guide/neighbors.md): fixed, adaptive and SANN cutoffs, Voronoi and number-based neighbor methods.
-4. [Steinhardt parameters](docs/descriptors/steinhardt.md): bond-orientational order parameters $q_l$ and their neighbor-averaged variants.
-5. [Common neighbor analysis](docs/descriptors/cna.md): adaptive and conventional CNA, diamond structure identification.
-6. [Voronoi tessellation](docs/descriptors/voronoi.md): Voronoi structure vector and Voronoi volumes.
-7. [Disorder parameter](docs/descriptors/disorder.md): structural disorder from Steinhardt parameter correlations.
-8. [Angular and $\chi$ parameters](docs/descriptors/angular.md): angular criteria for tetrahedral ordering and $\chi$ parameters.
-9. [Centrosymmetry parameter](docs/descriptors/centrosymmetry.md): detecting defects and broken symmetry in crystals.
-10. [Entropy parameter](docs/descriptors/entropy.md): pair-entropy fingerprint for distinguishing solid and liquid.
-11. [Short-range order](docs/descriptors/sro.md): Warren-Cowley parameters for alloys.
-12. [Solid/liquid clustering](docs/descriptors/solid_liquid.md): identifying solid atoms in a melt and clustering by arbitrary conditions.
-13. [Trajectory module](docs/guide/files.md): lazy access to multi-frame LAMMPS dump files.
-14. [Wigner $W_l$ parameters](docs/descriptors/wigner_w.md): third-order bond-orientational invariants.
-15. [Minkowski structure metrics](docs/descriptors/minkowski.md): Voronoi-area-weighted Steinhardt parameters.
-16. [Ackland-Jones classification](docs/descriptors/ackland_jones.md): fcc/bcc/hcp/icosahedral labels from angular histograms.
-17. [Coordination variants](docs/descriptors/coordination.md): coordination number, effective and generalized coordination, local density.
-18. [Angular and bond-length distributions](docs/descriptors/distributions.md): ADF and BLDF as local fingerprints.
-19. [Deformation descriptors](docs/descriptors/deformation.md): atomic strain, von Mises invariant, $D^2_{\min}$ and slip vector.
-20. [Wigner-Seitz defect analysis](docs/descriptors/wigner_seitz.md): vacancies, interstitials and antisites against a reference.
-21. [ACE descriptors](docs/descriptors/ace.md): Atomic Cluster Expansion descriptors.
+- [Finding neighbors](docs/guide/neighbors.md): the neighbor methods, how they compare, and which one to use.
+- [Building structures](docs/guide/structures.md): crystals, elements, custom lattices and grain boundaries.
+- [Reading files and trajectories](docs/guide/files.md): file formats, periodic boundaries, LAMMPS trajectories, writing results.
+- [Large systems](docs/guide/large_systems.md): threads, memory and store_rows.
+
+## Descriptors
+
+- [Common neighbor analysis](docs/descriptors/cna.md): fcc, hcp, bcc, icosahedral and diamond labels.
+- [Ackland–Jones classification](docs/descriptors/ackland_jones.md): labels from bond angles.
+- [Steinhardt parameters](docs/descriptors/steinhardt.md): $q_l$ and the averaged $\bar{q}_l$.
+- [Wigner $W_l$ parameters](docs/descriptors/wigner_w.md): third order invariants.
+- [Minkowski structure metrics](docs/descriptors/minkowski.md): $q_l$ weighted by Voronoi face areas.
+- [Voronoi tessellation](docs/descriptors/voronoi.md): Voronoi vectors and volumes.
+- [Angular criteria and $\chi$ parameters](docs/descriptors/angular.md): tetrahedral order and bond angle histograms.
+- [Solid–liquid classification](docs/descriptors/solid_liquid.md): solid atoms and clusters in a liquid.
+- [Disorder parameter](docs/descriptors/disorder.md): local disorder from bond correlations.
+- [Entropy parameter](docs/descriptors/entropy.md): a pair entropy fingerprint.
+- [Centrosymmetry](docs/descriptors/centrosymmetry.md): stacking faults, vacancies and surfaces.
+- [Atomic deformation](docs/descriptors/deformation.md): strain, $D^2_\mathrm{min}$ and slip vector.
+- [Wigner–Seitz analysis](docs/descriptors/wigner_seitz.md): vacancies, interstitials and antisites.
+- [Short range order](docs/descriptors/sro.md): Warren–Cowley parameters.
+- [Coordination](docs/descriptors/coordination.md): coordination numbers and local density.
+- [Distribution functions](docs/descriptors/distributions.md): radial, angular and bond length distributions.
+- [ACE descriptors](docs/descriptors/ace.md): Atomic Cluster Expansion.
