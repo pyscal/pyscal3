@@ -23,7 +23,7 @@ parts:
     - file: docs/descriptors/solid_liquid
     - file: docs/descriptors/disorder
     - file: docs/descriptors/angular
-    - file: docs/methods/06_voronoi.md
+    - file: docs/descriptors/voronoi
     - file: docs/descriptors/centrosymmetry
     - file: docs/descriptors/entropy
     - file: docs/methods/09_minkowski.md
@@ -39,7 +39,6 @@ parts:
     chapters:
     - file: docs/examples.md
       sections:
-      - file: examples/06_voronoi_tessellation
       - file: examples/11_short_range_order
       - file: examples/14_wigner_w_parameters
       - file: examples/15_minkowski_structure_metrics

@@ -15,7 +15,7 @@ Most need the neighbors to be found first with `find_neighbors`. The tables mark
 | [Steinhardt parameters](steinhardt) | `steinhardt_parameter` | $q_l$ and averaged $\bar{q}_l$ |
 | [Wigner $W_l$ parameters](../methods/10_wigner_w) | `wigner_w_parameter` | third order invariants $W_l$ |
 | [Minkowski structure metrics](../methods/09_minkowski) | `minkowski_parameter` | $q_l$ weighted by Voronoi face areas (finds its own neighbors) |
-| [Voronoi vector](../methods/06_voronoi) | `voronoi_vector` | numbers of Voronoi faces with 3, 4, 5 and 6 edges |
+| [Voronoi vector](voronoi) | `voronoi_vector` | numbers of Voronoi faces with 3, 4, 5 and 6 edges |
 | [Angular and $\chi$ parameters](angular) | `angular_criteria`, `chi_params` | bond angle histograms, tetrahedral order |
 
 ## Solid or liquid, ordered or disordered?
