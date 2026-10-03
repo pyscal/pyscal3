@@ -25,7 +25,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 4. [Steinhardt parameters](docs/descriptors/steinhardt.md): bond-orientational order parameters $q_l$ and their neighbor-averaged variants.
 5. [Common neighbor analysis](docs/descriptors/cna.md): adaptive and conventional CNA, diamond structure identification.
 6. [Voronoi tessellation](examples/06_voronoi_tessellation.ipynb): Voronoi structure vector and Voronoi volumes.
-7. [Disorder parameter](examples/07_disorder_parameter.ipynb): structural disorder from Steinhardt parameter correlations.
+7. [Disorder parameter](docs/descriptors/disorder.md): structural disorder from Steinhardt parameter correlations.
 8. [Angular and $\chi$ parameters](examples/08_angular_and_chi_params.ipynb): angular criteria for tetrahedral ordering and $\chi$ parameters.
 9. [Centrosymmetry parameter](examples/09_centrosymmetry_parameter.ipynb): detecting defects and broken symmetry in crystals.
 10. [Entropy parameter](examples/10_entropy_parameter.ipynb): pair-entropy fingerprint for distinguishing solid and liquid.

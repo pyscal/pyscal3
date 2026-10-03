@@ -13,7 +13,7 @@ kernelspec:
 
 The bond orientational order parameters of Steinhardt, Nelson and Ronchetti [1] describe the arrangement of the neighbors of an atom with spherical harmonics.
 They do not depend on the orientation of the crystal, and different crystal structures have different values.
-They are used to tell crystal structures apart, to separate solid from liquid atoms, and as input to [solid–liquid classification](solid_liquid), [disorder parameters](../methods/04_disorder) and [Wigner $W_l$ parameters](../methods/10_wigner_w).
+They are used to tell crystal structures apart, to separate solid from liquid atoms, and as input to [solid–liquid classification](solid_liquid), [disorder parameters](disorder) and [Wigner $W_l$ parameters](../methods/10_wigner_w).
 
 ```{code-cell} ipython3
 :tags: [remove-cell]
@@ -84,7 +84,7 @@ It also stores the results on `atoms`:
 | `atoms.arrays["pyscal_q4_real"]`, `["pyscal_q4_imag"]` | $(N, 2l + 1)$ | real and imaginary parts of $q_{4m}$, $m = -l, \dots, l$ |
 | `atoms.arrays["pyscal_avg_q4"]` | $(N,)$ | $\bar{q}_4$, with `averaged=True` |
 
-The $q_{lm}$ are stored because the averaged parameters, [solid–liquid classification](solid_liquid) and [disorder parameters](../methods/04_disorder) need them.
+The $q_{lm}$ are stored because the averaged parameters, [solid–liquid classification](solid_liquid) and [disorder parameters](disorder) need them.
 With `averaged=True`, the $q_{lm}$ are computed on the way, so the plain parameters do not have to be computed first.
 
 ## Values for perfect crystals
