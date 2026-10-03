@@ -1,6 +1,6 @@
 # Examples
 
-The tutorials below cover the full pyscal API — from loading structures to computing structural descriptors.
+These notebooks show the descriptors that do not have their own page yet. Finding neighbors, Steinhardt parameters and common neighbor analysis are covered in the [user guide](guide/neighbors) and the [descriptor pages](descriptors/index).
 
 ::::{grid} 1 1 2 3
 :class-container: text-center
@@ -22,33 +22,6 @@ Loading structures with ASE, the pyscal workflow, and where results are stored.
 Creating structures
 ^^^
 Built-in crystal types, elements by name, custom lattices, and grain boundaries.
-:::
-
-:::{grid-item-card}
-:link: ../examples/03_finding_neighbors
-:link-type: doc
-:class-header: bg-light
-Finding neighbors
-^^^
-Cutoff (fixed / adaptive / SANN), Voronoi, and number-based neighbor methods.
-:::
-
-:::{grid-item-card}
-:link: ../examples/04_steinhardt_parameters
-:link-type: doc
-:class-header: bg-light
-Steinhardt parameters
-^^^
-Bond-orientational order parameters q_l and their neighbor-averaged variants.
-:::
-
-:::{grid-item-card}
-:link: ../examples/05_common_neighbor_analysis
-:link-type: doc
-:class-header: bg-light
-Common neighbor analysis
-^^^
-Adaptive CNA and conventional CNA for identifying FCC, HCP, BCC, and icosahedral environments.
 :::
 
 :::{grid-item-card}
