@@ -173,7 +173,7 @@ ax.legend(frameon=False);
 Above a standard deviation of about 5 % of the nearest neighbor distance, the fraction of correctly labelled atoms drops quickly.
 By the Lindemann criterion, the root mean square displacement at melting is roughly 10 to 15 % of the nearest neighbor distance, or 6 to 9 % in each direction.
 A crystal close to its melting point therefore has many atoms labelled *others*, as in [A first analysis](../tour).
-For classification at high temperature, the [averaged Steinhardt parameters](steinhardt) are more robust.
+At high temperature, the [averaged Steinhardt parameters](steinhardt) still separate crystal from liquid atoms where CNA labels many crystal atoms as *others*.
 
 ## Example: stacking faults in fcc
 

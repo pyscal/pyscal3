@@ -14,7 +14,7 @@ kernelspec:
 Wigner–Seitz analysis finds point defects by comparing a structure with a perfect reference lattice [1].
 Each atom is assigned to the nearest lattice site, and the number of atoms on each site gives the vacancies, the interstitials and, in alloys, the antisites.
 It is used to count the defects left by collision cascades in radiation damage simulations and to follow vacancies and interstitials as they diffuse.
-[Common neighbor analysis](cna) and the [centrosymmetry parameter](centrosymmetry) label atoms by the structure around them, and thermal vibrations at high temperature make many atoms look defective.
+[Common neighbor analysis](cna) and the [centrosymmetry parameter](centrosymmetry.md) label atoms by the structure around them, and thermal vibrations at high temperature make many atoms look defective.
 Wigner–Seitz analysis counts atoms per site instead, so it gives the number of point defects also at high temperature.
 The [deformation descriptors](deformation) also use a reference structure, but compare the neighbors of each atom.
 

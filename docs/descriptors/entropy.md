@@ -14,7 +14,7 @@ kernelspec:
 The entropy parameter of Piaggi and Parrinello [1] is a fingerprint of the local order around an atom.
 It is computed from the radial distribution function centred on the atom, in the form of the pair contribution to the entropy.
 It is lower in a crystal than in a liquid, and it is used to separate solid from liquid atoms and to find defects [1].
-Unlike the [Steinhardt parameters](steinhardt), the [disorder parameter](disorder) and the [solid–liquid classification](solid_liquid), it uses only the distances to the neighbors and no bond angles.
+Unlike the [Steinhardt parameters](steinhardt), the [disorder parameter](disorder.md) and the [solid–liquid classification](solid_liquid), it uses only the distances to the neighbors and no bond angles.
 
 ```{code-cell} ipython3
 :tags: [remove-cell]

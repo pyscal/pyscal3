@@ -23,15 +23,15 @@ Most need the neighbors to be found first with `find_neighbors`. The tables mark
 | Descriptor | Function | Result |
 |---|---|---|
 | [Solid–liquid classification](solid_liquid) | `find_solids`, `find_clusters` | solid or liquid label per atom, largest solid cluster |
-| [Disorder parameter](disorder) | `disorder` | local disorder per atom |
-| [Entropy parameter](entropy) | `entropy` | pair entropy fingerprint per atom |
+| [Disorder parameter](disorder.md) | `disorder` | local disorder per atom |
+| [Entropy parameter](entropy.md) | `entropy` | pair entropy fingerprint per atom |
 | [Steinhardt parameters](steinhardt) | `steinhardt_parameter(..., averaged=True)` | averaged $\bar{q}_l$ |
 
 ## Defects and deformation
 
 | Descriptor | Function | Result per atom |
 |---|---|---|
-| [Centrosymmetry](centrosymmetry) | `centrosymmetry` | deviation from inversion symmetry (finds its own neighbors) |
+| [Centrosymmetry](centrosymmetry.md) | `centrosymmetry` | deviation from inversion symmetry (finds its own neighbors) |
 | [Atomic deformation](deformation) | `atomic_strain`, `von_mises_strain`, `d2min`, `slip_vector` | strain, von Mises strain, non-affine displacement, slip vector, relative to a reference |
 | [Wigner–Seitz analysis](wigner_seitz) | `wigner_seitz_analysis`, `identify_defect_atoms` | vacancies, interstitials and antisites relative to a reference |
 
@@ -47,4 +47,4 @@ Most need the neighbors to be found first with `find_neighbors`. The tables mark
 
 | Descriptor | Function | Result per atom |
 |---|---|---|
-| [ACE descriptors](ace) | `ace` | Atomic Cluster Expansion descriptors up to body order four |
+| [ACE descriptors](ace.md) | `ace` | Atomic Cluster Expansion descriptors up to body order four |
