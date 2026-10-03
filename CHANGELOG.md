@@ -124,6 +124,10 @@ neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
 
 ### Fixes
 
+- `make_crystal(noise=...)` adds the random displacements once to every atom.
+  Before, they were added again to each replicated copy, so atoms in later
+  copies moved up to twice as far. A new `seed` argument makes them
+  reproducible.
 - `common_neighbor_analysis` and `diamond_structure` no longer label every
   atom as "others" when a single atom, for example an isolated atom next to a
   surface, has too few neighbor candidates.

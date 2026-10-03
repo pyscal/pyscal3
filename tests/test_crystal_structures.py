@@ -1,4 +1,7 @@
 """Tests for crystal structure creation."""
+import numpy as np
+import pytest
+
 import pyscal3
 from pyscal3.structures import make_crystal, make_element, available_structures
 
@@ -79,3 +82,24 @@ def test_element_list_maps_sublattices():
     l12 = make_crystal("l12", lattice_constant=3.75, element=["Au", "Cu"])
     assert l12.get_chemical_symbols().count("Au") == 1
     assert l12.get_chemical_symbols().count("Cu") == 3
+
+
+def test_noise_is_the_same_for_every_atom():
+    # the displacements were added again to every replicated copy, so
+    # atoms in later copies moved more than atoms in the first cell
+    perfect = make_crystal("fcc", lattice_constant=4.0, repetitions=(4, 4, 4))
+    np.random.seed(1)
+    noisy = make_crystal("fcc", lattice_constant=4.0, repetitions=(4, 4, 4), noise=0.1)
+    shift = noisy.positions - perfect.positions
+    first, last = shift[:64], shift[-64:]
+    assert np.std(shift) == pytest.approx(0.1, rel=0.05)
+    assert np.std(first) == pytest.approx(0.1, rel=0.2)
+    assert np.std(last) == pytest.approx(0.1, rel=0.2)
+
+
+def test_noise_seed():
+    a = make_crystal("bcc", lattice_constant=3.0, repetitions=3, noise=0.05, seed=7)
+    b = make_crystal("bcc", lattice_constant=3.0, repetitions=3, noise=0.05, seed=7)
+    c = make_crystal("bcc", lattice_constant=3.0, repetitions=3, noise=0.05, seed=8)
+    assert np.array_equal(a.positions, b.positions)
+    assert not np.array_equal(a.positions, c.positions)
