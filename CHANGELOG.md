@@ -124,6 +124,17 @@ neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
 
 ### Fixes
 
+- `identify_ackland_jones` follows the method of Ackland and Jones (2006), as
+  in the original implementation of LAMMPS `compute ackland/atom`: it
+  chooses its own neighbors from the six nearest atoms, assigns the
+  structure with the smallest deviation from the ideal angle counts, and
+  labels atoms that match no structure as other. Before, it used the stored
+  neighbor list and a simplified decision tree that labelled any unmatched
+  atom with an angle near 139 degrees as hcp, so a liquid came out as 99.6 %
+  hcp (now 83 % other). It no longer needs `find_neighbors`, stores integer
+  labels in `pyscal_structure` like `common_neighbor_analysis` (names are
+  still returned), and stores its eight angle counts in
+  `pyscal_ackland_chi` instead of computing `pyscal_chiparams`.
 - `effective_coordination_number` iterates the weighted mean bond length to
   self-consistency, as Hoppe defines it and as its docstring said. It used
   to stop after one step, so values were too low when bond lengths differ:

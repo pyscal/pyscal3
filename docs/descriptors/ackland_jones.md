@@ -11,10 +11,10 @@ kernelspec:
 
 # Ackland–Jones classification
 
-The method of Ackland and Jones [1] labels each atom as fcc, hcp, bcc, icosahedral or other, from the angles between the bonds to its neighbors.
-It counts the bond angles in a few ranges, the [χ parameters](angular), and compares the counts with those of the perfect structures.
-It gives the same kind of labels as [common neighbor analysis](cna) (CNA).
-This page describes the rules that pyscal uses and compares the labels with CNA on crystals at finite temperature and on a liquid.
+The method of Ackland and Jones [1] labels each atom as fcc, hcp, bcc, icosahedral or unknown, from the angles between the bonds to its nearest neighbors.
+It counts the bond angles in eight ranges and compares the counts with those of the perfect structures.
+It gives the same kind of labels as [common neighbor analysis](cna) (CNA), and it chooses its neighbors from the distances to the six nearest atoms, so it needs no cutoff.
+This page describes the method and compares its labels with CNA on crystals at finite temperature and on a liquid.
 
 ```{code-cell} ipython3
 :tags: [remove-cell]
@@ -28,32 +28,46 @@ warnings.simplefilter("ignore")
 
 ## Definition
 
-For each atom, the χ parameters $\chi_0, \dots, \chi_8$ count the pairs of neighbors whose bond angle falls in nine ranges of $\cos\theta$ (see [Angular criteria and χ parameters](angular) for the ranges).
-In the perfect structures, with first shell neighbors, the counts that matter are:
+For each atom $i$, let $r_0^2$ be the mean of the squared distances to its six nearest atoms.
+The method uses two groups of neighbors:
+the $N_0$ atoms with $r_{ij}^2 < 1.45\, r_0^2$, and the $N_1$ atoms with $r_{ij}^2 < 1.55\, r_0^2$.
+For every pair $j, k$ of the $N_0$ neighbors, the cosine of the bond angle $\theta_{jik}$ is counted in one of eight ranges:
 
-| Structure | Neighbors | $\chi_0$ | $\chi_1 + \chi_2 + \chi_3$ | $\chi_2$ | $\chi_5$ |
-|---|---|---|---|---|---|
-| bcc | 14 | 7 | 0 | 0 | 12 |
-| fcc | 12 | 6 | 0 | 0 | 12 |
-| icosahedral | 12 | 6 | 0 | 0 | 0 |
-| hcp | 12 | 3 | 6 | 6 | 12 |
+| Count | $\chi_0$ | $\chi_1$ | $\chi_2$ | $\chi_3$ | $\chi_4$ | $\chi_5$ | $\chi_6$ | $\chi_7$ |
+|---|---|---|---|---|---|---|---|---|
+| $\cos\theta$ from | −1 | −0.945 | −0.915 | −0.755 | −0.195 | 0.195 | 0.245 | 0.795 |
+| to | −0.945 | −0.915 | −0.755 | −0.195 | 0.195 | 0.245 | 0.795 | 1 |
 
-$\chi_0$ counts pairs of neighbors on nearly opposite sides of the atom (angles above 160.9°), $\chi_1$ to $\chi_3$ count angles between 134.8° and 160.9°, and $\chi_5$ counts angles between 78.8° and 101.2°.
-pyscal applies the following rules in this order:
+In the perfect structures the counts are:
 
-1. **bcc** if $\chi_0 \ge 7$.
-2. Otherwise, if $\chi_0 \ge 5$ and $\chi_1 + \chi_2 + \chi_3 = 0$: **icosahedral** if $\chi_5 = 0$, and **fcc** if $\chi_5 > 0$.
-3. Otherwise, **hcp** if $\chi_2 > 0$.
-4. Otherwise, **other**.
+| Structure | $N_0$ | $\chi_0$ | $\chi_1$ | $\chi_2$ | $\chi_3$ | $\chi_4$ | $\chi_5$ | $\chi_6$ | $\chi_7$ |
+|---|---|---|---|---|---|---|---|---|---|
+| fcc | 12 | 6 | 0 | 0 | 24 | 12 | 0 | 24 | 0 |
+| hcp | 12 | 3 | 0 | 6 | 21 | 12 | 0 | 24 | 0 |
+| bcc | 14 | 7 | 0 | 0 | 36 | 12 | 0 | 36 | 0 |
+| icosahedral | 12 | 6 | 0 | 0 | 30 | 0 | 0 | 30 | 0 |
 
-The method of the original paper [1] differs in two ways.
-It selects the neighbors itself, from the distances to the six nearest atoms.
-It also assigns atoms whose counts do not match the ideal values to the structure with the smallest deviation from them.
-pyscal uses the stored neighbor list and only the rules above.
+From the counts, the method computes the deviations from a bcc, a close packed, an fcc and an hcp environment:
+
+$$
+\delta_\mathrm{bcc} = \frac{0.35\, \chi_4}{\chi_5 + \chi_6 - \chi_4}, \quad
+\delta_\mathrm{cp} = \left| 1 - \frac{\chi_6}{24} \right|, \quad
+\delta_\mathrm{fcc} = \frac{0.61}{6} \left( |\chi_0 + \chi_1 - 6| + \chi_2 \right), \quad
+\delta_\mathrm{hcp} = \frac{1}{12} \left( |\chi_0 - 3| + |\chi_0 + \chi_1 + \chi_2 + \chi_3 - 9| \right).
+$$
+
+$\delta_\mathrm{bcc}$ is set to 0 if $\chi_0 = 7$, $\delta_\mathrm{fcc}$ if $\chi_0 = 6$, and $\delta_\mathrm{hcp}$ if $\chi_0 \le 3$.
+The atom is then labelled by the first rule that applies:
+
+1. **unknown** if $\chi_7 > 0$, that is, if two neighbors are closer than about 37° as seen from the atom.
+2. **icosahedral** if $\chi_4 < 3$ and $11 \le N_1 \le 13$, and **unknown** if $\chi_4 < 3$ otherwise.
+3. **bcc** if $\delta_\mathrm{bcc} \le \delta_\mathrm{cp}$ and $N_1 \ge 11$, and **unknown** if $\delta_\mathrm{bcc} \le \delta_\mathrm{cp}$ otherwise.
+4. **unknown** if $N_1$ is not 11 or 12.
+5. **fcc** if $\delta_\mathrm{fcc} < \delta_\mathrm{hcp}$, and **hcp** otherwise.
+
+pyscal follows the original implementation of `compute ackland/atom` in LAMMPS.
 
 ## Usage
-
-Find the neighbors first, then classify:
 
 ```{code-cell} ipython3
 import numpy as np
@@ -61,35 +75,30 @@ import pyscal
 from ase.io import read
 
 atoms = read("conf.bcc.dump", format="lammps-dump-text")
-pyscal.find_neighbors(atoms, method="cutoff", cutoff=3.8)
-
 labels, names = pyscal.identify_ackland_jones(atoms)
 labels[:6], names[:6]
 ```
 
-The cutoff of 3.8 Å is the first minimum of the radial distribution function of this bcc crystal, between the second and the third neighbor shell (see [Finding neighbors](../guide/neighbors)).
-`identify_ackland_jones` returns an integer label and a name for each atom:
+`identify_ackland_jones` finds its own neighbors, so `find_neighbors` is not needed, and a neighbor list stored on `atoms` is not used and not changed.
+It returns an integer label and a name for each atom.
+The labels are those of `common_neighbor_analysis`:
 
 | Label | 0 | 1 | 2 | 3 | 4 |
 |---|---|---|---|---|---|
 | Name | other | fcc | hcp | bcc | ico |
 
-The numbers are the same as those of `common_neighbor_analysis`.
 The results are stored on `atoms`:
 
 | Key | Shape | Content |
 |---|---|---|
 | `atoms.arrays["pyscal_ackland_label"]` | $(N,)$ | integer label |
-| `atoms.arrays["pyscal_structure"]` | $(N,)$ | name, as a string |
-| `atoms.arrays["pyscal_chiparams"]` | $(N, 9)$ | $\chi_0, \dots, \chi_8$ |
-
-`identify_ackland_jones` uses the stored neighbor list and raises an error if `find_neighbors` has not been called.
+| `atoms.arrays["pyscal_structure"]` | $(N,)$ | integer label, the key that `common_neighbor_analysis` also uses |
+| `atoms.arrays["pyscal_ackland_chi"]` | $(N, 8)$ | $\chi_0, \dots, \chi_7$ |
 
 ## Crystals at finite temperature and a liquid
 
 How well does the method label atoms in real simulations?
-We classify three MD snapshots from the `examples` folder, an fcc crystal and a bcc crystal at finite temperature, and a liquid, with both methods.
-The neighbors are all atoms within the first minimum of the radial distribution function, which gives 12 neighbors in fcc and 14 in bcc.
+We classify three MD snapshots from the `examples` folder, an fcc crystal and a bcc crystal at finite temperature, and a liquid, with the Ackland–Jones method and with adaptive CNA.
 
 ```{code-cell} ipython3
 from collections import Counter
@@ -99,12 +108,10 @@ snapshots = {
     "bcc": read("conf.bcc.dump", format="lammps-dump-text"),
     "liquid": read("conf.lqd.Al.dump", format="lammps-dump-text"),
 }
-cutoffs = {"fcc": 3.5, "bcc": 3.8, "liquid": 4.1}
 
 fractions = {}
 for name, snapshot in snapshots.items():
     n = len(snapshot)
-    pyscal.find_neighbors(snapshot, method="cutoff", cutoff=cutoffs[name])
     _, names = pyscal.identify_ackland_jones(snapshot)
     fractions[name, "Ackland–Jones"] = {k: v / n for k, v in Counter(names).items()}
     counts = pyscal.common_neighbor_analysis(snapshot)
@@ -112,7 +119,7 @@ for name, snapshot in snapshots.items():
                               for k, v in counts.items()}
 ```
 
-`common_neighbor_analysis` finds its own neighbors, and it calls the label 0 `others`, which is renamed here to `other`.
+`common_neighbor_analysis` calls the label 0 `others`, which is renamed here to `other`.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -147,56 +154,46 @@ from myst_nb import glue
 def percent(name, method, structure):
     return round(100 * fractions[name, method].get(structure, 0))
 
-for name, structures_ in [("fcc", ["fcc", "hcp", "other"]), ("bcc", ["bcc", "hcp"])]:
-    for structure in structures_:
+for name in ("fcc", "bcc", "liquid"):
+    for structure in ("fcc", "hcp", "bcc", "ico", "other"):
         glue(f"aj_{name}_{structure}", percent(name, "Ackland–Jones", structure), display=False)
-glue("aj_liquid_hcp", round(100 * fractions["liquid", "Ackland–Jones"]["hcp"], 1), display=False)
 glue("cna_fcc_fcc", percent("fcc", "CNA", "fcc"), display=False)
-glue("cna_fcc_other", percent("fcc", "CNA", "other"), display=False)
 glue("cna_bcc_bcc", percent("bcc", "CNA", "bcc"), display=False)
 glue("cna_liquid_other", percent("liquid", "CNA", "other"), display=False)
-chi_liquid = snapshots["liquid"].arrays["pyscal_chiparams"]
-glue("liquid_chi2", round(100 * np.mean(chi_liquid[:, 2] > 0), 1), display=False)
+assert percent("fcc", "Ackland–Jones", "fcc") > percent("fcc", "CNA", "fcc")
+assert percent("bcc", "Ackland–Jones", "bcc") < percent("bcc", "CNA", "bcc")
+assert percent("liquid", "Ackland–Jones", "other") > 70
 ```
 
-In the fcc snapshot, the Ackland–Jones method labels {glue}`aj_fcc_fcc` % of the atoms as fcc, {glue}`aj_fcc_hcp` % as hcp and {glue}`aj_fcc_other` % as other.
-CNA labels {glue}`cna_fcc_fcc` % as fcc and {glue}`cna_fcc_other` % as other.
-In the bcc snapshot, the method labels {glue}`aj_bcc_bcc` % as bcc and {glue}`aj_bcc_hcp` % as hcp, and CNA labels {glue}`cna_bcc_bcc` % as bcc.
-In the liquid, the method labels {glue}`aj_liquid_hcp` % of the atoms as hcp, and CNA labels {glue}`cna_liquid_other` % as other.
-
-The hcp labels come from rule 3.
-Thermal motion moves angles out of $\chi_0$ or into $\chi_1$ to $\chi_3$, so that an fcc atom fails the fcc test.
-Any atom that fails the tests for bcc, fcc and icosahedral and has an angle in $\chi_2$ is labelled hcp.
-In the liquid, {glue}`liquid_chi2` % of the atoms have such an angle.
-CNA labels atoms that it cannot assign as other, so a missed atom does not look like a different crystal structure.
+In the fcc snapshot, the Ackland–Jones method labels {glue}`aj_fcc_fcc` % of the atoms as fcc, more than CNA with {glue}`cna_fcc_fcc` %.
+The method assigns the structure with the smallest deviation, so an atom whose angles are moved slightly by thermal motion can still be labelled fcc, where CNA requires the exact signatures.
+In the bcc snapshot, the method labels {glue}`aj_bcc_bcc` % of the atoms as bcc, fewer than CNA with {glue}`cna_bcc_bcc` %, and {glue}`aj_bcc_fcc` % as fcc.
+In bcc, the second shell is only 15 % farther away than the first, and thermal motion moves second shell atoms across the limit of $1.45\, r_0^2$, which changes $\chi_0$ and $N_1$.
+In the liquid, {glue}`aj_liquid_other` % of the atoms are unknown, and CNA labels {glue}`cna_liquid_other` % as other.
 
 ## Random displacements
 
 To see how the labels change with the size of the thermal displacements, we add random displacements to perfect fcc, hcp and bcc crystals, with a standard deviation $\sigma$ up to 10 % of the nearest neighbor distance in each direction, a rough model of thermal vibrations.
-The neighbors are all atoms within a cutoff between the first and second neighbor shell (fcc, hcp), or between the second and third (bcc).
 We compare with adaptive CNA.
 
 ```{code-cell} ipython3
 from ase.build import bulk
 
 def perfect(name):
-    """Crystal, nearest neighbor distance and neighbor cutoff."""
+    """Crystal and nearest neighbor distance."""
     if name == "hcp":
-        return bulk("Cu", "hcp", a=2.55).repeat((8, 8, 5)), 2.55, 0.5 * (1 + np.sqrt(2)) * 2.55
+        return bulk("Cu", "hcp", a=2.55).repeat((8, 8, 5)), 2.55
     if name == "fcc":
-        a = 3.61
-        return bulk("Cu", "fcc", a=a, cubic=True).repeat(6), a / np.sqrt(2), 0.5 * (1 / np.sqrt(2) + 1) * a
-    a = 2.87
-    return bulk("Fe", "bcc", a=a, cubic=True).repeat(6), a * np.sqrt(3) / 2, 0.5 * (1 + np.sqrt(2)) * a
+        return bulk("Cu", "fcc", a=3.61, cubic=True).repeat(6), 3.61 / np.sqrt(2)
+    return bulk("Fe", "bcc", a=2.87, cubic=True).repeat(6), 2.87 * np.sqrt(3) / 2
 
 sigmas = np.linspace(0, 0.10, 11)
 scan = {}
 for name in ("fcc", "hcp", "bcc"):
-    crystal, nearest, cutoff = perfect(name)
+    crystal, nearest = perfect(name)
     for sigma in sigmas:
         noisy = crystal.copy()
         noisy.rattle(sigma * nearest, seed=1)
-        pyscal.find_neighbors(noisy, method="cutoff", cutoff=cutoff)
         _, names = pyscal.identify_ackland_jones(noisy)
         scan[name, sigma, "Ackland–Jones"] = Counter(names)
         scan[name, sigma, "CNA"] = pyscal.common_neighbor_analysis(noisy)
@@ -207,15 +204,17 @@ for name in ("fcc", "hcp", "bcc"):
 :tags: [hide-input]
 from matplotlib.lines import Line2D
 
+kinds = ("fcc", "hcp", "bcc", "ico", "other")
+markers = dict(zip(kinds, "o^sDv"))
+colour_of = lambda s: COLOURS["others"] if s == "other" else COLOURS[s]
 mp = figure(columns=3, ratio=0.36, wspace=0.12)
 for k, name in enumerate(("fcc", "hcp", "bcc")):
     ax = mp[0, k]
     n = scan[name, 0, "n"]
-    for structure, marker in zip(("fcc", "hcp", "bcc", "other"), "o^sD"):
+    for structure in kinds:
         values = [scan[name, s, "Ackland–Jones"].get(structure, 0) / n for s in sigmas]
-        colour = COLOURS["others"] if structure == "other" else COLOURS[structure]
-        ax.plot(100 * sigmas, values, marker=marker, color=colour, mec=DARK, mew=0.7,
-                ms=4.5, lw=1.5)
+        ax.plot(100 * sigmas, values, marker=markers[structure], color=colour_of(structure),
+                mec=DARK, mew=0.7, ms=4.5, lw=1.5)
     cna = [scan[name, s, "CNA"][name] / n for s in sigmas]
     ax.plot(100 * sigmas, cna, ls=":", marker="o", color=COLOURS[name], mfc="white",
             mec=COLOURS[name], mew=1, ms=4.5, lw=1.5)
@@ -225,9 +224,8 @@ for k, name in enumerate(("fcc", "hcp", "bcc")):
         ax.tick_params(labelleft=False)
 mp[0, 0].set_ylabel("Fraction of atoms")
 mp[0, 1].set_xlabel(r"$\sigma$  (% of nearest neighbor distance)")
-handles = [Line2D([], [], marker=m, color=COLOURS[s] if s != "other" else COLOURS["others"],
-                  mec=DARK, mew=0.7, ms=5, lw=1.5, label=f"{s} (Ackland–Jones)")
-           for s, m in zip(("fcc", "hcp", "bcc", "other"), "o^sD")]
+handles = [Line2D([], [], marker=markers[s], color=colour_of(s), mec=DARK, mew=0.7, ms=5,
+                  lw=1.5, label=f"{s} (Ackland–Jones)") for s in kinds]
 handles.append(Line2D([], [], ls=":", marker="o", color=DARK, mfc="white", mec=DARK,
                       ms=5, lw=1.5, label="correct label (CNA)"))
 mp.fig.legend(handles=handles, frameon=False, ncol=3, loc="upper center",
@@ -239,55 +237,30 @@ mp.fig.legend(handles=handles, frameon=False, ncol=3, loc="upper center",
 def fraction(name, sigma, method, structure):
     return round(100 * scan[name, sigma, method].get(structure, 0) / scan[name, sigma, "n"])
 
-glue("lowest_4", min(fraction(name, s, method, name) for name in ("fcc", "hcp", "bcc")
-                     for method in ("Ackland–Jones", "CNA") for s in sigmas[:5]), display=False)
-s6 = sigmas[6]
-glue("aj_fcc_6", fraction("fcc", s6, "Ackland–Jones", "fcc"), display=False)
-glue("cna_fcc_6", fraction("fcc", s6, "CNA", "fcc"), display=False)
-glue("aj_bcc_6", fraction("bcc", s6, "Ackland–Jones", "bcc"), display=False)
-glue("cna_bcc_6", fraction("bcc", s6, "CNA", "bcc"), display=False)
-s10 = sigmas[10]
-glue("aj_fcc_hcp_10", fraction("fcc", s10, "Ackland–Jones", "hcp"), display=False)
-glue("aj_bcc_hcp_10", fraction("bcc", s10, "Ackland–Jones", "hcp"), display=False)
-glue("aj_hcp_10", fraction("hcp", s10, "Ackland–Jones", "hcp"), display=False)
+s4, s6, s8 = sigmas[4], sigmas[6], sigmas[8]
+for name in ("fcc", "hcp"):
+    glue(f"aj_{name}_8", fraction(name, s8, "Ackland–Jones", name), display=False)
+    glue(f"cna_{name}_8", fraction(name, s8, "CNA", name), display=False)
+    # up to 6 %, the two methods agree to within a few percent
+    assert all(abs(fraction(name, s, "Ackland–Jones", name) - fraction(name, s, "CNA", name)) <= 10
+               for s in sigmas[:7])
+    assert fraction(name, s8, "Ackland–Jones", name) > fraction(name, s8, "CNA", name)
+glue("aj_bcc_4", fraction("bcc", s4, "Ackland–Jones", "bcc"), display=False)
+glue("cna_bcc_4", fraction("bcc", s4, "CNA", "bcc"), display=False)
+assert fraction("bcc", s4, "Ackland–Jones", "bcc") < fraction("bcc", s4, "CNA", "bcc")
 ```
 
-The solid lines show the fraction of atoms that the Ackland–Jones method assigns to each structure, and the dotted lines the fraction that CNA labels correctly.
-For $\sigma$ up to 4 %, both methods label at least {glue}`lowest_4` % of the atoms correctly.
-At $\sigma = 6$ %, the method labels {glue}`aj_fcc_6` % of the fcc atoms as fcc and {glue}`aj_bcc_6` % of the bcc atoms as bcc, where CNA labels {glue}`cna_fcc_6` % and {glue}`cna_bcc_6` %.
-At $\sigma = 10$ %, the method labels {glue}`aj_fcc_hcp_10` % of the fcc atoms and {glue}`aj_bcc_hcp_10` % of the bcc atoms as hcp.
-The hcp crystal stays at {glue}`aj_hcp_10` % hcp, because hcp is the label for atoms that fail the other tests.
-A high fraction of hcp atoms is therefore not evidence for an hcp phase.
-Check it with CNA or with the [averaged Steinhardt parameters](steinhardt).
-
-```{code-cell} ipython3
-:tags: [remove-cell]
-# checks for the statements below
-def share(atoms, structure):
-    names = np.array(pyscal.identify_ackland_jones(atoms)[1])
-    return round(100 * np.mean(names == structure))
-
-pyscal.find_neighbors(snapshots["bcc"], method="cutoff", cutoff=0)
-glue("adaptive_bcc", share(snapshots["bcc"], "bcc"), display=False)
-pyscal.find_neighbors(snapshots["fcc"], method="voronoi")
-glue("voronoi_fcc", share(snapshots["fcc"], "fcc"), display=False)
-
-bcc = bulk("Fe", "bcc", a=2.87, cubic=True).repeat(4)
-pyscal.find_neighbors(bcc, method="number", nmax=8)
-assert share(bcc, "other") == 100
-assert np.all(bcc.arrays["pyscal_chiparams"][:, 0] == 4)
-
-diamond = bulk("Si", "diamond", a=5.43, cubic=True).repeat(3)
-pyscal.find_neighbors(diamond, method="number", nmax=4)
-assert share(diamond, "other") == 100
-```
+The solid lines show the fraction of atoms that the Ackland–Jones method assigns to each label, and the dotted lines the fraction that CNA labels correctly.
+For fcc and hcp, the two methods label about the same fraction of atoms correctly up to $\sigma = 6$ %.
+At larger displacements the Ackland–Jones method keeps more atoms: at $\sigma = 8$ % it labels {glue}`aj_fcc_8` % of the fcc atoms and {glue}`aj_hcp_8` % of the hcp atoms correctly, against {glue}`cna_fcc_8` % and {glue}`cna_hcp_8` % with CNA.
+For bcc it loses atoms much earlier: at $\sigma = 4$ % it labels {glue}`aj_bcc_4` % of the atoms as bcc, where CNA still labels {glue}`cna_bcc_4` %.
 
 ## Things to watch
 
-- **The neighbor list decides the result.** The rules expect the 12 first neighbors in fcc, hcp and icosahedral environments, and 14 (8 + 6) in bcc. With only the 8 first neighbors, a bcc atom has $\chi_0 = 4$ and is labelled other. Check the number of neighbors per atom before classifying. Methods that add or drop neighbors give fewer correct labels (see [Finding neighbors](../guide/neighbors)). With the adaptive cutoff and its defaults, only {glue}`adaptive_bcc` % of the atoms of the bcc snapshot are labelled bcc. With Voronoi neighbors, only {glue}`voronoi_fcc` % of the atoms of the fcc snapshot are labelled fcc.
-- **hcp is the fallback label.** Every atom with an angle in $\chi_2$ that is not labelled bcc, fcc or icosahedral is labelled hcp, including the atoms of a liquid.
-- **Diamond structures are not covered.** With their four first neighbors, the atoms of a perfect diamond crystal are labelled other. Use `diamond_structure` (see [Common neighbor analysis](cna.md#diamond-structures)).
-- **`pyscal_structure` is shared with CNA.** `common_neighbor_analysis` stores integer labels under the same key, and `identify_ackland_jones` stores names. The function called last overwrites the result of the other. The integer labels of the Ackland–Jones method are also in `pyscal_ackland_label`.
+- **bcc at high temperature.** Thermal motion moves atoms of the second bcc shell across the limits of $N_0$ and $N_1$, and bcc atoms are labelled fcc or unknown. Check bcc fractions with CNA.
+- **Diamond structures are not covered.** The atoms of a perfect diamond crystal are labelled unknown. Use `diamond_structure` (see [Common neighbor analysis](cna.md#diamond-structures)).
+- **Surfaces.** Atoms at a free surface have too few neighbors in the angle counts and are labelled unknown.
+- **`pyscal_structure` is shared with CNA.** `common_neighbor_analysis` stores its labels under the same key, with the same codes. The function called last overwrites the result of the other. The Ackland–Jones labels are also in `pyscal_ackland_label`.
 
 ## References
 

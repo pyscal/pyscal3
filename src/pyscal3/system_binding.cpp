@@ -38,6 +38,7 @@ PYBIND11_MODULE(csystem, m) {
     m.def("get_all_neighbors_voronoi", &get_all_neighbors_voronoi);
     m.def("cna_structure", &cna_structure);
     m.def("diamond_structure_cna", &diamond_structure_cna);
+    m.def("ackland_jones_structure", &ackland_jones_structure);
     m.def("calculate_centrosymmetry", &calculate_centrosymmetry);
     m.def("calculate_entropy", &calculate_entropy);
     m.def("calculate_average_entropy", &calculate_average_entropy);

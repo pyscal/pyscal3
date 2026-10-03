@@ -1,5 +1,7 @@
 """Tests for Ackland-Jones structure classification."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -116,3 +118,88 @@ def test_ackland_fcc_hcp_discrimination():
     _, fcc_labels, _ = _classify("fcc", 4.05)
     _, hcp_labels, _ = _classify("hcp", 3.21)
     assert fcc_labels[0] != hcp_labels[0]
+
+
+# ------------------------------------------------------------------
+# The method of Ackland and Jones (2006)
+# ------------------------------------------------------------------
+
+def _reference(atoms, rcut=6.0):
+    """Independent implementation on ASE neighbor lists, following the paper
+    and the original LAMMPS compute ackland/atom."""
+    from ase.neighborlist import neighbor_list
+    i, D = neighbor_list("iD", atoms, rcut)
+    edges = [-0.945, -0.915, -0.755, -0.195, 0.195, 0.245, 0.795]
+    out = np.zeros(len(atoms), int)
+    for a in range(len(atoms)):
+        v = D[i == a]
+        d2 = (v * v).sum(1)
+        order = np.argsort(d2, kind="stable")
+        v, d2 = v[order], d2[order]
+        r0 = d2[:6].mean()
+        n0, n1 = (d2 < 1.45 * r0).sum(), (d2 < 1.55 * r0).sum()
+        u = v[:n0] / np.sqrt(d2[:n0])[:, None]
+        chi = np.zeros(8, int)
+        for x in range(n0):
+            for y in range(x + 1, n0):
+                chi[np.searchsorted(edges, u[x] @ u[y], side="right")] += 1
+        with np.errstate(all="ignore"):
+            d_bcc = 0.35 * chi[4] / (chi[5] + chi[6] - chi[4])
+        d_cp = abs(1 - chi[6] / 24)
+        d_fcc = 0.61 * (abs(chi[0] + chi[1] - 6) + chi[2]) / 6
+        d_hcp = (abs(chi[0] - 3) + abs(chi[:4].sum() - 9)) / 12
+        if chi[0] == 7:
+            d_bcc = 0
+        elif chi[0] == 6:
+            d_fcc = 0
+        elif chi[0] <= 3:
+            d_hcp = 0
+        if chi[7] > 0:
+            out[a] = 0
+        elif chi[4] < 3:
+            out[a] = 0 if (n1 > 13 or n1 < 11) else 4
+        elif d_bcc <= d_cp:
+            out[a] = 0 if n1 < 11 else 3
+        elif n1 > 12 or n1 < 11:
+            out[a] = 0
+        else:
+            out[a] = 1 if d_fcc < d_hcp else 2
+    return out
+
+
+@pytest.mark.parametrize("name,a", [("fcc", 3.61), ("bcc", 2.87)])
+def test_ackland_matches_reference(name, a):
+    from ase.build import bulk
+    atoms = bulk("Cu", name, a=a, cubic=True).repeat(4)
+    atoms.rattle(0.06 * a / np.sqrt(2), seed=3)
+    labels, _ = pyscal3.identify_ackland_jones(atoms)
+    assert np.array_equal(labels, _reference(atoms))
+    # the noise is large enough that several classes occur
+    assert len(np.unique(labels)) >= 3
+
+
+def test_ackland_liquid_is_not_a_crystal():
+    from ase.io import read
+    path = Path(__file__).resolve().parent.parent / "examples" / "conf.lqd.Al.dump"
+    liquid = read(path, format="lammps-dump-text")
+    labels, _ = pyscal3.identify_ackland_jones(liquid)
+    assert np.mean(labels == 0) > 0.7
+    assert np.mean(labels == 2) < 0.2
+
+
+def test_ackland_stores_integer_labels_and_keeps_neighbors():
+    atoms = make_crystal("bcc", lattice_constant=2.87, repetitions=(3, 3, 3))
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=2.6)
+    before = atoms.info["pyscal_bond_neighbors"].copy()
+    labels, _ = pyscal3.identify_ackland_jones(atoms)
+    assert atoms.arrays["pyscal_structure"].dtype.kind == "i"
+    assert np.array_equal(atoms.arrays["pyscal_structure"], labels)
+    assert atoms.arrays["pyscal_ackland_chi"].shape == (len(atoms), 8)
+    assert np.array_equal(atoms.info["pyscal_bond_neighbors"], before)
+    assert np.all(labels == 3)
+
+
+def test_ackland_needs_no_neighbor_list():
+    atoms = make_crystal("hcp", lattice_constant=3.21, repetitions=(3, 3, 3))
+    labels, _ = pyscal3.identify_ackland_jones(atoms)
+    assert np.all(labels == 2)

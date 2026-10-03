@@ -15,7 +15,7 @@ The two descriptors on this page are computed from the angles between the bonds 
 The angular criterion $A$ of Uttormark et al. [1] measures how far the four nearest neighbors of an atom are from a regular tetrahedron.
 It is used to find atoms in diamond structures, such as crystalline silicon or germanium.
 The χ parameters of Ackland and Jones [2] are a histogram of the cosines of all bond angles of an atom.
-They are the input of the [Ackland–Jones classification](ackland_jones).
+The [Ackland–Jones classification](ackland_jones) uses the same kind of counts, with eight bins and its own choice of neighbors.
 For a structure label of diamond atoms, see [Common neighbor analysis](cna), and for the bond angle distribution of a whole system, see [Distribution functions](distributions).
 
 ```{code-cell} ipython3
@@ -211,7 +211,7 @@ Panel (b) shows the mean over the atoms of each snapshot, and the error bars giv
 In the fcc snapshot, $\chi_0$ drops from 6 to {glue}`fcc_chi0_mean` on average, and {glue}`fcc_chi123_percent` % of the atoms have at least one angle in $\chi_1$ to $\chi_3$, which are empty in the perfect crystal.
 In the bcc snapshot, $\chi_0$ drops from 7 to {glue}`bcc_chi0_mean`.
 In the liquid, $\chi_0$ is {glue}`liquid_chi0_mean` on average, and many pairs fall in bins that are empty in fcc and bcc, for example {glue}`liquid_chi2_mean` in $\chi_2$.
-Classifiers that test for exact counts, such as the [Ackland–Jones classification](ackland_jones), are therefore sensitive to temperature.
+A classifier that tests for the exact counts of the perfect structures is therefore sensitive to temperature.
 
 ## Finding tetrahedral atoms
 
