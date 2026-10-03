@@ -25,15 +25,6 @@ Third-order bond-orientational invariants w_l and their averaged variants.
 :::
 
 :::{grid-item-card}
-:link: ../examples/15_minkowski_structure_metrics
-:link-type: doc
-:class-header: bg-light
-Minkowski structure metrics
-^^^
-Voronoi face-area weighted Steinhardt parameters for robust structure identification.
-:::
-
-:::{grid-item-card}
 :link: ../examples/17_coordination_variants
 :link-type: doc
 :class-header: bg-light

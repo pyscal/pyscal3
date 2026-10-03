@@ -45,7 +45,7 @@ $q_l$ lies between 0 and 1.
 The parameters with $l = 4$ and $l = 6$ are used most often.
 
 With [Voronoi neighbors](../guide/neighbors), each term in the sum over $j$ is multiplied by the weight $w_{ij}$ of the neighbor, the relative area of the Voronoi face shared with $j$.
-`minkowski_parameter` computes these weighted parameters directly (see [Minkowski structure metrics](../methods/09_minkowski)).
+`minkowski_parameter` computes these weighted parameters directly (see [Minkowski structure metrics](minkowski)).
 
 ### Averaged parameters
 
