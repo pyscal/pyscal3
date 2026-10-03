@@ -16,15 +16,6 @@ Warren-Cowley chemical short-range order parameter for multi-component alloys.
 :::
 
 :::{grid-item-card}
-:link: ../examples/17_coordination_variants
-:link-type: doc
-:class-header: bg-light
-Coordination variants
-^^^
-Coordination number computed via cutoff, Voronoi, and SANN neighbor methods.
-:::
-
-:::{grid-item-card}
 :link: ../examples/18_angular_bond_distributions
 :link-type: doc
 :class-header: bg-light
