@@ -15,15 +15,6 @@ Short-range order
 Warren-Cowley chemical short-range order parameter for multi-component alloys.
 :::
 
-:::{grid-item-card}
-:link: ../examples/18_angular_bond_distributions
-:link-type: doc
-:class-header: bg-light
-Angular bond distributions
-^^^
-Bond-angle distribution functions for characterizing local environments.
-:::
-
 ::::
 
 
