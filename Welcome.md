@@ -28,7 +28,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 7. [Disorder parameter](docs/descriptors/disorder.md): structural disorder from Steinhardt parameter correlations.
 8. [Angular and $\chi$ parameters](examples/08_angular_and_chi_params.ipynb): angular criteria for tetrahedral ordering and $\chi$ parameters.
 9. [Centrosymmetry parameter](examples/09_centrosymmetry_parameter.ipynb): detecting defects and broken symmetry in crystals.
-10. [Entropy parameter](examples/10_entropy_parameter.ipynb): pair-entropy fingerprint for distinguishing solid and liquid.
+10. [Entropy parameter](docs/descriptors/entropy.md): pair-entropy fingerprint for distinguishing solid and liquid.
 11. [Short-range order](examples/11_short_range_order.ipynb): Warren-Cowley parameters for alloys.
 12. [Solid/liquid clustering](docs/descriptors/solid_liquid.md): identifying solid atoms in a melt and clustering by arbitrary conditions.
 13. [Trajectory module](docs/guide/files.md): lazy access to multi-frame LAMMPS dump files.

@@ -34,15 +34,6 @@ Detecting defects and broken symmetry in ordered crystals.
 :::
 
 :::{grid-item-card}
-:link: ../examples/10_entropy_parameter
-:link-type: doc
-:class-header: bg-light
-Entropy parameter
-^^^
-Pair-entropy for distinguishing crystal structures, with local and averaged variants.
-:::
-
-:::{grid-item-card}
 :link: ../examples/11_short_range_order
 :link-type: doc
 :class-header: bg-light

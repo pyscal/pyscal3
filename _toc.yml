@@ -25,7 +25,7 @@ parts:
     - file: docs/methods/05_angular.md
     - file: docs/methods/06_voronoi.md
     - file: docs/methods/07_centrosymmetry.md
-    - file: docs/methods/08_entropy.md
+    - file: docs/descriptors/entropy
     - file: docs/methods/09_minkowski.md
     - file: docs/methods/10_wigner_w.md
     - file: docs/methods/11_ackland_jones.md
@@ -42,7 +42,6 @@ parts:
       - file: examples/06_voronoi_tessellation
       - file: examples/08_angular_and_chi_params
       - file: examples/09_centrosymmetry_parameter
-      - file: examples/10_entropy_parameter
       - file: examples/11_short_range_order
       - file: examples/14_wigner_w_parameters
       - file: examples/15_minkowski_structure_metrics
