@@ -18,27 +18,23 @@ parts:
   - caption: Descriptors
     chapters:
     - file: docs/descriptors/index
-    - file: docs/descriptors/steinhardt
     - file: docs/descriptors/cna
+    - file: docs/descriptors/ackland_jones
+    - file: docs/descriptors/steinhardt
+    - file: docs/descriptors/wigner_w
+    - file: docs/descriptors/minkowski
+    - file: docs/descriptors/voronoi
+    - file: docs/descriptors/angular
     - file: docs/descriptors/solid_liquid
     - file: docs/descriptors/disorder
-    - file: docs/descriptors/angular
-    - file: docs/descriptors/voronoi
-    - file: docs/descriptors/centrosymmetry
     - file: docs/descriptors/entropy
-    - file: docs/descriptors/minkowski
-    - file: docs/descriptors/wigner_w
-    - file: docs/descriptors/ackland_jones
-    - file: docs/descriptors/coordination
-    - file: docs/descriptors/distributions
+    - file: docs/descriptors/centrosymmetry
     - file: docs/descriptors/deformation
     - file: docs/descriptors/wigner_seitz
-    - file: docs/descriptors/ace
     - file: docs/descriptors/sro
-  - caption: Examples
-    chapters:
-    - file: docs/examples.md
-      sections:
+    - file: docs/descriptors/coordination
+    - file: docs/descriptors/distributions
+    - file: docs/descriptors/ace
   - caption: Reference
     chapters:
     - file: docs/api.md

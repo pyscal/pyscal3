@@ -1,5 +1,5 @@
 # Dependencies for building the documentation (Read the Docs) and running
-# the example notebooks. The package itself declares its runtime
+# its pages, which are executed notebooks. The package itself declares its runtime
 # dependencies in pyproject.toml.
 numpy
 scipy>=1.15
@@ -8,8 +8,6 @@ pyyaml
 matplotlib
 pychromatic
 pandas
-plotly
-ipywidgets
 scikit-learn
 pybind11
 jupyter-book<2
