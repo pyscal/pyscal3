@@ -6,6 +6,8 @@ scipy>=1.15
 ase
 pyyaml
 matplotlib
+pychromatic
+pandas
 plotly
 ipywidgets
 scikit-learn
