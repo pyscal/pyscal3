@@ -30,7 +30,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 9. [Centrosymmetry parameter](examples/09_centrosymmetry_parameter.ipynb): detecting defects and broken symmetry in crystals.
 10. [Entropy parameter](examples/10_entropy_parameter.ipynb): pair-entropy fingerprint for distinguishing solid and liquid.
 11. [Short-range order](examples/11_short_range_order.ipynb): Warren-Cowley parameters for alloys.
-12. [Solid/liquid clustering](examples/12_solid_liquid_clustering.ipynb): identifying solid atoms in a melt and clustering by arbitrary conditions.
+12. [Solid/liquid clustering](docs/descriptors/solid_liquid.md): identifying solid atoms in a melt and clustering by arbitrary conditions.
 13. [Trajectory module](docs/guide/files.md): lazy access to multi-frame LAMMPS dump files.
 14. [Wigner $W_l$ parameters](examples/14_wigner_w_parameters.ipynb): third-order bond-orientational invariants.
 15. [Minkowski structure metrics](examples/15_minkowski_structure_metrics.ipynb): Voronoi-area-weighted Steinhardt parameters.

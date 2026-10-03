@@ -22,7 +22,7 @@ Most need the neighbors to be found first with `find_neighbors`. The tables mark
 
 | Descriptor | Function | Result |
 |---|---|---|
-| [Solid–liquid classification](../methods/03_solidliquid) | `find_solids`, `find_clusters` | solid or liquid label per atom, largest solid cluster |
+| [Solid–liquid classification](solid_liquid) | `find_solids`, `find_clusters` | solid or liquid label per atom, largest solid cluster |
 | [Disorder parameter](../methods/04_disorder) | `disorder` | local disorder per atom |
 | [Entropy parameter](../methods/08_entropy) | `entropy` | pair entropy fingerprint per atom |
 | [Steinhardt parameters](steinhardt) | `steinhardt_parameter(..., averaged=True)` | averaged $\bar{q}_l$ |
