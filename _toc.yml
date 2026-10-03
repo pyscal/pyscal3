@@ -27,7 +27,7 @@ parts:
     - file: docs/descriptors/centrosymmetry
     - file: docs/descriptors/entropy
     - file: docs/descriptors/minkowski
-    - file: docs/methods/10_wigner_w.md
+    - file: docs/descriptors/wigner_w
     - file: docs/descriptors/ackland_jones
     - file: docs/methods/12_coordination.md
     - file: docs/methods/13_distributions.md
@@ -40,7 +40,6 @@ parts:
     - file: docs/examples.md
       sections:
       - file: examples/11_short_range_order
-      - file: examples/14_wigner_w_parameters
       - file: examples/17_coordination_variants
       - file: examples/18_angular_bond_distributions
   - caption: Reference
