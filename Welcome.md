@@ -32,7 +32,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 11. [Short-range order](examples/11_short_range_order.ipynb): Warren-Cowley parameters for alloys.
 12. [Solid/liquid clustering](docs/descriptors/solid_liquid.md): identifying solid atoms in a melt and clustering by arbitrary conditions.
 13. [Trajectory module](docs/guide/files.md): lazy access to multi-frame LAMMPS dump files.
-14. [Wigner $W_l$ parameters](examples/14_wigner_w_parameters.ipynb): third-order bond-orientational invariants.
+14. [Wigner $W_l$ parameters](docs/descriptors/wigner_w.md): third-order bond-orientational invariants.
 15. [Minkowski structure metrics](docs/descriptors/minkowski.md): Voronoi-area-weighted Steinhardt parameters.
 16. [Ackland-Jones classification](docs/descriptors/ackland_jones.md): fcc/bcc/hcp/icosahedral labels from angular histograms.
 17. [Coordination variants](examples/17_coordination_variants.ipynb): coordination number, effective and generalized coordination, local density.

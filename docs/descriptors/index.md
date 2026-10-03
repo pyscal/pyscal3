@@ -13,7 +13,7 @@ Most need the neighbors to be found first with `find_neighbors`. The tables mark
 | [Diamond structure](cna.md#diamond-structures) | `diamond_structure` | cubic or hexagonal diamond, and their neighbors (finds its own neighbors) |
 | [Ackland–Jones classification](ackland_jones) | `identify_ackland_jones` | fcc, hcp, bcc, icosahedral or unknown, from bond angles |
 | [Steinhardt parameters](steinhardt) | `steinhardt_parameter` | $q_l$ and averaged $\bar{q}_l$ |
-| [Wigner $W_l$ parameters](../methods/10_wigner_w) | `wigner_w_parameter` | third order invariants $W_l$ |
+| [Wigner $W_l$ parameters](wigner_w) | `wigner_w_parameter` | third order invariants $W_l$ |
 | [Minkowski structure metrics](minkowski) | `minkowski_parameter` | $q_l$ weighted by Voronoi face areas (finds its own neighbors) |
 | [Voronoi vector](voronoi) | `voronoi_vector` | numbers of Voronoi faces with 3, 4, 5 and 6 edges |
 | [Angular and $\chi$ parameters](angular) | `angular_criteria`, `chi_params` | bond angle histograms, tetrahedral order |

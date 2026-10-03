@@ -16,15 +16,6 @@ Warren-Cowley chemical short-range order parameter for multi-component alloys.
 :::
 
 :::{grid-item-card}
-:link: ../examples/14_wigner_w_parameters
-:link-type: doc
-:class-header: bg-light
-Wigner W parameters
-^^^
-Third-order bond-orientational invariants w_l and their averaged variants.
-:::
-
-:::{grid-item-card}
 :link: ../examples/17_coordination_variants
 :link-type: doc
 :class-header: bg-light
