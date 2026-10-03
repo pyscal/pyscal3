@@ -11,6 +11,7 @@ parts:
   - caption: User guide
     chapters:
     - file: docs/guide/neighbors
+    - file: docs/guide/structures
     - file: docs/guide/migration
   - caption: Descriptors
     chapters:
@@ -37,7 +38,6 @@ parts:
     - file: docs/examples.md
       sections:
       - file: examples/01_getting_started
-      - file: examples/02_creating_structures
       - file: examples/06_voronoi_tessellation
       - file: examples/07_disorder_parameter
       - file: examples/08_angular_and_chi_params
