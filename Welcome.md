@@ -19,7 +19,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 
 ## Examples
 
-1. [Getting started](examples/01_getting_started.ipynb): loading structures with ASE, the pyscal workflow, and where results are stored.
+1. [Getting started](docs/tour.md): loading structures with ASE, the pyscal workflow, and where results are stored.
 2. [Creating structures](docs/guide/structures.md): built-in crystal types, elements by name, custom lattices and grain boundaries.
 3. [Finding neighbors](docs/guide/neighbors.md): fixed, adaptive and SANN cutoffs, Voronoi and number-based neighbor methods.
 4. [Steinhardt parameters](docs/descriptors/steinhardt.md): bond-orientational order parameters $q_l$ and their neighbor-averaged variants.
@@ -31,7 +31,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 10. [Entropy parameter](examples/10_entropy_parameter.ipynb): pair-entropy fingerprint for distinguishing solid and liquid.
 11. [Short-range order](examples/11_short_range_order.ipynb): Warren-Cowley parameters for alloys.
 12. [Solid/liquid clustering](examples/12_solid_liquid_clustering.ipynb): identifying solid atoms in a melt and clustering by arbitrary conditions.
-13. [Trajectory module](examples/13_trajectory_module.ipynb): lazy access to multi-frame LAMMPS dump files.
+13. [Trajectory module](docs/guide/files.md): lazy access to multi-frame LAMMPS dump files.
 14. [Wigner $W_l$ parameters](examples/14_wigner_w_parameters.ipynb): third-order bond-orientational invariants.
 15. [Minkowski structure metrics](examples/15_minkowski_structure_metrics.ipynb): Voronoi-area-weighted Steinhardt parameters.
 16. [Ackland-Jones classification](examples/16_ackland_jones_classification.ipynb): fcc/bcc/hcp/icosahedral labels from angular histograms.

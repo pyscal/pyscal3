@@ -12,6 +12,7 @@ parts:
     chapters:
     - file: docs/guide/neighbors
     - file: docs/guide/structures
+    - file: docs/guide/files
     - file: docs/guide/migration
   - caption: Descriptors
     chapters:
@@ -37,7 +38,6 @@ parts:
     chapters:
     - file: docs/examples.md
       sections:
-      - file: examples/01_getting_started
       - file: examples/06_voronoi_tessellation
       - file: examples/07_disorder_parameter
       - file: examples/08_angular_and_chi_params
@@ -45,7 +45,6 @@ parts:
       - file: examples/10_entropy_parameter
       - file: examples/11_short_range_order
       - file: examples/12_solid_liquid_clustering
-      - file: examples/13_trajectory_module
       - file: examples/14_wigner_w_parameters
       - file: examples/15_minkowski_structure_metrics
       - file: examples/16_ackland_jones_classification

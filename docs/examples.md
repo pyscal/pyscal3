@@ -7,15 +7,6 @@ These notebooks show the descriptors that do not have their own page yet. Findin
 :gutter: 3
 
 :::{grid-item-card}
-:link: ../examples/01_getting_started
-:link-type: doc
-:class-header: bg-light
-Getting started
-^^^
-Loading structures with ASE, the pyscal workflow, and where results are stored.
-:::
-
-:::{grid-item-card}
 :link: ../examples/06_voronoi_tessellation
 :link-type: doc
 :class-header: bg-light
@@ -76,15 +67,6 @@ Warren-Cowley chemical short-range order parameter for multi-component alloys.
 Solid/liquid clustering
 ^^^
 Identifying solid atoms in a melt and clustering by arbitrary conditions.
-:::
-
-:::{grid-item-card}
-:link: ../examples/13_trajectory_module
-:link-type: doc
-:class-header: bg-light
-Trajectory module
-^^^
-Efficient analysis of multi-frame LAMMPS dump trajectories.
 :::
 
 :::{grid-item-card}
