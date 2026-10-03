@@ -47,4 +47,4 @@ Most need the neighbors to be found first with `find_neighbors`. The tables mark
 
 | Descriptor | Function | Result per atom |
 |---|---|---|
-| [ACE descriptors](../methods/16_ace) | `ace` | Atomic Cluster Expansion descriptors up to body order four |
+| [ACE descriptors](ace) | `ace` | Atomic Cluster Expansion descriptors up to body order four |
