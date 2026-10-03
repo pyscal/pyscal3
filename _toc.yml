@@ -13,6 +13,7 @@ parts:
     - file: docs/guide/neighbors
     - file: docs/guide/structures
     - file: docs/guide/files
+    - file: docs/guide/large_systems
     - file: docs/guide/migration
   - caption: Descriptors
     chapters:
