@@ -44,3 +44,17 @@ def test_entropy_averaged_alias():
     b = pyscal3.entropy(atoms, rm=rm, averaged=True)
     assert np.allclose(a, b)
     assert "pyscal_average_entropy" in atoms.arrays
+
+
+def test_average_over_neighbors_of_a_vector_property():
+    # each column of a property with several values per atom is averaged on
+    # its own, with the same result as the 1-D average of that column
+    atoms = make_crystal("fcc", lattice_constant=4.05, repetitions=(3, 3, 3), noise=0.1, seed=2)
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.5)
+    rng = np.random.default_rng(0)
+    atoms.arrays["vector"] = rng.normal(size=(len(atoms), 4))
+    averaged = pyscal3.average_over_neighbors(atoms, "vector")
+    assert averaged.shape == (len(atoms), 4)
+    for k in range(4):
+        atoms.arrays["column"] = atoms.arrays["vector"][:, k].copy()
+        assert np.allclose(averaged[:, k], pyscal3.average_over_neighbors(atoms, "column"))

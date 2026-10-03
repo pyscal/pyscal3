@@ -1323,6 +1323,9 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     Returns
     -------
     numpy array
+        The averages, with the shape of the property: one value per atom,
+        or one row per atom for properties with several values per atom
+        (each column is averaged separately).
     """
     d = _get_dict_with_neighbors(atoms)
 
@@ -1335,24 +1338,20 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     else:
         raise KeyError(f"Property '{key}' not found")
 
-    # 1-D values: use fast C++ averaging
     values = np.asarray(values)
-    if values.ndim == 1:
-        offsets, nb = neighbor_arrays(atoms, "neighbors")
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
+
+    def average(column):
         return pc.calculate_average_over_neighbors(
-            offsets, nb["neighbors"], np.ascontiguousarray(values, dtype=float), include_self
+            offsets, nb["neighbors"], np.ascontiguousarray(column, dtype=float), include_self
         )
 
-    # Multi-dimensional: fall back to Python loop
-    offsets, nb = neighbor_arrays(atoms, "neighbors")
-    result = []
-    for i in range(len(atoms)):
-        vals = [values[i]] if include_self else []
-        for j in nb["neighbors"][offsets[i]:offsets[i + 1]]:
-            vals.append(values[j])
-        result.append(np.mean(vals))
-
-    return np.array(result)
+    if values.ndim == 1:
+        return average(values)
+    # several values per atom: average each column on its own
+    columns = values.reshape(len(atoms), -1)
+    result = np.column_stack([average(columns[:, k]) for k in range(columns.shape[1])])
+    return result.reshape(values.shape)
 
 
 # ---------------------------------------------------------------------------

@@ -124,6 +124,9 @@ neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
 
 ### Fixes
 
+- `average_over_neighbors` averages each column of a property with several
+  values per atom, such as `pyscal_ace`, and returns an array of the same
+  shape. It used to return the mean over all values of each atom.
 - `identify_ackland_jones` follows the method of Ackland and Jones (2006), as
   in the original implementation of LAMMPS `compute ackland/atom`: it
   chooses its own neighbors from the six nearest atoms, assigns the
