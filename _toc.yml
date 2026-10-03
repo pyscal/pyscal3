@@ -22,7 +22,7 @@ parts:
     - file: docs/descriptors/cna
     - file: docs/descriptors/solid_liquid
     - file: docs/descriptors/disorder
-    - file: docs/methods/05_angular.md
+    - file: docs/descriptors/angular
     - file: docs/methods/06_voronoi.md
     - file: docs/methods/07_centrosymmetry.md
     - file: docs/descriptors/entropy
@@ -40,7 +40,6 @@ parts:
     - file: docs/examples.md
       sections:
       - file: examples/06_voronoi_tessellation
-      - file: examples/08_angular_and_chi_params
       - file: examples/09_centrosymmetry_parameter
       - file: examples/11_short_range_order
       - file: examples/14_wigner_w_parameters

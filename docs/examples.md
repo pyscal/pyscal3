@@ -16,15 +16,6 @@ Voronoi structure vector (n3, n4, n5, n6) and Voronoi-based neighbor finding.
 :::
 
 :::{grid-item-card}
-:link: ../examples/08_angular_and_chi_params
-:link-type: doc
-:class-header: bg-light
-Angular & chi parameters
-^^^
-Angular criteria for diamond detection and Ackland-Jones chi parameters.
-:::
-
-:::{grid-item-card}
 :link: ../examples/09_centrosymmetry_parameter
 :link-type: doc
 :class-header: bg-light
