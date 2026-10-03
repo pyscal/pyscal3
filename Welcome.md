@@ -24,7 +24,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 3. [Finding neighbors](docs/guide/neighbors.md): fixed, adaptive and SANN cutoffs, Voronoi and number-based neighbor methods.
 4. [Steinhardt parameters](docs/descriptors/steinhardt.md): bond-orientational order parameters $q_l$ and their neighbor-averaged variants.
 5. [Common neighbor analysis](docs/descriptors/cna.md): adaptive and conventional CNA, diamond structure identification.
-6. [Voronoi tessellation](examples/06_voronoi_tessellation.ipynb): Voronoi structure vector and Voronoi volumes.
+6. [Voronoi tessellation](docs/descriptors/voronoi.md): Voronoi structure vector and Voronoi volumes.
 7. [Disorder parameter](docs/descriptors/disorder.md): structural disorder from Steinhardt parameter correlations.
 8. [Angular and $\chi$ parameters](docs/descriptors/angular.md): angular criteria for tetrahedral ordering and $\chi$ parameters.
 9. [Centrosymmetry parameter](docs/descriptors/centrosymmetry.md): detecting defects and broken symmetry in crystals.

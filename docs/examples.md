@@ -7,15 +7,6 @@ These notebooks show the descriptors that do not have their own page yet. Findin
 :gutter: 3
 
 :::{grid-item-card}
-:link: ../examples/06_voronoi_tessellation
-:link-type: doc
-:class-header: bg-light
-Voronoi tessellation
-^^^
-Voronoi structure vector (n3, n4, n5, n6) and Voronoi-based neighbor finding.
-:::
-
-:::{grid-item-card}
 :link: ../examples/11_short_range_order
 :link-type: doc
 :class-header: bg-light
