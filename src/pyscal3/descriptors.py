@@ -382,24 +382,9 @@ def disorder(atoms: Atoms, q=6, averaged=False):
     """
     d = _get_dict_with_neighbors(atoms)
 
-    # Ensure q values exist
-    keys_needed = ["q%d_real" % q, "q%d_imag" % q]
-    need_calc = False
-    for k in keys_needed:
-        if k not in d:
-            need_calc = True
-            break
-        v = d[k]
-        if not hasattr(v, "__len__") or len(v) == 0:
-            need_calc = True
-            break
-        # Check if it looks like a 2-D container (list-of-lists or 2-D array)
-        first = v[0]
-        if not (hasattr(first, "__len__") and not isinstance(first, str)):
-            need_calc = True
-            break
-    if need_calc:
-        _compute_qlm(atoms, d, q)
+    # q_lm from the current neighbors: stored values may belong to an
+    # earlier neighbor list
+    _compute_qlm(atoms, d, q)
 
     offsets, nb = neighbor_arrays(atoms, "neighbors")
     real = np.ascontiguousarray(d["q%d_real" % q], dtype=float)

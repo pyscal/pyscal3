@@ -67,3 +67,19 @@ def test_disorder_perfect_crystal_is_zero():
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)
     dis = pyscal3.disorder(atoms, q=6)
     assert np.allclose(dis, 0.0, atol=1e-10)
+
+
+def test_disorder_uses_the_current_neighbors():
+    # q_lm stored by an earlier steinhardt_parameter call with other
+    # neighbors must not be reused
+    import os
+    from ase.io import read
+    path = os.path.join(os.path.dirname(__file__), "..", "examples", "conf.lqd.Al.dump")
+    stale = read(path, format="lammps-dump-text")
+    pyscal3.find_neighbors(stale, method="cutoff", cutoff=3.5)
+    pyscal3.steinhardt_parameter(stale, l=6)
+    pyscal3.find_neighbors(stale, method="voronoi")
+    fresh = read(path, format="lammps-dump-text")
+    pyscal3.find_neighbors(fresh, method="voronoi")
+    assert np.allclose(pyscal3.disorder(stale, q=6), pyscal3.disorder(fresh, q=6))
+    assert np.allclose(stale.arrays["pyscal_q6"], fresh.arrays["pyscal_q6"])
