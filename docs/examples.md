@@ -61,15 +61,6 @@ Bond-angle distribution functions for characterizing local environments.
 :::
 
 :::{grid-item-card}
-:link: ../examples/21_deformation_descriptors
-:link-type: doc
-:class-header: bg-light
-Deformation descriptors
-^^^
-Per-atom deformation gradient, strain, and slip-vector descriptors.
-:::
-
-:::{grid-item-card}
 :link: ../examples/22_wigner_seitz_defects
 :link-type: doc
 :class-header: bg-light

@@ -37,6 +37,6 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 16. [Ackland-Jones classification](docs/descriptors/ackland_jones.md): fcc/bcc/hcp/icosahedral labels from angular histograms.
 17. [Coordination variants](examples/17_coordination_variants.ipynb): coordination number, effective and generalized coordination, local density.
 18. [Angular and bond-length distributions](examples/18_angular_bond_distributions.ipynb): ADF and BLDF as local fingerprints.
-19. [Deformation descriptors](examples/21_deformation_descriptors.ipynb): atomic strain, von Mises invariant, $D^2_{\min}$ and slip vector.
+19. [Deformation descriptors](docs/descriptors/deformation.md): atomic strain, von Mises invariant, $D^2_{\min}$ and slip vector.
 20. [Wigner-Seitz defect analysis](examples/22_wigner_seitz_defects.ipynb): vacancies, interstitials and antisites against a reference.
 21. [ACE descriptors](examples/28_ace_descriptors.ipynb): Atomic Cluster Expansion descriptors.
