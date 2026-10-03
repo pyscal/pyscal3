@@ -602,7 +602,6 @@ def entropy(
     d = {}
 
     n = len(atoms)
-    volume = _periodic_volume(atoms, "entropy")
     kb = 1
 
     cutoffs = np.ascontiguousarray(stored_per_atom(atoms, "cutoff"), dtype=float)
@@ -618,7 +617,8 @@ def entropy(
     if local:
         rho = 0
     else:
-        rho = n / volume
+        # the global density needs a fully periodic cell
+        rho = n / _periodic_volume(atoms, "entropy")
 
     d["entropy"] = pc.calculate_entropy(
         offsets, nb["neighbordist"], cutoffs, sigma, rho, rstart, rm, h, kb
@@ -1222,10 +1222,13 @@ def find_solids(
     """
     d = {}
 
-    if isinstance(bonds, int):
+    # numbers.Integral and numbers.Real also accept numpy scalars
+    if isinstance(bonds, numbers.Integral):
         criteria = 0
-    elif isinstance(bonds, float) and 0 <= bonds <= 1:
+        bonds = int(bonds)
+    elif isinstance(bonds, numbers.Real) and 0 <= bonds <= 1:
         criteria = 1
+        bonds = float(bonds)
     else:
         raise TypeError("bonds must be int or float in [0,1]")
 
@@ -1295,6 +1298,8 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
             largest_id = unique[counts.argmax()]
             atoms.arrays["pyscal_largest_cluster"] = cluster_ids == largest_id
             return largest_size
+        # no cluster: do not leave the mask of an earlier call behind
+        atoms.arrays["pyscal_largest_cluster"] = np.zeros(len(atoms), dtype=bool)
         return 0
     return None
 

@@ -75,3 +75,15 @@ def test_entropy_warns_when_rm_exceeds_cutoff():
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)
     with pytest.warns(UserWarning, match="neighbor cutoff"):
         pyscal3.entropy(atoms, rm=5.0)
+
+
+def test_local_entropy_does_not_need_a_periodic_cell():
+    # the local variant uses the density of each atom, not N / V
+    from ase.build import bulk
+    atoms = bulk("Cu", "fcc", a=3.61, cubic=True).repeat(5)
+    atoms.pbc = [True, True, False]
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=5.0)
+    values = pyscal3.entropy(atoms, rm=4.0, sigma=0.2, local=True)
+    assert np.all(np.isfinite(values))
+    with pytest.raises(ValueError):
+        pyscal3.entropy(atoms, rm=4.0, sigma=0.2)

@@ -124,6 +124,12 @@ neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
 
 ### Fixes
 
+- `find_solids` accepts numpy integers and floats for `bonds`; an
+  `np.int64` raised `TypeError`.
+- `entropy(local=True)` works for cells that are not periodic in all
+  directions; only the global density needs the volume of the cell.
+- `find_clusters` clears `pyscal_largest_cluster` when no atom satisfies the
+  condition, instead of leaving the mask of an earlier call.
 - `voronoi_vector` compares `area_cutoff` with the share of each face in the
   surface of the Voronoi cell, as documented. It used to compare it with the
   neighbor weight, which depends on `voroexp`: with `voroexp=3`, the square

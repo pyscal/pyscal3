@@ -96,7 +96,7 @@ It also stores the results on `atoms`:
 | `atoms.arrays["pyscal_average_entropy"]` | $(N,)$ | $\bar{s}$, with `averaged=True` |
 
 With `local=True`, the density of each atom is $\rho_i = N(i) / (\tfrac{4}{3} \pi r_\mathrm{c}(i)^3)$, where $r_\mathrm{c}(i)$ is its neighbor cutoff, instead of the global density $\rho = N / V$.
-`entropy` needs a fully periodic cell.
+`entropy` needs a fully periodic cell for the global density $\rho$, and `local=True` works with any cell.
 
 ## Solid and liquid
 
