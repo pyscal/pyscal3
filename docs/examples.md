@@ -60,14 +60,6 @@ Angular bond distributions
 Bond-angle distribution functions for characterizing local environments.
 :::
 
-:::{grid-item-card}
-:link: ../examples/28_ace_descriptors
-:link-type: doc
-:class-header: bg-light
-ACE descriptors
-^^^
-Atomic Cluster Expansion descriptors for machine-learning interatomic potentials.
-:::
 ::::
 
 
