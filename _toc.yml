@@ -26,7 +26,7 @@ parts:
     - file: docs/descriptors/voronoi
     - file: docs/descriptors/centrosymmetry
     - file: docs/descriptors/entropy
-    - file: docs/methods/09_minkowski.md
+    - file: docs/descriptors/minkowski
     - file: docs/methods/10_wigner_w.md
     - file: docs/descriptors/ackland_jones
     - file: docs/methods/12_coordination.md
@@ -41,7 +41,6 @@ parts:
       sections:
       - file: examples/11_short_range_order
       - file: examples/14_wigner_w_parameters
-      - file: examples/15_minkowski_structure_metrics
       - file: examples/17_coordination_variants
       - file: examples/18_angular_bond_distributions
   - caption: Reference

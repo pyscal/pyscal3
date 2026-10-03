@@ -84,7 +84,7 @@ w_{ij} = \frac{A_{ij}^{\,p}}{\sum_{k} A_{ik}^{\,p}},
 $$
 
 where the sum runs over all neighbors $k$ of $i$ and the exponent $p$ is set by `voroexp` (default 1).
-Steinhardt parameters use these weights, which makes them less sensitive to the small faces that thermal motion creates (see [Minkowski structure metrics](../methods/09_minkowski)).
+Steinhardt parameters use these weights, which makes them less sensitive to the small faces that thermal motion creates (see [Minkowski structure metrics](../descriptors/minkowski)).
 
 ### Candidate radius
 
