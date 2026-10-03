@@ -124,6 +124,10 @@ neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
 
 ### Fixes
 
+- `von_mises_strain` uses the definition of Shimizu, Ogata and Li, with a
+  factor 1/6 on the differences of the normal strains. With the factor 1/2
+  used before, the value depended on the orientation of the axes: a pure
+  shear gave a value up to 1.7 times larger after a rotation.
 - `disorder` computes the $q_{lm}$ from the current neighbors. It used to
   reuse values stored by an earlier call with another neighbor list.
 - `make_crystal(noise=...)` adds the random displacements once to every atom.

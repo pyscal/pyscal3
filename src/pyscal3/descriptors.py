@@ -1108,14 +1108,20 @@ def von_mises_strain(atoms: Atoms, reference: Atoms):
     """
     Compute the von Mises shear strain invariant from the atomic strain.
 
+    Following Shimizu, Ogata and Li (2007),
+
     .. math::
 
         \\eta^{\\text{Mises}} = \\sqrt{
-            \\frac{1}{2} \\left[
+            \\frac{1}{6} \\left[
                 (E_{xx}-E_{yy})^2 + (E_{yy}-E_{zz})^2 + (E_{zz}-E_{xx})^2
             \\right]
             + E_{xy}^2 + E_{yz}^2 + E_{xz}^2
         }
+
+    which equals :math:`\\sqrt{E'_{ij} E'_{ij} / 2}` with :math:`E'` the
+    deviatoric part of the strain, so it does not depend on the
+    orientation of the axes.
 
     Parameters
     ----------
@@ -1134,7 +1140,7 @@ def von_mises_strain(atoms: Atoms, reference: Atoms):
     exx, eyy, ezz = E[:, 0, 0], E[:, 1, 1], E[:, 2, 2]
     exy, eyz, exz = E[:, 0, 1], E[:, 1, 2], E[:, 0, 2]
     vm = np.sqrt(
-        0.5 * ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2)
+        ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2) / 6.0
         + exy**2 + eyz**2 + exz**2
     )
     vm[np.isnan(E).any(axis=(1, 2))] = np.nan

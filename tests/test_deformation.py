@@ -175,3 +175,22 @@ class TestDeformationIntegration:
         assert vm.shape[0] == len(deformed)
         assert d2.shape[0] == len(deformed)
         assert sv.shape[0] == len(deformed)
+
+
+def test_von_mises_does_not_depend_on_orientation():
+    # a pure shear along the cube axes and the same shear rotated by 45
+    # degrees about z must give the same von Mises strain, equal to gamma
+    gamma = 0.02
+    reference = bulk("Cu", "fcc", a=3.61, cubic=True).repeat(4)
+    shear = np.array([[1.0, gamma, 0.0], [gamma, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    c = np.cos(np.pi / 4)
+    rotation = np.array([[c, -c, 0.0], [c, c, 0.0], [0.0, 0.0, 1.0]])
+    values = []
+    for G in (shear, rotation.T @ shear @ rotation):
+        current = reference.copy()
+        current.set_cell(reference.cell @ G.T, scale_atoms=True)
+        for atoms in (reference, current):
+            pc.find_neighbors(atoms, method="cutoff", cutoff=3.1)
+        values.append(pc.von_mises_strain(current, reference))
+    assert np.allclose(values[0], values[1], atol=1e-6)
+    assert np.allclose(values[0], gamma, rtol=0.02)
