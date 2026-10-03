@@ -16,15 +16,6 @@ Voronoi structure vector (n3, n4, n5, n6) and Voronoi-based neighbor finding.
 :::
 
 :::{grid-item-card}
-:link: ../examples/09_centrosymmetry_parameter
-:link-type: doc
-:class-header: bg-light
-Centrosymmetry parameter
-^^^
-Detecting defects and broken symmetry in ordered crystals.
-:::
-
-:::{grid-item-card}
 :link: ../examples/11_short_range_order
 :link-type: doc
 :class-header: bg-light

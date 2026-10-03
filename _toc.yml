@@ -24,7 +24,7 @@ parts:
     - file: docs/descriptors/disorder
     - file: docs/descriptors/angular
     - file: docs/methods/06_voronoi.md
-    - file: docs/methods/07_centrosymmetry.md
+    - file: docs/descriptors/centrosymmetry
     - file: docs/descriptors/entropy
     - file: docs/methods/09_minkowski.md
     - file: docs/methods/10_wigner_w.md
@@ -40,7 +40,6 @@ parts:
     - file: docs/examples.md
       sections:
       - file: examples/06_voronoi_tessellation
-      - file: examples/09_centrosymmetry_parameter
       - file: examples/11_short_range_order
       - file: examples/14_wigner_w_parameters
       - file: examples/15_minkowski_structure_metrics
