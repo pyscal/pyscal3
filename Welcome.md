@@ -20,7 +20,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 ## Examples
 
 1. [Getting started](examples/01_getting_started.ipynb): loading structures with ASE, the pyscal workflow, and where results are stored.
-2. [Creating structures](examples/02_creating_structures.ipynb): built-in crystal types, elements by name, custom lattices and grain boundaries.
+2. [Creating structures](docs/guide/structures.md): built-in crystal types, elements by name, custom lattices and grain boundaries.
 3. [Finding neighbors](docs/guide/neighbors.md): fixed, adaptive and SANN cutoffs, Voronoi and number-based neighbor methods.
 4. [Steinhardt parameters](docs/descriptors/steinhardt.md): bond-orientational order parameters $q_l$ and their neighbor-averaged variants.
 5. [Common neighbor analysis](docs/descriptors/cna.md): adaptive and conventional CNA, diamond structure identification.

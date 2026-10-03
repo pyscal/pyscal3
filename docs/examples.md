@@ -16,15 +16,6 @@ Loading structures with ASE, the pyscal workflow, and where results are stored.
 :::
 
 :::{grid-item-card}
-:link: ../examples/02_creating_structures
-:link-type: doc
-:class-header: bg-light
-Creating structures
-^^^
-Built-in crystal types, elements by name, custom lattices, and grain boundaries.
-:::
-
-:::{grid-item-card}
 :link: ../examples/06_voronoi_tessellation
 :link-type: doc
 :class-header: bg-light
