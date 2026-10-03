@@ -61,15 +61,6 @@ Warren-Cowley chemical short-range order parameter for multi-component alloys.
 :::
 
 :::{grid-item-card}
-:link: ../examples/12_solid_liquid_clustering
-:link-type: doc
-:class-header: bg-light
-Solid/liquid clustering
-^^^
-Identifying solid atoms in a melt and clustering by arbitrary conditions.
-:::
-
-:::{grid-item-card}
 :link: ../examples/14_wigner_w_parameters
 :link-type: doc
 :class-header: bg-light

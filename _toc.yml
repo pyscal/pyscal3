@@ -20,7 +20,7 @@ parts:
     - file: docs/descriptors/index
     - file: docs/descriptors/steinhardt
     - file: docs/descriptors/cna
-    - file: docs/methods/03_solidliquid.md
+    - file: docs/descriptors/solid_liquid
     - file: docs/methods/04_disorder.md
     - file: docs/methods/05_angular.md
     - file: docs/methods/06_voronoi.md
@@ -45,7 +45,6 @@ parts:
       - file: examples/09_centrosymmetry_parameter
       - file: examples/10_entropy_parameter
       - file: examples/11_short_range_order
-      - file: examples/12_solid_liquid_clustering
       - file: examples/14_wigner_w_parameters
       - file: examples/15_minkowski_structure_metrics
       - file: examples/16_ackland_jones_classification
