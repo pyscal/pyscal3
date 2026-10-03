@@ -53,6 +53,7 @@ sphinx:
   config:
     autodoc_member_order: bysource
     myst_heading_anchors: 3
+    nb_execution_raise_on_error: true
     napoleon_google_docstring: false
     napoleon_numpy_docstring: true
     mathjax_path: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
