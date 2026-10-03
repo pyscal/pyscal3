@@ -28,7 +28,7 @@ parts:
     - file: docs/descriptors/entropy
     - file: docs/methods/09_minkowski.md
     - file: docs/methods/10_wigner_w.md
-    - file: docs/methods/11_ackland_jones.md
+    - file: docs/descriptors/ackland_jones
     - file: docs/methods/12_coordination.md
     - file: docs/methods/13_distributions.md
     - file: docs/methods/14_deformation.md
@@ -44,7 +44,6 @@ parts:
       - file: examples/11_short_range_order
       - file: examples/14_wigner_w_parameters
       - file: examples/15_minkowski_structure_metrics
-      - file: examples/16_ackland_jones_classification
       - file: examples/17_coordination_variants
       - file: examples/18_angular_bond_distributions
       - file: examples/21_deformation_descriptors

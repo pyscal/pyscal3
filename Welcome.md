@@ -34,7 +34,7 @@ Complete documentation is available at [pyscal.org](https://pyscal.org).
 13. [Trajectory module](docs/guide/files.md): lazy access to multi-frame LAMMPS dump files.
 14. [Wigner $W_l$ parameters](examples/14_wigner_w_parameters.ipynb): third-order bond-orientational invariants.
 15. [Minkowski structure metrics](examples/15_minkowski_structure_metrics.ipynb): Voronoi-area-weighted Steinhardt parameters.
-16. [Ackland-Jones classification](examples/16_ackland_jones_classification.ipynb): fcc/bcc/hcp/icosahedral labels from angular histograms.
+16. [Ackland-Jones classification](docs/descriptors/ackland_jones.md): fcc/bcc/hcp/icosahedral labels from angular histograms.
 17. [Coordination variants](examples/17_coordination_variants.ipynb): coordination number, effective and generalized coordination, local density.
 18. [Angular and bond-length distributions](examples/18_angular_bond_distributions.ipynb): ADF and BLDF as local fingerprints.
 19. [Deformation descriptors](examples/21_deformation_descriptors.ipynb): atomic strain, von Mises invariant, $D^2_{\min}$ and slip vector.

@@ -52,15 +52,6 @@ Voronoi face-area weighted Steinhardt parameters for robust structure identifica
 :::
 
 :::{grid-item-card}
-:link: ../examples/16_ackland_jones_classification
-:link-type: doc
-:class-header: bg-light
-Ackland-Jones classification
-^^^
-Angular-distribution-based structure classification for FCC, BCC, HCP, and icosahedral.
-:::
-
-:::{grid-item-card}
 :link: ../examples/17_coordination_variants
 :link-type: doc
 :class-header: bg-light
