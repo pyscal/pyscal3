@@ -9,6 +9,7 @@
 #include <sstream>
 #include <time.h>
 #include <vector>
+#include <cstdint>
 #include <vector>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -20,6 +21,11 @@ const double PI = 3.141592653589793;
 
 namespace py = pybind11;
 using namespace std;
+
+// Flat neighbour data passed from Python: offsets (n + 1) into per-bond
+// arrays, neighbour indices, and per-bond or per-atom values.
+using nl_index = py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>;
+using nl_values = py::array_t<double, py::array::c_style | py::array::forcecast>;
 
 /*-----------------------------------------------------
     Some utility objects
@@ -88,8 +94,6 @@ py::dict nl_cutoff(const nl_positions& positions, const nl_positions& cell,
     const vector<bool>& pbc, double rc);
 py::dict nl_shell(const nl_positions& positions, const nl_positions& cell,
     const vector<bool>& pbc, double dmin, double dmax);
-py::dict nl_candidates(const nl_positions& positions, const nl_positions& cell,
-    const vector<bool>& pbc, double prefactor, int nmin);
 py::dict nl_number(const nl_positions& positions, const nl_positions& cell,
     const vector<bool>& pbc, double prefactor, int nmax, bool assign);
 py::dict nl_adaptive(const nl_positions& positions, const nl_positions& cell,
@@ -129,37 +133,47 @@ vector<vector<vector<vector<double>>>> calculate_q_atom(const int lm,
 void calculate_q(py::dict& atoms,
     const int lm);
 
-double plm(const int l,
-    const int m,
-    const double theta);
+vector<double> ylm_norms(const int l);
 
-double sph_legendre(const int l,
-    const int m,
-    const double theta);
+void ylm_all_m(const int l,
+    const double theta,
+    const double phi,
+    const vector<double>& norm,
+    double* ylm_real,
+    double* ylm_imag);
 
-void calculate_qlm(const int l, 
-    const int m, 
-    const double theta, 
-    const double phi, 
-    double &ylm_real, 
-    double &ylm_imag);
-
-void calculate_q_single(py::dict& atoms,
+py::tuple calculate_q_single(const nl_index& offsets,
+    const nl_values& theta,
+    const nl_values& phi,
+    const nl_values& weights,
     const int lm);
 
-void calculate_aq_single(py::dict& atoms,
+py::array_t<double> calculate_aq_single(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm);
 
-void calculate_w_single(py::dict& atoms,
+py::tuple calculate_w_single(const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm);
 
-void calculate_aw_single(py::dict& atoms,
+py::tuple calculate_aw_single(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm);
 
-void calculate_disorder(py::dict& atoms,
+py::array_t<double> calculate_disorder(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm);
 
-void calculate_bonds(py::dict& atoms,
+py::tuple calculate_bonds(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm,
     const double threshold,
     const double avgthreshold,
@@ -167,129 +181,77 @@ void calculate_bonds(py::dict& atoms,
     const int comparecriteria,
     const int criteria);
 
-void extract_cluster(int ti,
-    int clusterindex,
-    vector<bool>& condition,
-    vector<bool>& ghost,
-    vector<vector<int>>& neighbors,
-    vector<vector<double>>& neighbordist,
-    vector<double>& cutoff,
-    vector<int>& cluster);
-
-void find_clusters(py::dict& atoms,
+py::array_t<std::int64_t> find_clusters(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& neighbordist,
+    const nl_values& atom_cutoff,
+    const py::array_t<bool, py::array::c_style | py::array::forcecast>& condition,
     double clustercutoff);
 
 /*-----------------------------------------------------
-    CNA Methods
+    CNA Methods (cna.cpp)
 -----------------------------------------------------*/
-
-void get_cna_neighbors(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    double lattice_constant,
-    int style);
-
-void get_acna_neighbors_cn12(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void get_acna_neighbors_cn14(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void get_common_neighbors(const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    const int ti,
-    const vector<vector<double>>& positions,
-    const vector<double>& cutoff,
-    const vector<vector<int>>& neighbors,
-    vector<vector<vector<int>>>& cna,
-    vector<vector<vector<int>>>& common);
-
-void get_common_bonds(const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    const int ti,
-    const vector<vector<double>>& positions,
-    const vector<double>& cutoff,
-    const vector<vector<int>>& neighbors,
-    vector<vector<vector<int>>>& cna,
-    vector<vector<vector<int>>>& common,
-    vector<vector<vector<int>>>& bonds);
-
-void identify_cn12(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void identify_cn14(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void get_diamond_neighbors(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    vector<vector<int>>& first_shell);
-
-void identify_diamond_cna(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
+py::tuple cna_structure(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor, double lattice_constant, int nmin);
+py::tuple diamond_structure_cna(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor);
 
 /*-----------------------------------------------------
     Other Methods
 -----------------------------------------------------*/
-void calculate_centrosymmetry(py::dict& atoms,
-    const int nmax);
+py::array_t<double> calculate_centrosymmetry(const nl_index& offsets,
+    const nl_values& diff, const int nmax);
 
 /*-----------------------------------------------------
     Pure-math descriptors (chi, angular, voronoi-vec, SRO)
 -----------------------------------------------------*/
-void calculate_chi_params(py::dict& atoms);
+py::tuple calculate_chi_params(const nl_index& offsets, const nl_values& diff);
 
-void calculate_angular_criteria(py::dict& atoms);
+py::array_t<double> calculate_angular_criteria(const nl_index& offsets,
+    const nl_values& neighbordist, const nl_values& diff);
 
 void calculate_voronoi_vector(py::dict& atoms,
     double edge_cutoff,
     double area_cutoff);
 
-void calculate_short_range_order(py::dict& atoms,
+py::array_t<double> calculate_short_range_order(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_index& types,
     int reference_type,
     int compare_type);
 
 /*-----------------------------------------------------
     Entropy Methods
 -----------------------------------------------------*/
-void calculate_entropy(py::dict& atoms, 
-    double sigma, 
-    double rho, 
-    double rstart, 
-    double rstop, 
-    double h, 
+py::array_t<double> calculate_entropy(const nl_index& offsets,
+    const nl_values& neighbordist,
+    const nl_values& cutoff,
+    double sigma,
+    double rho,
+    double rstart,
+    double rstop,
+    double h,
     double kb);
 
-void calculate_average_entropy(py::dict& atoms);
+py::array_t<double> calculate_average_entropy(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& entropy);
 
 /*-----------------------------------------------------
     Neighbor-averaging helpers (puremath.cpp)
 -----------------------------------------------------*/
-void calculate_average_disorder(py::dict& atoms);
+py::array_t<double> calculate_average_disorder(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& disorder);
 
-py::list calculate_average_over_neighbors(py::dict& atoms,
-    const vector<double>& values,
+py::tuple calculate_local_deformation(const nl_index& offsets_cur,
+    const nl_index& neighbors_cur,
+    const nl_values& diff_cur,
+    const nl_index& offsets_ref,
+    const nl_index& neighbors_ref,
+    const nl_values& diff_ref);
+
+py::array_t<double> calculate_average_over_neighbors(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& values,
     bool include_self);

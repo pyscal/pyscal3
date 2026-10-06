@@ -68,3 +68,34 @@ def test_numpy_integer_l_accepted():
     assert len(q_arr) == 2
     w = pyscal3.wigner_w_parameter(atoms, l=np.int32(6))[0]
     assert np.allclose(w, -0.01316, atol=1e-4)
+
+
+def test_qlm_matches_scipy_spherical_harmonics():
+    """q_lm of each atom is the mean of Y_lm over its neighbour vectors.
+
+    The reference is scipy.special.sph_harm_y (with the Condon-Shortley
+    phase), evaluated at the stored neighbour angles, for every m including
+    the stored real and imaginary parts.
+    """
+    from ase import Atoms
+    from scipy.special import sph_harm_y
+
+    rng = np.random.default_rng(11)
+    length = (120 * 11.8) ** (1 / 3)
+    atoms = Atoms("Cu120", positions=rng.uniform(0, length, (120, 3)),
+                  cell=[length] * 3, pbc=True)
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=4.5)
+    theta = atoms.info["pyscal_theta"]
+    phi = atoms.info["pyscal_phi"]
+    for l in range(1, 11):
+        (q,) = pyscal3.steinhardt_parameter(atoms, l)
+        real = np.asarray(atoms.info.get("pyscal_q%d_real" % l, atoms.arrays.get("pyscal_q%d_real" % l)))
+        imag = np.asarray(atoms.info.get("pyscal_q%d_imag" % l, atoms.arrays.get("pyscal_q%d_imag" % l)))
+        for i in range(len(atoms)):
+            m = np.arange(-l, l + 1)
+            ylm = sph_harm_y(l, m[:, None], np.asarray(theta[i])[None, :],
+                             np.asarray(phi[i])[None, :]).mean(axis=1)
+            np.testing.assert_allclose(real[i], ylm.real, rtol=0, atol=1e-12)
+            np.testing.assert_allclose(imag[i], ylm.imag, rtol=0, atol=1e-12)
+            expected = np.sqrt(4 * np.pi / (2 * l + 1) * np.sum(np.abs(ylm) ** 2))
+            np.testing.assert_allclose(q[i], expected, rtol=1e-12)

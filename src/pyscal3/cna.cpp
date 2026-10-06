@@ -1,632 +1,242 @@
+/*
+Common neighbour analysis (adaptive and with a lattice constant) and the
+diamond structure identification.
+
+The neighbours of each atom are its nearest candidates from the neighbour
+search (neighbor_backend.cpp), with their bond vectors. Two neighbours m, n
+of atom i are bonded if |v_m - v_n| <= cutoff_i, so no minimum image and no
+padded supercell is needed. The neighbour graph of an atom is kept as
+bitmasks (at most 16 neighbours).
+
+Signature of neighbour k of atom i:
+    c0  number of neighbours of i bonded to k (common neighbours)
+    c1  number of bonds among these common neighbours
+    c2  largest number of such bonds of one common neighbour
+    c3  smallest number of such bonds of one common neighbour (8 if none)
+fcc: 12 x (4,2,1,1); hcp: 6 x (4,2,1,1) + 6 x (4,2,2,0); ico: 12 x (5,5,2,2);
+bcc (14 neighbours): 6 x (4,4,2,2) + 8 x (6,6,2,2).
+Labels: 0 others, 1 fcc, 2 hcp, 3 bcc, 4 ico.
+*/
 #include "system.h"
-#include <iostream>
-#include <iomanip>
-#include <algorithm>
-#include <stdio.h>
-#include "string.h"
-#include <chrono>
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
-#include <pybind11/complex.h>
-#include <pybind11/functional.h>
-#include <pybind11/chrono.h>
-#include <map>
-#include <string>
-#include <any>
+#include "neighbor_backend.h"
 
-void get_cna_neighbors(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-	double lattice_constant,
-	int style){
+#include <cmath>
+#include <cstdint>
 
-    double d;
-    double diffx,diffy,diffz;
-    double tempr,temptheta,tempphi;
-    vector<double> diffi, diffj;
+namespace {
 
-    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
-    vector<vector<int>> atom_temp_neighbors = atoms[py::str("temp_neighbors")].cast<vector<vector<int>>>();;
-    vector<vector<double>> atom_temp_neighbordist = atoms[py::str("temp_neighbordist")].cast<vector<vector<double>>>();;
+using nlb::idx;
+using nlb::Rows;
 
-    int nop = positions.size();
-    vector<vector<int>> neighbors(nop);
-    vector<vector<double>> neighbordist(nop);
-    vector<vector<double>> neighborweight(nop);
-    vector<vector<vector<double>>> diff(nop);
-    vector<vector<double>> r(nop);
-    vector<vector<double>> phi(nop);
-    vector<vector<double>> theta(nop);
-    vector<double> cutoff(nop);     
+constexpr int MAXNB = 16;
 
-    double factor, ncount;
-
-    if (style == 1){
-        factor = 0.854;
-        ncount = 12;
+inline int popcount(std::uint32_t x) {
+    int c = 0;
+    while (x) {
+        x &= x - 1;
+        c++;
     }
-    else{
-        factor = 1.207;
-        ncount = 14;
-    }
-
-    for (int ti=0; ti<nop; ti++){
-        cutoff[ti] = factor*lattice_constant;
-        if (int(atom_temp_neighbors[ti].size()) < ncount) continue;
-        for(int i=0 ; i<ncount; i++){
-            int tj = atom_temp_neighbors[ti][i];
-            d = get_abs_distance(positions[ti], positions[tj],
-                triclinic, rot, rotinv, box, 
-                diffx, diffy, diffz);
-
-            neighbors[ti].emplace_back(tj);
-            neighbordist[ti].emplace_back(d);
-            neighborweight[ti].emplace_back(1.00);
-            
-            diffi.clear();
-            diffi.emplace_back(diffx);
-            diffi.emplace_back(diffy);
-            diffi.emplace_back(diffz);
-            diff[ti].emplace_back(diffi);
-            
-            convert_to_spherical_coordinates(diffx, diffy, diffz, tempr, tempphi, temptheta);
-            
-            r[ti].emplace_back(tempr);
-            phi[ti].emplace_back(tempphi);
-            theta[ti].emplace_back(temptheta);
-        }
-    }
-
-    atoms[py::str("neighbors")] = neighbors;
-    atoms[py::str("neighbordist")] = neighbordist;
-    atoms[py::str("neighborweight")] = neighborweight;
-    atoms[py::str("diff")] = diff;
-    atoms[py::str("r")] = r;
-    atoms[py::str("theta")] = theta;
-    atoms[py::str("phi")] = phi;
-    atoms[py::str("cutoff")] = cutoff;
+    return c;
 }
 
-void get_acna_neighbors_cn12(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box){
-
-    double d;
-    double diffx,diffy,diffz;
-    double tempr,temptheta,tempphi;
-    vector<double> diffi, diffj;
-
-    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
-    vector<vector<int>> atom_temp_neighbors = atoms[py::str("temp_neighbors")].cast<vector<vector<int>>>();;
-    vector<vector<double>> atom_temp_neighbordist = atoms[py::str("temp_neighbordist")].cast<vector<vector<double>>>();;
-
-    int nop = positions.size();
-    vector<vector<int>> neighbors(nop);
-    vector<vector<double>> neighbordist(nop);
-    vector<vector<double>> neighborweight(nop);
-    vector<vector<vector<double>>> diff(nop);
-    vector<vector<double>> r(nop);
-    vector<vector<double>> phi(nop);
-    vector<vector<double>> theta(nop);
-    vector<double> cutoff(nop);
-
-    for (int ti=0; ti<nop; ti++){
-        if (atom_temp_neighbors[ti].size() > 11){
-            double ssum = 0;
-            for(int i=0 ; i<12; i++){
-                ssum += atom_temp_neighbordist[ti][i];
-                int tj = atom_temp_neighbors[ti][i];
-                d = get_abs_distance(positions[ti], positions[tj],
-                    triclinic, rot, rotinv, box, 
-                    diffx, diffy, diffz);
-
-                neighbors[ti].emplace_back(tj);
-                neighbordist[ti].emplace_back(d);
-                neighborweight[ti].emplace_back(1.00);
-                
-                diffi.clear();
-                diffi.emplace_back(diffx);
-                diffi.emplace_back(diffy);
-                diffi.emplace_back(diffz);
-                diff[ti].emplace_back(diffi);
-                
-                convert_to_spherical_coordinates(diffx, diffy, diffz, tempr, tempphi, temptheta);
-                
-                r[ti].emplace_back(tempr);
-                phi[ti].emplace_back(tempphi);
-                theta[ti].emplace_back(temptheta); 
+// v: nn bond vectors (3 values each), nn <= MAXNB
+void signatures(const double *v, int nn, double cutoff, int sig[][4]) {
+    std::uint32_t adj[MAXNB] = {0};
+    for (int a = 0; a + 1 < nn; a++) {
+        for (int b = a + 1; b < nn; b++) {
+            const double dx = v[3 * a] - v[3 * b];
+            const double dy = v[3 * a + 1] - v[3 * b + 1];
+            const double dz = v[3 * a + 2] - v[3 * b + 2];
+            if (sqrt(dx * dx + dy * dy + dz * dz) <= cutoff) {
+                adj[a] |= 1u << b;
+                adj[b] |= 1u << a;
             }
-            cutoff[ti] = 1.207*ssum/12.00;
         }
     }
-
-    atoms[py::str("neighbors")] = neighbors;
-    atoms[py::str("neighbordist")] = neighbordist;
-    atoms[py::str("neighborweight")] = neighborweight;
-    atoms[py::str("diff")] = diff;
-    atoms[py::str("r")] = r;
-    atoms[py::str("theta")] = theta;
-    atoms[py::str("phi")] = phi;
-    atoms[py::str("cutoff")] = cutoff;     
-
-}
-
-
-void get_acna_neighbors_cn14(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box){
-
-    double d;
-    double diffx,diffy,diffz;
-    double tempr,temptheta,tempphi;
-    vector<double> diffi, diffj;
-
-    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
-    vector<vector<int>> atom_temp_neighbors = atoms[py::str("temp_neighbors")].cast<vector<vector<int>>>();;
-    vector<vector<double>> atom_temp_neighbordist = atoms[py::str("temp_neighbordist")].cast<vector<vector<double>>>();;
-
-    int nop = positions.size();
-    vector<vector<int>> neighbors(nop);
-    vector<vector<double>> neighbordist(nop);
-    vector<vector<double>> neighborweight(nop);
-    vector<vector<vector<double>>> diff(nop);
-    vector<vector<double>> r(nop);
-    vector<vector<double>> phi(nop);
-    vector<vector<double>> theta(nop);
-    vector<double> cutoff(nop);
-
-    for (int ti=0; ti<nop; ti++){
-        if (atom_temp_neighbors[ti].size() >= 14){
-            double ssum = 0;
-            for(int i=0 ; i<8; i++){
-                ssum += 1.1547*atom_temp_neighbordist[ti][i];
-            }
-            for(int i=8 ; i<14; i++){
-                ssum += atom_temp_neighbordist[ti][i];
-            }
-            for(int i=0 ; i<14; i++){
-                int tj = atom_temp_neighbors[ti][i];
-                d = get_abs_distance(positions[ti], positions[tj],
-                    triclinic, rot, rotinv, box, 
-                    diffx, diffy, diffz);
-
-                neighbors[ti].emplace_back(tj);
-                neighbordist[ti].emplace_back(d);
-                neighborweight[ti].emplace_back(1.00);
-                
-                diffi.clear();
-                diffi.emplace_back(diffx);
-                diffi.emplace_back(diffy);
-                diffi.emplace_back(diffz);
-                diff[ti].emplace_back(diffi);
-                
-                convert_to_spherical_coordinates(diffx, diffy, diffz, tempr, tempphi, temptheta);
-                
-                r[ti].emplace_back(tempr);
-                phi[ti].emplace_back(tempphi);
-                theta[ti].emplace_back(temptheta); 
-            }
-            cutoff[ti] = 1.207*ssum/14.00;
+    for (int k = 0; k < nn; k++) {
+        const std::uint32_t common = adj[k];
+        int bonds = 0, maxbonds = 0, minbonds = 8;
+        for (int l = 0; l < nn; l++) {
+            if (!(common >> l & 1u)) continue;
+            const int b = popcount(adj[l] & common);
+            bonds += b;
+            maxbonds = std::max(maxbonds, b);
+            minbonds = std::min(minbonds, b);
         }
-    }
-
-    atoms[py::str("neighbors")] = neighbors;
-    atoms[py::str("neighbordist")] = neighbordist;
-    atoms[py::str("neighborweight")] = neighborweight;
-    atoms[py::str("diff")] = diff;
-    atoms[py::str("r")] = r;
-    atoms[py::str("theta")] = theta;
-    atoms[py::str("phi")] = phi;
-    atoms[py::str("cutoff")] = cutoff;     
-}
-
-
-void get_common_neighbors(const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    const int ti,
-    const vector<vector<double>>& positions,
-    const vector<double>& cutoff,
-    const vector<vector<int>>& neighbors,
-    vector<vector<vector<int>>>& cna,
-    vector<vector<vector<int>>>& common){
-    
-    int m, n;
-    double d, diffx, diffy, diffz;
-    
-    cna[ti].clear();
-    cna[ti].resize(neighbors[ti].size());
-    common[ti].clear();
-    common[ti].resize(neighbors[ti].size());
-
-    for(int i=0; i<neighbors[ti].size(); i++){
-        for(int j=0; j<4; j++){
-            cna[ti][i].emplace_back(0);
-        }
-    }
-    
-    for(int i=0; i+1<int(neighbors[ti].size()); i++){
-        m = neighbors[ti][i];
-        for(int j=i+1; j<neighbors[ti].size(); j++){
-            n = neighbors[ti][j];
-            d = get_abs_distance(positions[m], positions[n],
-                triclinic, rot, rotinv, box, 
-                diffx, diffy, diffz);
-
-            if (d <= cutoff[ti]){
-                cna[ti][i][0]++;
-                common[ti][i].emplace_back(n);
-                cna[ti][j][0]++;
-                common[ti][j].emplace_back(m);
-            }
-        }
+        sig[k][0] = popcount(common);
+        sig[k][1] = bonds / 2;
+        sig[k][2] = maxbonds;
+        sig[k][3] = minbonds;
     }
 }
 
-
-void get_common_bonds(const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    const int ti,
-    const vector<vector<double>>& positions,
-    const vector<double>& cutoff,
-    const vector<vector<int>>& neighbors,
-    vector<vector<vector<int>>>& cna,
-    vector<vector<vector<int>>>& common,
-    vector<vector<vector<int>>>& bonds){
-    
-    int c1, c2, maxbonds, minbonds;
-    double d, diffx, diffy, diffz;
-
-    bonds[ti].clear();
-    bonds[ti].resize(neighbors[ti].size());
-
-    for(int k=0; k<neighbors[ti].size(); k++){
-        for(int l=0; l<cna[ti][k][0]; l++){
-            bonds[ti][k].emplace_back(0);
-        }
-        
-        for(int l=0; l<cna[ti][k][0]-1; l++){
-            for(int m=l+1; m<cna[ti][k][0]; m++){
-                
-                c1 = common[ti][k][l];
-                c2 = common[ti][k][m];
-                
-                d = get_abs_distance(positions[c1], positions[c2],
-                    triclinic, rot, rotinv, box, 
-                    diffx, diffy, diffz);
-                
-                if(d <= cutoff[ti]){
-                    cna[ti][k][1]++;
-                    bonds[ti][k][l]++;
-                    bonds[ti][k][m]++;
-                }
-            }
-        }
-
-        maxbonds = 0;
-        minbonds = 8;
-        
-        for(int l=0; l<cna[ti][k][0]; l++){
-            maxbonds = max(bonds[ti][k][l], maxbonds);
-            minbonds = min(bonds[ti][k][l], minbonds);
-        }
-        cna[ti][k][2] = maxbonds;
-        cna[ti][k][3] = minbonds;    
-    }
+bool is(const int s[4], int a, int b, int c, int d) {
+    return s[0] == a && s[1] == b && s[2] == c && s[3] == d;
 }
 
-void identify_cn12(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box){
-
-    int c1, c2, c3, c4;
-    int nfcc, nhcp, nico;
-
-    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
-    vector<double> cutoff = atoms[py::str("cutoff")].cast<vector<double>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<int> structure = atoms[py::str("structure")].cast<vector<int>>();
-
-    int nop = positions.size();
-    vector<vector<vector<int>>> cna(nop);
-    vector<vector<vector<int>>> common(nop);
-    vector<vector<vector<int>>> bonds(nop);
-
-    for(int ti=0; ti<nop; ti++){
-        if(structure[ti] == 0){
-            get_common_neighbors(triclinic, rot, rotinv, box, ti, positions,
-                cutoff, neighbors, cna, common);
-            get_common_bonds(triclinic, rot, rotinv, box, ti, positions,
-                cutoff, neighbors, cna, common, bonds);
-
-            nfcc = 0;
-            nhcp = 0;
-            nico = 0;
-
-            for(int k=0; k<neighbors[ti].size(); k++){
-                
-                c1 = cna[ti][k][0];
-                c2 = cna[ti][k][1];
-                c3 = cna[ti][k][2];
-                c4 = cna[ti][k][3];
-
-                if((c1==4) && (c2==2) && (c3==1) && (c4==1)){
-                    nfcc++;
-                }
-                else if ((c1==4) && (c2==2) && (c3==2) && (c4==0)){
-                    nhcp++;
-                }
-                else if ((c1==5) && (c2==5) && (c3==2) && (c4==2)){
-                    nico++;
-                }
-
-            }
-            if(nfcc==12){
-                structure[ti] = 1;
-            }
-            else if((nfcc==6) && (nhcp==6)){
-                structure[ti] = 2;   
-            }
-            else if (nico==12){
-                structure[ti] = 4;   
-            }
-        }
+// 1 fcc, 2 hcp, 4 ico or 0 from the signatures of 12 (or more) neighbours
+int classify_cn12(const int sig[][4], int nn) {
+    int nfcc = 0, nhcp = 0, nico = 0;
+    for (int k = 0; k < nn; k++) {
+        if (is(sig[k], 4, 2, 1, 1)) nfcc++;
+        else if (is(sig[k], 4, 2, 2, 0)) nhcp++;
+        else if (is(sig[k], 5, 5, 2, 2)) nico++;
     }
-    atoms[py::str("structure")] = structure;
+    if (nfcc == 12) return 1;
+    if (nfcc == 6 && nhcp == 6) return 2;
+    if (nico == 12) return 4;
+    return 0;
 }
 
-
-void identify_cn14(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box){
-
-    int c1, c2, c3, c4;
-    int nbcc1, nbcc2;
-    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
-    vector<double> cutoff = atoms[py::str("cutoff")].cast<vector<double>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<int> structure = atoms[py::str("structure")].cast<vector<int>>();
-
-    int nop = positions.size();
-    vector<vector<vector<int>>> cna(nop);
-    vector<vector<vector<int>>> common(nop);
-    vector<vector<vector<int>>> bonds(nop);
-
-    for(int ti=0; ti<nop; ti++){
-        if(structure[ti] == 0){
-            get_common_neighbors(triclinic, rot, rotinv, box, ti, positions,
-                cutoff, neighbors, cna, common);
-            get_common_bonds(triclinic, rot, rotinv, box, ti, positions,
-                cutoff, neighbors, cna, common, bonds);
-            
-            nbcc1 = 0;
-            nbcc2 = 0;
-
-            for(int k=0; k<neighbors[ti].size(); k++){
-                
-                c1 = cna[ti][k][0];
-                c2 = cna[ti][k][1];
-                c3 = cna[ti][k][2];
-                c4 = cna[ti][k][3];
-
-                if((c1==4) && (c2==4) && (c3==2) && (c4==2)){
-                    nbcc1++;
-                }
-                else if ((c1==6) && (c2==6) && (c3==2) && (c4==2)){
-                    nbcc2++;
-                }
-
-            }
-            if((nbcc1==6) && (nbcc2==8)){
-                structure[ti] = 3;   
-            }
-        }
+// 3 bcc or 0 from the signatures of 14 neighbours
+int classify_cn14(const int sig[][4], int nn) {
+    int nbcc1 = 0, nbcc2 = 0;
+    for (int k = 0; k < nn; k++) {
+        if (is(sig[k], 4, 4, 2, 2)) nbcc1++;
+        else if (is(sig[k], 6, 6, 2, 2)) nbcc2++;
     }
-    atoms[py::str("structure")] = structure;
+    return (nbcc1 == 6 && nbcc2 == 8) ? 3 : 0;
 }
 
-
-//Diamond identification routines
-void get_diamond_neighbors(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    vector<vector<double>>& first_shell){
-
-    double d;
-    double diffx,diffy,diffz;
-    double tempr,temptheta,tempphi;
-    vector<double> diffi, diffj;
-
-    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
-    vector<vector<int>> atom_temp_neighbors = atoms[py::str("temp_neighbors")].cast<vector<vector<int>>>();;
-    vector<vector<double>> atom_temp_neighbordist = atoms[py::str("temp_neighbordist")].cast<vector<vector<double>>>();;
-
-    int nop = positions.size();
-    vector<vector<int>> neighbors(nop);
-    vector<vector<double>> neighbordist(nop);
-    vector<vector<double>> neighborweight(nop);
-    vector<vector<vector<double>>> diff(nop);
-    vector<vector<double>> r(nop);
-    vector<vector<double>> phi(nop);
-    vector<vector<double>> theta(nop);
-
-    for (int ti=0; ti<nop; ti++){
-        //an atom with fewer than four candidates has no diamond first shell;
-        //leave its neighbor lists empty so it stays classified as "others"
-        if (int(atom_temp_neighbors[ti].size()) < 4) continue;
-        for(int i=0 ; i<4; i++){
-            int tj = atom_temp_neighbors[ti][i];
-            if ((tj < 0) || (tj >= nop)) continue;
-            first_shell[ti].emplace_back(tj);
-
-            if (int(atom_temp_neighbors[tj].size()) < 4) continue;
-            for(int j=0; j<4; j++){
-                int tk = atom_temp_neighbors[tj][j];
-                if (ti == tk) continue;
-                if ((tk < 0) || (tk >= nop)) continue;
-                d = get_abs_distance(positions[ti], positions[tk],
-                    triclinic, rot, rotinv, box, 
-                    diffx, diffy, diffz);
-
-                neighbors[ti].emplace_back(tk);
-                neighbordist[ti].emplace_back(d);
-                neighborweight[ti].emplace_back(1.00);
-                
-                diffi.clear();
-                diffi.emplace_back(diffx);
-                diffi.emplace_back(diffy);
-                diffi.emplace_back(diffz);
-                diff[ti].emplace_back(diffi);
-                
-                convert_to_spherical_coordinates(diffx, diffy, diffz, tempr, tempphi, temptheta);
-                
-                r[ti].emplace_back(tempr);
-                phi[ti].emplace_back(tempphi);
-                theta[ti].emplace_back(temptheta);                
-            }
-        }
-    }
-    atoms[py::str("neighbors")] = neighbors;
-    atoms[py::str("neighbordist")] = neighbordist;
-    atoms[py::str("neighborweight")] = neighborweight;
-    atoms[py::str("diff")] = diff;
-    atoms[py::str("r")] = r;
-    atoms[py::str("theta")] = theta;
-    atoms[py::str("phi")] = phi;
-
+py::array_t<std::int64_t> to_array(const std::vector<std::int64_t> &s) {
+    py::array_t<std::int64_t> out(static_cast<py::ssize_t>(s.size()));
+    std::copy(s.begin(), s.end(), out.mutable_data());
+    return out;
 }
 
+bool enough_candidates(const Rows &c, idx n, int nmin) {
+    for (idx a = 0; a < n; a++)
+        if (c.offsets[a + 1] - c.offsets[a] < nmin) return false;
+    return true;
+}
 
-void identify_diamond_cna(py::dict& atoms,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box){
+}  // namespace
 
-    vector<vector<double>> positions = atoms[py::str("positions")].cast<vector<vector<double>>>();
+py::tuple cna_structure(const nl_positions &positions, const nl_positions &cell,
+                        const vector<bool> &pbc, double prefactor,
+                        double lattice_constant, int nmin) {
+    // adaptive cutoffs if lattice_constant is 0; returns (labels, whether
+    // every atom had at least nmin candidates)
+    const nlb::Geometry g = nlb::make_geometry(positions, cell, pbc);
+    // only the 14 nearest candidates are used, so most atoms are searched
+    // with a smaller radius (the result is the same)
+    const double guess = nlb::guess_radius(g, prefactor);
+    const Rows c = nlb::nearest_candidates(g, 0.85 * guess, guess, 14);
+    std::vector<std::int64_t> structure(g.n, 0);
+    int sig[MAXNB][4];
 
-    int nop = positions.size();
-    vector<double> cutoff(nop);
-    vector<vector<double>> first_shell(nop);
+    for (idx ti = 0; ti < g.n; ti++) {
+        const idx lo = c.offsets[ti];
+        const idx cnt = c.offsets[ti + 1] - lo;
+        const double *v = &c.v[3 * lo];
+        const double *d = &c.d[lo];
 
-    get_diamond_neighbors(atoms,
-        triclinic,
-        rot, 
-        rotinv,
-        box,
-        first_shell);
-
-    //now get the neighbors, and neighbor distance
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<vector<double>> neighbordist = atoms[py::str("neighbordist")].cast<vector<vector<double>>>();
-
-    for (int ti=0; ti<nop; ti++){
-        //needs the first twelve second-shell distances; without them the atom
-        //cannot be a diamond site and keeps a zero cutoff
-        if (int(neighbordist[ti].size()) < 12){
-            cutoff[ti] = 0.0;
-            continue;
+        if (cnt >= 12) {
+            double cutoff;
+            if (lattice_constant == 0.0) {
+                double ssum = 0;
+                for (int i = 0; i < 12; i++) ssum += d[i];
+                cutoff = 1.207 * ssum / 12.00;
+            } else {
+                cutoff = 0.854 * lattice_constant;
+            }
+            signatures(v, 12, cutoff, sig);
+            structure[ti] = classify_cn12(sig, 12);
         }
+        if (structure[ti] == 0 && cnt >= 14) {
+            double cutoff;
+            if (lattice_constant == 0.0) {
+                double ssum = 0;
+                for (int i = 0; i < 8; i++) ssum += 1.1547 * d[i];
+                for (int i = 8; i < 14; i++) ssum += d[i];
+                cutoff = 1.207 * ssum / 14.00;
+            } else {
+                cutoff = 1.207 * lattice_constant;
+            }
+            signatures(v, 14, cutoff, sig);
+            structure[ti] = classify_cn14(sig, 14);
+        }
+    }
+    return py::make_tuple(to_array(structure), enough_candidates(c, g.n, nmin));
+}
+
+py::tuple diamond_structure_cna(const nl_positions &positions, const nl_positions &cell,
+                                const vector<bool> &pbc, double prefactor) {
+    // Diamond identification: CNA on the second shell (the four nearest
+    // candidates of each of the four nearest candidates, without the atom
+    // itself). Labels: 0 others, 1 cubic diamond, 2 cubic diamond first
+    // neighbour, 3 cubic diamond second neighbour, 4 hexagonal diamond,
+    // 5 and 6 its first and second neighbours.
+    const nlb::Geometry g = nlb::make_geometry(positions, cell, pbc);
+    // only the 4 nearest candidates are used (see cna_structure)
+    const double guess = nlb::guess_radius(g, prefactor);
+    const Rows c = nlb::nearest_candidates(g, 0.65 * guess, guess, 4);
+    const idx n = g.n;
+    std::vector<std::int64_t> structure(n, 0);
+    // second-shell neighbour indices of each atom, at most MAXNB
+    std::vector<idx> second(n * MAXNB);
+    std::vector<int> nsecond(n, 0);
+    int sig[MAXNB][4];
+
+    for (idx ti = 0; ti < n; ti++) {
+        const idx lo = c.offsets[ti];
+        if (c.offsets[ti + 1] - lo < 4) continue;
+        double v2[3 * MAXNB], d2[MAXNB];
+        int nn = 0;
+        for (int i = 0; i < 4; i++) {
+            const idx tj = c.j[lo + i];
+            const idx lj = c.offsets[tj];
+            if (c.offsets[tj + 1] - lj < 4) continue;
+            for (int k = 0; k < 4; k++) {
+                const idx tk = c.j[lj + k];
+                // r_i - r_k through the bond vectors, which picks the right image
+                const double x = c.v[3 * (lo + i)] + c.v[3 * (lj + k)];
+                const double y = c.v[3 * (lo + i) + 1] + c.v[3 * (lj + k) + 1];
+                const double z = c.v[3 * (lo + i) + 2] + c.v[3 * (lj + k) + 2];
+                const double dist = sqrt(x * x + y * y + z * z);
+                if (tk == ti && dist < 1e-8) continue;   // back to the atom itself
+                v2[3 * nn] = x;
+                v2[3 * nn + 1] = y;
+                v2[3 * nn + 2] = z;
+                d2[nn] = dist;
+                second[ti * MAXNB + nn] = tk;
+                nn++;
+            }
+        }
+        nsecond[ti] = nn;
+        if (nn < 12) continue;
         double ssum = 0;
-        for(int i=0; i<12; i++){
-            ssum += neighbordist[ti][i];
-        }
-        cutoff[ti] = 1.207*ssum/12.00;
+        for (int i = 0; i < 12; i++) ssum += d2[i];
+        signatures(v2, nn, 1.207 * ssum / 12.00, sig);
+        // cubic (fcc-like second shell) or hexagonal (hcp-like) diamond;
+        // any other second shell, icosahedral included, is not a diamond site
+        const int s = classify_cn12(sig, nn);
+        structure[ti] = (s == 1) ? 5 : (s == 2) ? 8 : 0;
     }
 
-    //assign cutoff
-    atoms[py::str("cutoff")] = cutoff;
-
-    //cutoffs have been assigned. Now run cn12 identification
-    identify_cn12(atoms,
-        triclinic,
-        rot, 
-        rotinv,
-        box);
-
-
-    vector<int> structure = atoms[py::str("structure")].cast<vector<int>>();
-    
-    for (int ti=0; ti<nop; ti++){
-        if (structure[ti] == 1){
-            structure[ti] = 5;
-        }
-        else if (structure[ti] == 2){
-            structure[ti] = 8;
+    // first neighbours of a diamond site
+    for (idx ti = 0; ti < n; ti++) {
+        if (structure[ti] >= 5) continue;
+        const idx lo = c.offsets[ti];
+        // an atom with fewer than four candidates has no first shell
+        const idx nf = (c.offsets[ti + 1] - lo >= 4) ? 4 : 0;
+        for (idx i = 0; i < nf; i++) {
+            const std::int64_t sj = structure[c.j[lo + i]];
+            if (sj == 5) { structure[ti] = 6; break; }
+            if (sj == 8) { structure[ti] = 9; break; }
         }
     }
-
-    //second pass
-    for (int ti=0; ti<nop; ti++){
-        if (structure[ti] < 5){
-            for(int i=0; i<int(first_shell[ti].size()) && i<4; i++){
-                if(structure[first_shell[ti][i]] == 5){
-                    structure[ti] = 6;
-                    break;
-                }
-                else if(structure[first_shell[ti][i]] == 8){
-                    structure[ti] = 9;
-                    break;
-                } 
-            }
-        }     
-    }
-
-    for (int ti=0; ti<nop; ti++){
-        if (structure[ti] < 5){
-            //still unassigned
-            for (int j=0; j<neighbors[ti].size(); j++){
-                int tj = neighbors[ti][j];
-                if (structure[tj] == 5){
-                    structure[ti] = 7;
-                    break;
-                }
-                else if (structure[tj] == 8){
-                    structure[ti] = 10;
-                    break;
-                } 
-            }
+    // second neighbours of a diamond site
+    for (idx ti = 0; ti < n; ti++) {
+        if (structure[ti] >= 5) continue;
+        for (int k = 0; k < nsecond[ti]; k++) {
+            const std::int64_t sk = structure[second[ti * MAXNB + k]];
+            if (sk == 5) { structure[ti] = 7; break; }
+            if (sk == 8) { structure[ti] = 10; break; }
         }
     }
-
-    //map ids
-    for (int ti=0; ti<nop; ti++){
-        if (structure[ti] == 5){
-            structure[ti] = 1;
-        }
-        else if (structure[ti] == 6){
-            structure[ti] = 2;
-        }
-        else if (structure[ti] == 7){
-            structure[ti] = 3;
-        }
-        else if (structure[ti] == 8){
-            structure[ti] = 4;
-        }
-        else if (structure[ti] == 9){
-            structure[ti] = 5;
-        }
-        else if (structure[ti] == 10){
-            structure[ti] = 6;
-        }
+    for (idx ti = 0; ti < n; ti++) {
+        if (structure[ti] >= 5) structure[ti] -= 4;
     }
-
-    atoms[py::str("structure")] = structure;     
-
+    return py::make_tuple(to_array(structure), enough_candidates(c, n, 4));
 }

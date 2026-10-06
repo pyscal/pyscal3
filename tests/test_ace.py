@@ -370,3 +370,16 @@ class TestACENu3Invariance:
         assert _wigner_3j(1, 1, 0, 1, 0, -1) == 0.0  # triangle violated by m3
         # symmetry: even permutation of columns leaves the symbol unchanged
         assert np.isclose(_wigner_3j(2, 1, 3, 1, -1, 0), _wigner_3j(1, 3, 2, -1, 0, 1))
+
+
+def test_ace_is_reproducible():
+    """Two calls on the same atoms give bitwise the same descriptors."""
+    import numpy as np
+    from ase.build import bulk
+
+    atoms = bulk("Cu", "fcc", a=3.61, cubic=True).repeat(4)
+    atoms.rattle(0.1, seed=1)
+    pyscal3.find_neighbors(atoms, method="cutoff", cutoff=4.3)
+    runs = [pyscal3.ace(atoms, nmax=4, lmax=4, nu_max=3, normalize=False)["full"] for _ in range(4)]
+    for r in runs[1:]:
+        np.testing.assert_array_equal(r, runs[0])

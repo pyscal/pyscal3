@@ -106,6 +106,19 @@ The results are stored in the `Atoms` object:
 - The neighbor vectors $\mathbf{r}_i - \mathbf{r}_j$ are always stored in `atoms.info["pyscal_diff"]`.
 - If no atom has a neighbor, all these keys are $(n, 0)$ arrays in `atoms.arrays`.
 
+The same bonds are also stored as flat arrays in `atoms.info`, in the same order:
+- `pyscal_bond_offsets` has $n + 1$ entries. The bonds of atom $i$ are `offsets[i]:offsets[i + 1]` in the other arrays.
+- The other arrays are `pyscal_bond_neighbors`, `pyscal_bond_distance`, `pyscal_bond_weight`, `pyscal_bond_vector` (one row $\mathbf{r}_i - \mathbf{r}_j$ per bond), `pyscal_bond_theta` and `pyscal_bond_phi`.
+- The adaptive, SANN and number methods also store their candidates as `pyscal_candidate_offsets`, `pyscal_candidate_neighbors` and `pyscal_candidate_distance`.
+
+All descriptors read these flat arrays. Building the per-atom lists is the slowest part of the search when atoms have different numbers of neighbors, so it can be skipped:
+
+``` python
+pyscal.find_neighbors(atoms, method='cutoff', cutoff=5.0, store_rows=False)
+```
+
+With `store_rows=False`, only the flat keys and `pyscal_cutoff` are stored. `atoms.write()` to extxyz then works for any neighbor list. Ragged lists in `atoms.info` cannot be written to extxyz.
+
 ## References
 
 1. van Meel, J. A., Filion, L., Valeriani, C. & Frenkel, D. A parameter-free, solid-angle based, nearest- neighbor algorithm. J Chem Phys 234107, (2012).

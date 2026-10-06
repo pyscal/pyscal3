@@ -15,41 +15,40 @@
 #include <string>
 #include <any>
 
-void calculate_centrosymmetry(py::dict& atoms,
+py::array_t<double> calculate_centrosymmetry(const nl_index& offsets,
+    const nl_values& diff,
     const int nmax){
-    
+
+    // sum of the nmax/2 smallest |r_ij + r_ik| squared over neighbour pairs
+    const std::int64_t* off = offsets.data();
+    const double* v = diff.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
     double dx, dy, dz, weight;
     vector<datom> temp;
+    py::array_t<double> centrosymmetry(nop);
+    double* out = centrosymmetry.mutable_data();
 
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();;
-    vector<vector<vector<double>>> diff = atoms[py::str("diff")].cast<vector<vector<vector<double>>>>();;
+    for (py::ssize_t ti=0; ti<nop; ti++){
+        temp.clear();
+        int count = 0;
+        for (std::int64_t i=off[ti]; i<off[ti+1]; i++){
+            for (std::int64_t j=i+1; j<off[ti+1]; j++){
+                dx = v[3*i] + v[3*j];
+                dy = v[3*i + 1] + v[3*j + 1];
+                dz = v[3*i + 2] + v[3*j + 2];
+                weight = sqrt(dx*dx+dy*dy+dz*dz);
+                datom x = {weight, count};
+                temp.emplace_back(x);
+                count++;
+            }
+        }
+        sort(temp.begin(), temp.end(), by_dist());
 
-    int nop = neighbors.size();
-    vector<double> centrosymmetry(nop);
-    
-    for (int ti=0; ti<nop; ti++){
-		temp.clear();
-    	int count = 0;
-    	for (int i=0; i<neighbors[ti].size(); i++){
-    		for (int j=i+1; j<neighbors[ti].size(); j++){
-            	dx = diff[ti][i][0] + diff[ti][j][0];
-            	dy = diff[ti][i][1] + diff[ti][j][1];
-            	dz = diff[ti][i][2] + diff[ti][j][2];
-	            weight = sqrt(dx*dx+dy*dy+dz*dz);
-	            datom x = {weight, count};
-	            temp.emplace_back(x);
-	            count++;
-    		}            
-    	}
-    	sort(temp.begin(), temp.end(), by_dist());
-
-	    double csym = 0;
-
-	    for(int i=0; i<nmax/2; i++){
-	        csym += temp[i].dist*temp[i].dist;
-	    }
-
-	    centrosymmetry[ti] = csym;
+        double csym = 0;
+        for(int i=0; i<nmax/2; i++){
+            csym += temp[i].dist*temp[i].dist;
+        }
+        out[ti] = csym;
     }
-    atoms[py::str("centrosymmetry")] = centrosymmetry; 
+    return centrosymmetry;
 }

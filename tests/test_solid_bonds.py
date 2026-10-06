@@ -57,3 +57,21 @@ def test_bonds_criterion_actually_filters():
     pyscal3.find_solids(atoms, bonds=1, threshold=0.5, avgthreshold=0.0, cluster=False)
     solid1 = atoms.arrays["pyscal_solid"].copy()
     assert solid6.sum() < solid1.sum()
+
+
+def test_find_clusters_large_cluster_does_not_overflow_the_stack():
+    """A 200 000-atom connected chain crashed the recursive cluster search."""
+    import subprocess
+    import sys
+
+    code = (
+        "import numpy as np; from ase import Atoms; import pyscal3\n"
+        "n = 200000\n"
+        "atoms = Atoms('H%d' % n, positions=np.c_[np.arange(n, dtype=float), np.zeros(n), np.zeros(n)],\n"
+        "              cell=[n, 10, 10], pbc=[True, False, False])\n"
+        "pyscal3.find_neighbors(atoms, method='cutoff', cutoff=1.5)\n"
+        "print(pyscal3.find_clusters(atoms, np.ones(n, dtype=bool)))\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "200000"
