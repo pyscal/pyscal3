@@ -1,66 +1,111 @@
-# pyscal
+# pyscal: python Structural Environment Calculator
 
-pyscal computes descriptors of the local atomic structure from atomistic simulation data.
-It works on [ASE](https://wiki.fysik.dtu.dk/ase/) `Atoms` objects, so any structure that ASE can read or build can be analysed directly, and the results are stored on the same object.
-The calculations run in C++ on all CPU cores.
+Complete documentation with examples available [here](https://pyscal.org/).
 
-Documentation with examples: [pyscal.org](https://pyscal.org).
+## What changed in version 4
+
+pyscal grew over the years from a small wrapper around a few C++ routines into a full structural-analysis toolkit. With each addition the original `System` / `Atoms` object model became more rigid: every new descriptor had to be threaded through the same class hierarchy, neighbor lists were tied to a particular `System` instance, and interoperating with the rest of the atomistic-simulation Python ecosystem (ASE, pymatgen, OVITO, LAMMPS dump readers) required converting back and forth between formats.
+
+Version 4 is a ground-up rewrite around four changes:
+
+- **ASE `Atoms` is the data structure.** pyscal no longer ships its own atoms class. Any `ase.Atoms` object, read from a LAMMPS dump, a POSCAR, a CIF, an XYZ, built with `ase.build.bulk`, or constructed by hand, can be passed directly to a pyscal function. Results are written back as `atoms.arrays["pyscal_*"]` for per-atom quantities and `atoms.info["pyscal_*"]` for global ones, so they travel with the atoms object and remain accessible to the rest of the ASE ecosystem.
+
+- **Functional API.** Every descriptor is a top-level function in `pyscal` that takes an `Atoms` object as its first argument. Neighbor lists are computed once with `pyscal.find_neighbors(atoms, ...)` and reused by every subsequent descriptor. There is no system state to keep in sync, no method-chaining order to remember, and no class to subclass when adding a new descriptor.
+
+- **Neighbor search on matscipy-neighbours.** The neighbor search uses the C++ core of [matscipy-neighbours](https://github.com/libAtoms/matscipy-neighbours), which is included in pyscal. The neighbors are stored as flat arrays, which the descriptors read directly. For one million atoms with 12 neighbors each, the search takes 0.12 s instead of 28 s in pyscal 3.3.
+
+- **Threads.** The neighbor search, common neighbor analysis and the per-atom loops of the descriptors run on all CPU cores. The results are the same for any number of threads. `pyscal.set_num_threads(n)` or the environment variable `PYSCAL_NUM_THREADS` sets the number of threads.
+
+The C++ core keeps voro++ for tessellation and its own kernels for Steinhardt-type invariants and common neighbor analysis, with pybind11 bindings, and is now exposed through a much thinner Python layer.
+
+A typical session looks like:
 
 ```python
 import pyscal
-from ase.io import read
+from ase.build import bulk
 
-atoms = read("dump.lammpstrj", format="lammps-dump-text")
-pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)        # adaptive cutoff
-q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6], averaged=True)
-counts = pyscal.common_neighbor_analysis(atoms)               # {'fcc': ..., 'hcp': ..., ...}
-atoms.arrays["pyscal_structure"]                              # label of each atom
+atoms = bulk("Cu", "fcc", cubic=True).repeat(4)
+pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)   # adaptive
+q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
+labels, names = pyscal.identify_ackland_jones(atoms)
+
+print(atoms.arrays["pyscal_q6"].mean())   # ≈ 0.57 for fcc
 ```
 
-## What pyscal computes
+### Timings
 
-- **Neighbors:** fixed cutoff, adaptive cutoff, SANN, a fixed number of neighbors, Voronoi.
-- **Crystal structure of each atom:** common neighbor analysis (adaptive and conventional), diamond structure identification, Ackland–Jones classification, Voronoi structure vectors.
-- **Orientational order:** Steinhardt parameters $q_l$ and their averaged form, Wigner $W_l$, Minkowski structure metrics, angular and $\chi$ parameters.
-- **Solid and liquid:** solid–liquid classification and clustering, disorder parameters, the entropy fingerprint.
-- **Defects and deformation:** centrosymmetry, atomic strain, von Mises strain, $D^2_\mathrm{min}$, slip vector, Wigner–Seitz analysis of vacancies, interstitials and antisites.
-- **Chemistry and coordination:** Warren–Cowley short range order, coordination numbers, local density, radial, angular and bond length distributions.
-- **Machine learning:** Atomic Cluster Expansion (ACE) descriptors.
-- **Structures and trajectories:** builders for crystals and grain boundaries, and a lazy reader for LAMMPS trajectories.
+![Wall time of a neighbor search, adaptive CNA and q6 for one million atoms in pyscal 3.3, pyscal 4, OVITO and freud](https://raw.githubusercontent.com/pyscal/pyscal3/main/docs/_static/benchmark/benchmark.png)
+
+pyscal is as fast as or faster than OVITO and freud.
+
+Scripts written for pyscal 3 need small changes, described in [Migrating from pyscal 3](https://pyscal.org/docs/guide/migration.html). To keep the old interface, install `pyscal3<4`.
+
+## What is included
+
+This release consolidates a number of new descriptors alongside the existing ones:
+
+- Neighbors: fixed cutoff, adaptive cutoff, SANN, a fixed number of neighbors, Voronoi
+- Steinhardt $q_l$ and averaged $\bar{q}_l$
+- Wigner $W_l$: third-order rotational invariants for distinguishing cubic structures
+- Minkowski structure metrics: Voronoi-area-weighted, parameter-free $q_l$
+- Solid/liquid classification and clustering
+- Disorder parameter
+- Angular and $\chi$ parameters, Ackland-Jones structural classifier
+- Coordination measures: coordination number, effective coordination, generalised coordination, local density
+- Angular distribution function and bond-length distribution function
+- Voronoi tessellation: structural vector and Voronoi volume
+- Centrosymmetry parameter
+- Common neighbor analysis (CNA, adaptive CNA, diamond variants)
+- Entropy parameter (Piaggi–Parrinello)
+- Warren–Cowley short-range order
+- Atomic deformation: strain tensor, von Mises invariant, $D^2_{\min}$, slip vector
+- Wigner–Seitz defect analysis: vacancies, interstitials, antisites against a reference
+- Atomic Cluster Expansion (ACE) descriptors up to body order four
+
+A complete list with mathematical definitions and examples is available in the [documentation](https://pyscal.org/).
 
 ## Installation
 
-pyscal is distributed as `pyscal3`, because the name `pyscal` on PyPI belongs to an unrelated package.
-After installation, `import pyscal` and `import pyscal3` both work.
+pyscal is distributed on PyPI and conda-forge as `pyscal3` (the name `pyscal` on PyPI refers to a separate, unrelated package). After installation, both `import pyscal` and `import pyscal3` work.
 
-```
-pip install pyscal3
-```
-
-or
+From conda-forge:
 
 ```
 conda install -c conda-forge pyscal3
 ```
 
-Building from source (`pip install .` in a clone) needs a C++17 compiler.
+or from PyPI:
 
-pyscal 4 has a new interface built around ASE. Scripts written for pyscal 3 need small changes, described in [Migrating from pyscal 3](https://pyscal.org/docs/guide/migration.html). To keep the old interface, install `pyscal3<4`.
+```
+pip install pyscal3
+```
+
+To build from source:
+
+```
+git clone https://github.com/pyscal/pyscal3.git
+cd pyscal3
+pip install .
+```
+
+A C++ compiler with C++17 support is required when building from source.
 
 ## Third-party code
 
-pyscal includes two C++ libraries in `lib/`, compiled into its extension module:
+pyscal3 includes two C++ libraries in `lib/`, compiled into its extension module:
 
 - [voro++](https://math.lbl.gov/voro++/) by Chris H. Rycroft, for Voronoi tessellation.
-- [matscipy-neighbours](https://github.com/libAtoms/matscipy-neighbours) by the libAtoms developers, for the neighbor search. MIT licence, see `lib/matscipy-neighbours/LICENSE.md` and `VENDORED.md` in the same directory.
+- [matscipy-neighbours](https://github.com/libAtoms/matscipy-neighbours) by the libAtoms developers, for the neighbour search. MIT licence, see `lib/matscipy-neighbours/LICENSE.md` and `VENDORED.md` in the same directory.
 
-## Citing
+## Citing the work
 
 If you use pyscal in your work, please cite the [following article](https://joss.theoj.org/papers/10.21105/joss.01824):
 
 Sarath Menon, Grisell Díaz Leines and Jutta Rogal (2019). pyscal: A python module for structural analysis of atomic environments. *Journal of Open Source Software* 4(43), 1824. https://doi.org/10.21105/joss.01824
 
-For a list of publications that used pyscal, see [Google Scholar](https://scholar.google.com/scholar?oi=bibs&hl=en&cites=315020929885190486&as_sdt=5).
+## Works using pyscal
+
+For a list of publications that used pyscal, see [here](https://scholar.google.com/scholar?oi=bibs&hl=en&cites=315020929885190486&as_sdt=5).
 
 ## Contributing
 
