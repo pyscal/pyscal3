@@ -138,7 +138,6 @@ py::array_t<double> calculate_average_entropy(const nl_index& offsets,
     const std::int64_t* nb = neighbors.data();
     const double* ent = entropy.data();
     const py::ssize_t nop = offsets.shape(0) - 1;
-    double entsum;
 
     py::array_t<double> avg_entropy(nop);
     double* out = avg_entropy.mutable_data();
@@ -146,7 +145,7 @@ py::array_t<double> calculate_average_entropy(const nl_index& offsets,
     py::gil_scoped_release release_gil;
     pyscal::parallel_for(nop, [&](std::int64_t begin_, std::int64_t end_) {
     for (py::ssize_t ti = begin_; ti < end_; ti++) {
-        entsum = ent[ti];
+        double entsum = ent[ti];   // per atom, so per thread
         for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
             entsum += ent[nb[ci]];
         }
