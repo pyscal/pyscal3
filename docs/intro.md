@@ -1,118 +1,62 @@
+# pyscal
 
-# pyscal — python Structural Environment Calculator
-
-
-**pyscal** is a Python library for computing local atomic structural environments from atomistic simulation data. It provides fast C++-backed calculations of [Steinhardt's bond-orientational order parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784), common neighbor analysis, Voronoi tessellation, and many more descriptors — all through a clean functional API built on [ASE](https://wiki.fysik.dtu.dk/ase/) (Atomic Simulation Environment).
-
-```{note}
-pyscal is distributed on PyPI as **`pyscal3`** (the name `pyscal` on PyPI refers to an unrelated, now-unmaintained package). After `pip install pyscal3`, both `import pyscal` and `import pyscal3` work and refer to the same library.
-```
-
-## Key features
-
-- **ASE-first API** — all functions take and return standard `ase.Atoms` objects. Results are stored in `atoms.arrays` and `atoms.info` with the `pyscal_` prefix.
-- **Fast C++ core** — neighbor finding, Steinhardt parameters, CNA, and other descriptors run in compiled C++ via pybind11.
-- **Comprehensive descriptor suite:**
-  - [Steinhardt bond-orientational order parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784) and their [averaged](https://aip.scitation.org/doi/full/10.1063/1.2977970) and [disorder](https://doi.org/10.1063/1.3656762) variants
-  - [Wigner $W_l$](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.28.784) third-order rotational invariants
-  - [Minkowski structure metrics](https://doi.org/10.1063/1.4774084) — Voronoi-area-weighted, parameter-free $q_l$
-  - [Voronoi tessellation](http://math.lbl.gov/voro++) for structural vector and Voronoi volume
-  - [Common neighbor analysis](https://iopscience.iop.org/article/10.1088/0965-0393/20/4/045021) (CNA, adaptive CNA, diamond CNA)
-  - [Solid/liquid classification](https://link.springer.com/chapter/10.1007/b99429) with clustering
-  - [Centrosymmetry parameter](https://doi.org/10.1103/PhysRevB.58.11085)
-  - [Angular parameters](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.47.15717) and [Ackland-Jones $\chi$ parameters and classifier](https://doi.org/10.1103/PhysRevB.73.054104)
-  - Coordination measures — coordination number, [effective coordination](https://doi.org/10.1002/anie.197000251), and [generalised coordination](https://doi.org/10.1126/science.aab3501)
-  - Angular and bond-length distribution functions
-  - [Cowley short-range order](https://doi.org/10.1103/PhysRev.120.1648)
-  - [Entropy parameter](https://doi.org/10.1063/1.4998408) for structure distinction
-  - Atomic deformation — strain, von Mises invariant, [$D^2_{\min}$](https://doi.org/10.1103/PhysRevE.57.7192), [slip vector](https://doi.org/10.1103/PhysRevLett.87.165507)
-  - Wigner-Seitz defect analysis — vacancies, interstitials, antisites
-  - [Atomic Cluster Expansion](https://doi.org/10.1103/PhysRevB.99.014104) descriptors
-- **Structure creation** — built-in routines for common crystals, elements, general lattices, and grain boundaries.
-- **Trajectory support** — memory-efficient analysis of large LAMMPS dump trajectories.
-
-## Quick start
+pyscal computes descriptors of the local atomic structure from atomistic simulation data.
+It works on [ASE](https://wiki.fysik.dtu.dk/ase/) `Atoms` objects, so any structure that ASE can read or build can be analysed directly, and the results are stored on the same object.
+The calculations run in C++ on all CPU cores.
 
 ```python
-from ase.build import bulk
-import pyscal
-
-# Create a structure
-atoms = bulk("Cu", "fcc", cubic=True).repeat(3)
-
-# Find neighbors
-pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)
-
-# Calculate descriptors
-q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
-print(atoms.arrays["pyscal_q6"].mean())   # ≈ 0.57 for fcc
-
-# Common neighbor analysis
-result = pyscal.common_neighbor_analysis(atoms)
-print(result)  # {'fcc': 108, 'hcp': 0, 'bcc': 0, 'ico': 0, 'others': 0}
-```
-
-Results are stored directly on the ASE `Atoms` object:
-
-- **Per-atom data** → `atoms.arrays["pyscal_<name>"]` (NumPy arrays)
-- **System-level or ragged data** → `atoms.info["pyscal_<name>"]`
-
-This makes it easy to combine pyscal with ASE's I/O, visualisation, and analysis tools.
-
-
-## Why version 4?
-
-pyscal v4 is a major rewrite. The Python interface has been redesigned around [ASE](https://wiki.fysik.dtu.dk/ase/) and is no longer source-compatible with v3. Working v3 code will need small changes to run on v4. It is therefore worth describing why this rewrite was needed and what it gives in return.
-
-### ASE `Atoms` is now the data structure
-
-pyscal no longer ships its own `System` or `Atoms` class. Every public function takes an `ase.Atoms` object as its first argument and writes results back to that same object — per-atom quantities into `atoms.arrays["pyscal_*"]` and global or ragged quantities into `atoms.info["pyscal_*"]`. Any structure that ASE can read or build can be analysed with pyscal directly, and the results travel naturally to the rest of the ecosystem (ASE I/O, pymatgen, OVITO, plotting libraries).
-
-### A functional API
-
-Every descriptor is a top-level function. There is no system state to keep in sync, no method-chaining order to remember, no class to subclass when adding a new descriptor. A typical session is
-
-``` python
-import pyscal
-pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)
-q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6])
-labels, names = pyscal.identify_ackland_jones(atoms)
-```
-
-Adding a new descriptor in v4 means writing a single function — not extending a class hierarchy.
-
-### A larger descriptor library
-
-In addition to everything that was in v3, this release adds Wigner $W_l$ parameters, Minkowski structure metrics, Ackland-Jones structural classification, three coordination-number variants, angular and bond-length distribution functions, atomic deformation descriptors (strain tensor, von Mises invariant, $D^2_{\min}$, slip vector), Wigner-Seitz defect analysis, and Atomic Cluster Expansion (ACE) descriptors up to body order four. Each is documented and benchmarked against published reference values where available.
-
-### What is the migration path?
-
-Code that used to read
-
-``` python
-from pyscal3 import System
-sys = System('conf.dump')
-sys.find.neighbors(method='cutoff', cutoff=3)
-sys.calculate.steinhardt_parameter([4, 6])
-sys.atoms.solid
-```
-
-now reads
-
-``` python
 import pyscal
 from ase.io import read
-atoms = read('conf.dump', format='lammps-dump-text')
-pyscal.find_neighbors(atoms, method='cutoff', cutoff=3)
-pyscal.steinhardt_parameter(atoms, l=[4, 6])
-atoms.arrays['pyscal_solid']
+
+atoms = read("dump.lammpstrj", format="lammps-dump-text")
+pyscal.find_neighbors(atoms, method="cutoff", cutoff=0)
+q4, q6 = pyscal.steinhardt_parameter(atoms, l=[4, 6], averaged=True)
+pyscal.common_neighbor_analysis(atoms)
 ```
 
-If you need the v3 API, pin `pyscal3<4`.
+pyscal is installed with `pip install pyscal3` or `conda install -c conda-forge pyscal3`, and imported as `pyscal`.
 
+::::{grid} 1 2 2 2
+:gutter: 3
 
-## Citing
+:::{grid-item-card} Get started
+:link: tour
+:link-type: doc
+Install pyscal and go through a complete analysis, from reading a file to plotting the results.
+:::
+
+:::{grid-item-card} Finding neighbors
+:link: guide/neighbors
+:link-type: doc
+The neighbor methods, how they compare, and which one to use.
+:::
+
+:::{grid-item-card} Descriptors
+:link: descriptors/index
+:link-type: doc
+What each descriptor measures, when to use it, and examples on realistic structures.
+:::
+
+:::{grid-item-card} API reference
+:link: api
+:link-type: doc
+All functions and their parameters.
+:::
+::::
+
+## What pyscal computes
+
+- **Crystal structure of each atom:** common neighbor analysis, diamond structure identification, Ackland–Jones classification, Voronoi structure vectors.
+- **Orientational order:** Steinhardt parameters $q_l$ and their averaged form, Wigner $W_l$, Minkowski structure metrics, angular and $\chi$ parameters.
+- **Solid and liquid:** solid–liquid classification and clustering, disorder parameters, the entropy fingerprint.
+- **Defects and deformation:** centrosymmetry, atomic strain, von Mises strain, $D^2_\mathrm{min}$, slip vector, Wigner–Seitz analysis of vacancies, interstitials and antisites.
+- **Chemistry and coordination:** Warren–Cowley short range order, coordination numbers, local density, radial, angular and bond length distributions.
+- **Machine learning:** Atomic Cluster Expansion (ACE) descriptors.
+
+## Citing pyscal
 
 If you use pyscal in your work, please cite:
 
-> Sarath Menon, Grisell Díaz Leines and Jutta Rogal (2019). pyscal: A python module for structural analysis of atomic environments. *Journal of Open Source Software*, 4(43), 1824, https://doi.org/10.21105/joss.01824
+> S. Menon, G. Díaz Leines and J. Rogal, pyscal: A python module for structural analysis of atomic environments, *Journal of Open Source Software* **4**, 1824 (2019). [doi:10.21105/joss.01824](https://doi.org/10.21105/joss.01824)
+
+Please also cite the original publication of each method you use. They are listed on the page of each descriptor.

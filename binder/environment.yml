@@ -11,6 +11,8 @@ dependencies:
   - ase
   - pyyaml
   - matplotlib
-  - plotly
-  - ipywidgets
+  - pandas
+  - jupytext
   - scikit-learn
+  - pip:
+    - pychromatic

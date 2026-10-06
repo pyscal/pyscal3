@@ -8,7 +8,9 @@ logo: docs/_static/pyscal_logo1.png
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
 execute:
-  execute_notebooks: 'auto'
+  execute_notebooks: 'cache'
+  timeout: 600
+  allow_errors: false
 
 only_build_toc_files: true
 
@@ -50,6 +52,8 @@ sphinx:
     - sphinx.ext.napoleon
   config:
     autodoc_member_order: bysource
+    myst_heading_anchors: 3
+    nb_execution_raise_on_error: true
     napoleon_google_docstring: false
     napoleon_numpy_docstring: true
     mathjax_path: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
