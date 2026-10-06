@@ -27,54 +27,52 @@ from scipy.special import sph_harm_y
 
 import pyscal3.csystem as pc
 from pyscal3._bridge import (
-    get_box_params,
     atoms_to_dict,
     dict_to_atoms,
     ensure_neighbors,
     create_attribute,
-    padded_supercell,
-    periodic_directions,
-    guess_cutoff,
+    neighbor_arrays,
+    rows_from_flat,
+    stored_per_atom,
     gc_paused,
 )
-from pyscal3.neighbors import find_neighbors
+from pyscal3.neighbors import find_neighbors, _geometry
+
+
+def _padded(atoms, key, fill, dtype):
+    """Per-atom rows of a per-bond quantity as a 2-D (N, max_nn) array."""
+    offsets, nb = neighbor_arrays(atoms, key)
+    counts = np.diff(offsets)
+    n = len(atoms)
+    max_nn = int(counts.max()) if n else 0
+    out = np.full((n, max_nn), fill, dtype=dtype)
+    rows = np.repeat(np.arange(n), counts)
+    cols = np.arange(len(nb[key])) - np.repeat(offsets[:-1], counts)
+    out[rows, cols] = nb[key]
+    return out
 
 
 def _get_neighbor_dists_padded(atoms):
     """Return per-atom neighbor distances as a 2-D (N, max_nn) array.
 
-    Falls back to ``atoms.info["pyscal_neighbordist"]`` (ragged list)
-    when neighbor data is not stored as a uniform 2-D array in
-    ``atoms.arrays``.  Padded entries are zero.
+    Uses ``atoms.arrays["pyscal_neighbordist"]`` when the rows are stored
+    there (all atoms have the same number of neighbors), otherwise the flat
+    neighbor data. Padded entries are zero.
     """
     if "pyscal_neighbordist" in atoms.arrays:
         return atoms.arrays["pyscal_neighbordist"]
-    rows = atoms.info["pyscal_neighbordist"]
-    n = len(atoms)
-    max_nn = max((len(r) for r in rows), default=0)
-    out = np.zeros((n, max_nn), dtype=float)
-    for i, r in enumerate(rows):
-        if len(r) > 0:
-            out[i, : len(r)] = r
-    return out
+    return _padded(atoms, "neighbordist", 0.0, float)
 
 
 def _get_neighbor_indices_padded(atoms):
     """Return per-atom neighbor indices as a 2-D (N, max_nn) array.
 
-    Falls back to ``atoms.info["pyscal_neighbors"]`` for ragged data.
-    Padded entries are -1.
+    Uses ``atoms.arrays["pyscal_neighbors"]`` when the rows are stored there,
+    otherwise the flat neighbor data. Padded entries are -1.
     """
     if "pyscal_neighbors" in atoms.arrays:
         return atoms.arrays["pyscal_neighbors"]
-    rows = atoms.info["pyscal_neighbors"]
-    n = len(atoms)
-    max_nn = max((len(r) for r in rows), default=0)
-    out = np.full((n, max_nn), -1, dtype=int)
-    for i, r in enumerate(rows):
-        if len(r) > 0:
-            out[i, : len(r)] = r
-    return out
+    return _padded(atoms, "neighbors", -1, int)
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +121,23 @@ def _as_int_list(l):
     return [int(v) for v in l]
 
 
+def _compute_qlm(atoms: Atoms, d: dict, l: int, bonds=None):
+    """Compute q_l and the q_lm parts of every atom into ``d``.
+
+    ``bonds`` is the result of neighbor_arrays with theta, phi and
+    neighborweight; pass it when computing several l to flatten only once.
+    """
+    if bonds is None:
+        bonds = neighbor_arrays(atoms, "theta", "phi", "neighborweight")
+    offsets, nb = bonds
+    q, real, imag = pc.calculate_q_single(
+        offsets, nb["theta"], nb["phi"], nb["neighborweight"], l
+    )
+    d["q%d" % l] = q
+    d["q%d_real" % l] = real
+    d["q%d_imag" % l] = imag
+
+
 # ---------------------------------------------------------------------------
 # Steinhardt Parameters
 # ---------------------------------------------------------------------------
@@ -148,18 +163,18 @@ def steinhardt_parameter(atoms: Atoms, l, averaged=False):
     """
     ll = _as_int_list(l)
 
-    d = _get_dict_with_neighbors(atoms)
-
+    d = {}
+    bonds = neighbor_arrays(atoms, "theta", "phi", "neighborweight")
+    for val in ll:
+        _compute_qlm(atoms, d, val, bonds)
     if averaged:
-        # Need base q values first
+        offsets, nb = neighbor_arrays(atoms, "neighbors")
         for val in ll:
-            pc.calculate_q_single(d, val)
-        for val in ll:
-            pc.calculate_aq_single(d, val)
+            d["avg_q%d" % val] = pc.calculate_aq_single(
+                offsets, nb["neighbors"], d["q%d_real" % val], d["q%d_imag" % val], val
+            )
         result_keys = ["avg_q%d" % v for v in ll]
     else:
-        for val in ll:
-            pc.calculate_q_single(d, val)
         result_keys = ["q%d" % v for v in ll]
 
     # Sync all q-related keys back
@@ -227,22 +242,28 @@ def wigner_w_parameter(atoms: Atoms, l, averaged=False, normalized=True):
     """
     ll = _as_int_list(l)
 
-    d = _get_dict_with_neighbors(atoms)
+    d = {}
 
     # Ensure q_lm are computed first (W_l requires them)
+    bonds = neighbor_arrays(atoms, "theta", "phi", "neighborweight")
     for val in ll:
-        pc.calculate_q_single(d, val)
+        _compute_qlm(atoms, d, val, bonds)
 
     if averaged:
+        offsets, nb = neighbor_arrays(atoms, "neighbors")
         for val in ll:
-            pc.calculate_aw_single(d, val)
+            d["avg_w%d" % val], d["avg_what%d" % val] = pc.calculate_aw_single(
+                offsets, nb["neighbors"], d["q%d_real" % val], d["q%d_imag" % val], val
+            )
         if normalized:
             result_keys = ["avg_what%d" % v for v in ll]
         else:
             result_keys = ["avg_w%d" % v for v in ll]
     else:
         for val in ll:
-            pc.calculate_w_single(d, val)
+            d["w%d" % val], d["what%d" % val] = pc.calculate_w_single(
+                d["q%d_real" % val], d["q%d_imag" % val], val
+            )
         if normalized:
             result_keys = ["what%d" % v for v in ll]
         else:
@@ -378,15 +399,20 @@ def disorder(atoms: Atoms, q=6, averaged=False):
             need_calc = True
             break
     if need_calc:
-        pc.calculate_q_single(d, q)
+        _compute_qlm(atoms, d, q)
 
-    pc.calculate_disorder(d, q)
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
+    real = np.ascontiguousarray(d["q%d_real" % q], dtype=float)
+    imag = np.ascontiguousarray(d["q%d_imag" % q], dtype=float)
+    d["disorder"] = pc.calculate_disorder(offsets, nb["neighbors"], real, imag, q)
 
     sync_keys = ["disorder", "q%d" % q, "q%d_real" % q, "q%d_imag" % q]
 
     if averaged:
         # Average disorder over neighbors in C++
-        pc.calculate_average_disorder(d)
+        d["avg_disorder"] = pc.calculate_average_disorder(
+            offsets, nb["neighbors"], d["disorder"]
+        )
         sync_keys.append("avg_disorder")
 
     _sync_back(d, atoms, sync_keys)
@@ -417,31 +443,13 @@ def common_neighbor_analysis(atoms: Atoms, lattice_constant=None):
     dict
         Counts: {"fcc": n, "hcp": n, "bcc": n, "ico": n, "others": n}
     """
-    supercell = padded_supercell(atoms, cutoff=guess_cutoff(atoms, 2))
-    nreal = len(atoms)
-    d = atoms_to_dict(supercell)
-    triclinic, rot, rotinv, boxdims = get_box_params(supercell)
-    n = len(d["positions"])
-
-    # Create structure attribute
-    d["structure"] = [0] * n
-
-    # Find temp neighbors (by number, nmax=14)
-    _reset_and_find_temp_neighbors(d, supercell, periodic_directions(atoms), nmax=14)
-
-    if lattice_constant is None:
-        # Adaptive CNA
-        pc.get_acna_neighbors_cn12(d, triclinic, rot, rotinv, boxdims)
-        pc.identify_cn12(d, triclinic, rot, rotinv, boxdims)
-        pc.get_acna_neighbors_cn14(d, triclinic, rot, rotinv, boxdims)
-        pc.identify_cn14(d, triclinic, rot, rotinv, boxdims)
-    else:
-        pc.get_cna_neighbors(d, triclinic, rot, rotinv, boxdims, lattice_constant, 1)
-        pc.identify_cn12(d, triclinic, rot, rotinv, boxdims)
-        pc.get_cna_neighbors(d, triclinic, rot, rotinv, boxdims, lattice_constant, 2)
-        pc.identify_cn14(d, triclinic, rot, rotinv, boxdims)
-
-    structure = np.array(d["structure"][:nreal])
+    # candidates: all atoms within 2 * (V / N)^(1/3); the 12 or 14 nearest are used
+    structure, finished = pc.cna_structure(
+        *_geometry(atoms, 2), 2.0,
+        0.0 if lattice_constant is None else float(lattice_constant), 14,
+    )
+    if not finished:
+        _warn_few_candidates(14)
     atoms.arrays["pyscal_structure"] = structure
 
     return {
@@ -467,18 +475,9 @@ def diamond_structure(atoms: Atoms):
     dict
         Counts per structure type.
     """
-    supercell = padded_supercell(atoms, cutoff=guess_cutoff(atoms, 2))
-    nreal = len(atoms)
-    d = atoms_to_dict(supercell)
-    triclinic, rot, rotinv, boxdims = get_box_params(supercell)
-    n = len(d["positions"])
-
-    d["structure"] = [0] * n
-    _reset_and_find_temp_neighbors(d, supercell, periodic_directions(atoms), nmax=4)
-
-    pc.identify_diamond_cna(d, triclinic, rot, rotinv, boxdims)
-
-    structure = np.array(d["structure"][:nreal])
+    structure, finished = pc.diamond_structure_cna(*_geometry(atoms, 2), 2.0)
+    if not finished:
+        _warn_few_candidates(4)
     atoms.arrays["pyscal_structure"] = structure
 
     return {
@@ -520,12 +519,8 @@ def centrosymmetry(atoms: Atoms, nmax=12):
 
     # Find neighbors by number
     find_neighbors(atoms, method="number", nmax=nmax, assign_neighbor=True)
-    d = _get_dict_with_neighbors(atoms)
-    d["centrosymmetry"] = [0.0] * len(atoms)
-
-    pc.calculate_centrosymmetry(d, nmax)
-
-    cs = np.array(d["centrosymmetry"])
+    offsets, nb = neighbor_arrays(atoms, "diff")
+    cs = pc.calculate_centrosymmetry(offsets, nb["diff"], nmax)
     atoms.arrays["pyscal_centrosymmetry"] = cs
     return cs
 
@@ -560,6 +555,10 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
             "Voronoi analysis required. Call find_neighbors(atoms, method='voronoi') first."
         )
 
+    if "neighborweight" not in d:
+        # rows not stored (store_rows=False): rebuild them for the C++ routine
+        offsets, nb = neighbor_arrays(atoms, "neighborweight")
+        d["neighborweight"] = rows_from_flat(offsets, nb["neighborweight"])
     pc.calculate_voronoi_vector(d, edge_cutoff, area_cutoff)
 
     vv = np.array(d["vorovector"])
@@ -615,13 +614,14 @@ def entropy(
     if averaged is not None:
         average = averaged
 
-    d = _get_dict_with_neighbors(atoms)
+    offsets, nb = neighbor_arrays(atoms, "neighbors", "neighbordist")
+    d = {}
 
     n = len(atoms)
     volume = _periodic_volume(atoms, "entropy")
     kb = 1
 
-    cutoffs = np.asarray(d.get("cutoff", []), dtype=float)
+    cutoffs = np.ascontiguousarray(stored_per_atom(atoms, "cutoff"), dtype=float)
     if cutoffs.size > 0 and np.max(cutoffs) > 0 and rm > np.max(cutoffs) * (1 + 1e-9):
         warnings.warn(
             "entropy: rm=%.3f is larger than the neighbor cutoff (%.3f). "
@@ -636,12 +636,16 @@ def entropy(
     else:
         rho = n / volume
 
-    pc.calculate_entropy(d, sigma, rho, rstart, rm, h, kb)
+    d["entropy"] = pc.calculate_entropy(
+        offsets, nb["neighbordist"], cutoffs, sigma, rho, rstart, rm, h, kb
+    )
 
     sync_keys = ["entropy"]
 
     if average:
-        pc.calculate_average_entropy(d)
+        d["average_entropy"] = pc.calculate_average_entropy(
+            offsets, nb["neighbors"], d["entropy"]
+        )
         sync_keys.append("average_entropy")
 
     _sync_back(d, atoms, sync_keys)
@@ -704,7 +708,7 @@ def short_range_order(atoms: Atoms, reference_type=None, compare_type=None, aver
         the reference type). Per-atom values are stored in
         ``atoms.arrays["pyscal_sro"]``.
     """
-    d = _get_dict_with_neighbors(atoms)
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
 
     numbers = atoms.get_atomic_numbers()
     unique, counts = np.unique(numbers, return_counts=True)
@@ -728,9 +732,9 @@ def short_range_order(atoms: Atoms, reference_type=None, compare_type=None, aver
     if cmp not in unique:
         raise ValueError(f"No atoms of compare type {cmp} in the structure")
 
-    pc.calculate_short_range_order(d, ref, cmp)
-
-    sro = np.array(d["sro"], dtype=float)
+    sro = pc.calculate_short_range_order(
+        offsets, nb["neighbors"], np.ascontiguousarray(numbers, dtype=np.int64), ref, cmp
+    )
     atoms.arrays["pyscal_sro"] = sro
 
     if average:
@@ -769,9 +773,8 @@ def radial_distribution_function(atoms: Atoms, rmin=0, rmax=5.0, bins=100):
     ``rmax`` and overwrites any existing neighbor data on ``atoms``.
     """
     find_neighbors(atoms, method="cutoff", cutoff=rmax)
-    d = atoms_to_dict(atoms)
 
-    distances = np.concatenate([np.asarray(row) for row in d["neighbordist"]])
+    distances = neighbor_arrays(atoms, "neighbordist")[1]["neighbordist"]
     counts, bin_edges = np.histogram(distances, bins=bins, range=(rmin, rmax))
 
     edgewidth = abs(bin_edges[1] - bin_edges[0])
@@ -900,11 +903,8 @@ def angular_criteria(atoms: Atoms):
     numpy array
         Per-atom angular parameter A values.
     """
-    d = _get_dict_with_neighbors(atoms)
-
-    pc.calculate_angular_criteria(d)
-
-    ang = np.array(d["angular"])
+    offsets, nb = neighbor_arrays(atoms, "neighbordist", "diff")
+    ang = pc.calculate_angular_criteria(offsets, nb["neighbordist"], nb["diff"])
     atoms.arrays["pyscal_angular"] = ang
     return ang
 
@@ -930,15 +930,16 @@ def chi_params(atoms: Atoms, angles=False):
     numpy array of shape (natoms, 9)
         Chi parameter vectors.
     """
-    d = _get_dict_with_neighbors(atoms)
-
-    pc.calculate_chi_params(d)
-
-    cp = np.array(d["chiparams"])
+    offsets, nb = neighbor_arrays(atoms, "diff")
+    cp, cosines, cos_offsets = pc.calculate_chi_params(offsets, nb["diff"])
     atoms.arrays["pyscal_chiparams"] = cp
 
     if angles:
-        cosines_list = d["cosines"]
+        with gc_paused():
+            values = cosines.tolist()
+            cosines_list = [
+                values[a:b] for a, b in zip(cos_offsets[:-1].tolist(), cos_offsets[1:].tolist())
+            ]
         atoms.info["pyscal_cosines"] = cosines_list
         return cp, cosines_list
     return cp
@@ -1066,55 +1067,23 @@ def identify_ackland_jones(atoms: Atoms):
 # Deformation Descriptors (require reference configuration)
 # ---------------------------------------------------------------------------
 
-def _get_neighbor_diff_padded(atoms):
-    """Return per-atom neighbor displacement vectors as (N, max_nn, 3).
+def _local_deformation(atoms_cur, atoms_ref):
+    """Strain tensor, D^2_min and slip vector of every atom.
 
-    Falls back to ragged ``atoms.info["pyscal_diff"]`` if necessary.
-    Padded entries are zero.
+    Neighbors that appear in the neighbor lists of an atom in both
+    configurations are paired (the first entry of each neighbor index in
+    either list); the affine deformation gradient is fitted to the paired
+    neighbor vectors.
     """
-    if "pyscal_diff" in atoms.arrays:
-        return atoms.arrays["pyscal_diff"]
-    rows = atoms.info["pyscal_diff"]
-    n = len(atoms)
-    max_nn = max((len(r) for r in rows), default=0)
-    out = np.zeros((n, max_nn, 3), dtype=float)
-    for i, r in enumerate(rows):
-        if len(r) > 0:
-            out[i, : len(r)] = np.asarray(r)
-    return out
-
-
-def _match_neighbor_indices(atoms_cur, atoms_ref):
-    """
-    Match atoms across deformed/reference configs and return neighbor mapping.
-
-    Returns dict mapping atom index → list of (neighbor_index_cur, neighbor_index_ref)
-    for atoms that appear in both neighbor lists.
-    """
-    # Get current neighbor data
-    neighbors_cur = _get_neighbor_indices_padded(atoms_cur)
-    neighbors_ref = _get_neighbor_indices_padded(atoms_ref)
-    diff_cur = _get_neighbor_diff_padded(atoms_cur)
-    diff_ref = _get_neighbor_diff_padded(atoms_ref)
-
-    n = len(atoms_cur)
-    mapping = {}
-
-    for i in range(n):
-        nbrs_cur = neighbors_cur[i]
-        nbrs_ref = neighbors_ref[i]
-        valid_cur = nbrs_cur[nbrs_cur >= 0]
-        valid_ref = nbrs_ref[nbrs_ref >= 0]
-        # Find common neighbors
-        common = set(valid_cur) & set(valid_ref)
-        pairs = []
-        for j in common:
-            j_cur_idx = np.where(nbrs_cur == j)[0][0]
-            j_ref_idx = np.where(nbrs_ref == j)[0][0]
-            pairs.append((j_cur_idx, j_ref_idx))
-        mapping[i] = pairs
-
-    return mapping, diff_cur, diff_ref
+    ensure_neighbors(atoms_cur)
+    ensure_neighbors(atoms_ref)
+    off_cur, cur = neighbor_arrays(atoms_cur, "neighbors", "diff")
+    off_ref, ref = neighbor_arrays(atoms_ref, "neighbors", "diff")
+    if len(off_cur) != len(off_ref):
+        raise ValueError("atoms and reference must have the same number of atoms")
+    return pc.calculate_local_deformation(
+        off_cur, cur["neighbors"], cur["diff"], off_ref, ref["neighbors"], ref["diff"]
+    )
 
 
 def atomic_strain(atoms: Atoms, reference: Atoms):
@@ -1145,38 +1114,7 @@ def atomic_strain(atoms: Atoms, reference: Atoms):
     Reference: Falk & Langer, PRE 57 (1998) 7192 (D^2_min);
     Shimizu, Ogata, Li, Mat. Trans. 48 (2007) 2923 (atomic strain).
     """
-    ensure_neighbors(atoms)
-    ensure_neighbors(reference)
-
-    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
-    n = len(atoms)
-    strain = np.zeros((n, 3, 3))
-
-    for i in range(n):
-        pairs = mapping[i]
-        if len(pairs) < 3:
-            strain[i] = np.nan
-            continue
-
-        # Build matrices: rows = neighbor displacement vectors
-        X = np.array([diff_ref[i, j_ref] for (_, j_ref) in pairs])  # reference
-        Y = np.array([diff_cur[i, j_cur] for (j_cur, _) in pairs])  # current
-
-        # Deformation gradient F via least squares: Y = X @ F^T
-        # => F^T = (X^T X)^-1 X^T Y
-        XtX = X.T @ X
-        try:
-            XtX_inv = np.linalg.inv(XtX)
-        except np.linalg.LinAlgError:
-            strain[i] = np.nan
-            continue
-        F = (XtX_inv @ X.T @ Y).T
-
-        # Green-Lagrange strain E = (F^T F - I) / 2
-        C = F.T @ F
-        E = 0.5 * (C - np.eye(3))
-        strain[i] = E
-
+    strain, _, _ = _local_deformation(atoms, reference)
     atoms.arrays["pyscal_strain"] = strain
     return strain
 
@@ -1208,20 +1146,13 @@ def von_mises_strain(atoms: Atoms, reference: Atoms):
         Also stored as ``atoms.arrays["pyscal_von_mises"]``.
     """
     E = atomic_strain(atoms, reference)
-    n = len(atoms)
-    vm = np.zeros(n)
-
-    for i in range(n):
-        if np.any(np.isnan(E[i])):
-            vm[i] = np.nan
-            continue
-        exx, eyy, ezz = E[i, 0, 0], E[i, 1, 1], E[i, 2, 2]
-        exy, eyz, exz = E[i, 0, 1], E[i, 1, 2], E[i, 0, 2]
-        vm[i] = np.sqrt(
-            0.5 * ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2)
-            + exy**2 + eyz**2 + exz**2
-        )
-
+    exx, eyy, ezz = E[:, 0, 0], E[:, 1, 1], E[:, 2, 2]
+    exy, eyz, exz = E[:, 0, 1], E[:, 1, 2], E[:, 0, 2]
+    vm = np.sqrt(
+        0.5 * ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2)
+        + exy**2 + eyz**2 + exz**2
+    )
+    vm[np.isnan(E).any(axis=(1, 2))] = np.nan
     atoms.arrays["pyscal_von_mises"] = vm
     return vm
 
@@ -1246,35 +1177,7 @@ def d2min(atoms: Atoms, reference: Atoms):
         D^2_min per atom (Angstrom^2).
         Also stored as ``atoms.arrays["pyscal_d2min"]``.
     """
-    ensure_neighbors(atoms)
-    ensure_neighbors(reference)
-
-    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
-    n = len(atoms)
-    d2 = np.zeros(n)
-
-    for i in range(n):
-        pairs = mapping[i]
-        if len(pairs) < 3:
-            d2[i] = np.nan
-            continue
-
-        X = np.array([diff_ref[i, j_ref] for (_, j_ref) in pairs])
-        Y = np.array([diff_cur[i, j_cur] for (j_cur, _) in pairs])
-
-        XtX = X.T @ X
-        try:
-            XtX_inv = np.linalg.inv(XtX)
-        except np.linalg.LinAlgError:
-            d2[i] = np.nan
-            continue
-        F = (XtX_inv @ X.T @ Y).T
-
-        # Predicted positions from affine: Y_pred = X @ F^T
-        Y_pred = X @ F.T
-        residuals = Y - Y_pred
-        d2[i] = np.mean(np.sum(residuals**2, axis=1))
-
+    _, d2, _ = _local_deformation(atoms, reference)
     atoms.arrays["pyscal_d2min"] = d2
     return d2
 
@@ -1313,27 +1216,7 @@ def slip_vector(atoms: Atoms, reference: Atoms):
     -----
     Ref: Zimmerman, Kelchner, Klein, Hamilton, Foiles, PRL 87 (2001) 165507.
     """
-    ensure_neighbors(atoms)
-    ensure_neighbors(reference)
-
-    mapping, diff_cur, diff_ref = _match_neighbor_indices(atoms, reference)
-    n = len(atoms)
-    slip = np.zeros((n, 3))
-
-    for i in range(n):
-        pairs = mapping[i]
-        if len(pairs) == 0:
-            slip[i] = np.nan
-            continue
-
-        deltas = []
-        for j_cur, j_ref in pairs:
-            d_cur = diff_cur[i, j_cur]
-            d_ref = diff_ref[i, j_ref]
-            deltas.append(d_cur - d_ref)
-
-        slip[i] = np.mean(deltas, axis=0)
-
+    _, _, slip = _local_deformation(atoms, reference)
     atoms.arrays["pyscal_slip_vector"] = slip
     return slip
 
@@ -1380,7 +1263,7 @@ def find_solids(
     int or None
         Largest cluster size if cluster=True.
     """
-    d = _get_dict_with_neighbors(atoms)
+    d = {}
 
     if isinstance(bonds, int):
         criteria = 0
@@ -1392,10 +1275,15 @@ def find_solids(
     compare_criteria = 0 if right else 1
 
     # Calculate Steinhardt parameters
-    pc.calculate_q_single(d, q)
+    _compute_qlm(atoms, d, q)
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
 
     # Calculate bonds/solid classification
-    pc.calculate_bonds(d, q, threshold, avgthreshold, bonds, compare_criteria, criteria)
+    d["bonds"], sij, d["avg_sij"], d["solid"] = pc.calculate_bonds(
+        offsets, nb["neighbors"], d["q%d_real" % q], d["q%d_imag" % q], q,
+        threshold, avgthreshold, bonds, compare_criteria, criteria,
+    )
+    d["sij"] = rows_from_flat(offsets, sij)
 
     _sync_back(
         d,
@@ -1404,9 +1292,7 @@ def find_solids(
     )
 
     if cluster:
-        return find_clusters(
-            atoms, condition=np.array(d["solid"]) > 0, cutoff=cutoff, d=d
-        )
+        return find_clusters(atoms, condition=np.array(d["solid"]) > 0, cutoff=cutoff)
     return None
 
 
@@ -1425,8 +1311,7 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
     cutoff : float
         Cluster cutoff (0 = use neighbor cutoff).
     d : dict, optional
-        Internal: atom dict already built from ``atoms`` (used by
-        :func:`find_solids` to avoid rebuilding it).
+        Ignored. Kept so that existing calls keep working.
 
     Returns
     -------
@@ -1436,15 +1321,13 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
         not satisfy the condition) and, if largest=True, a boolean mask of
         the largest cluster in ``atoms.arrays["pyscal_largest_cluster"]``.
     """
-    if d is None:
-        d = _get_dict_with_neighbors(atoms)
-
-    condition = np.asarray(condition, dtype=bool)
-    d["condition"] = condition.tolist()
-
-    pc.find_clusters(d, cutoff)
-
-    cluster_ids = np.array(d["cluster"])
+    offsets, nb = neighbor_arrays(atoms, "neighbors", "neighbordist")
+    condition = np.ascontiguousarray(condition, dtype=bool)
+    cluster_ids = pc.find_clusters(
+        offsets, nb["neighbors"], nb["neighbordist"],
+        np.ascontiguousarray(stored_per_atom(atoms, "cutoff"), dtype=float),
+        condition, cutoff,
+    )
     atoms.arrays["pyscal_cluster"] = cluster_ids
 
     if largest:
@@ -1497,14 +1380,17 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     # 1-D values: use fast C++ averaging
     values = np.asarray(values)
     if values.ndim == 1:
-        result = pc.calculate_average_over_neighbors(d, values.tolist(), include_self)
-        return np.array(result)
+        offsets, nb = neighbor_arrays(atoms, "neighbors")
+        return pc.calculate_average_over_neighbors(
+            offsets, nb["neighbors"], np.ascontiguousarray(values, dtype=float), include_self
+        )
 
     # Multi-dimensional: fall back to Python loop
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
     result = []
     for i in range(len(atoms)):
         vals = [values[i]] if include_self else []
-        for j in d["neighbors"][i]:
+        for j in nb["neighbors"][offsets[i]:offsets[i + 1]]:
             vals.append(values[j])
         result.append(np.mean(vals))
 
@@ -1704,51 +1590,21 @@ def local_density(atoms: Atoms):
 # ---------------------------------------------------------------------------
 
 
-def _reset_and_find_temp_neighbors(d, supercell, periodic, nmax=14):
-    """Reset neighbors and store the candidates of every atom (for CNA/diamond).
+def _warn_few_candidates(nmax):
+    """Warn that some atoms had fewer than ``nmax`` neighbor candidates.
 
-    The candidates are all atoms within 2 * (V / N)^(1/3) of the padded
-    ``supercell``, sorted by distance. Only the ``periodic`` directions of the
-    original structure are periodic; the others carry the vacuum cell vector
-    of the supercell. The C++ classifiers take the first ``nmax`` candidates.
+    Atoms with fewer than ``nmax`` candidates cannot be classified and are
+    labelled "others". That is the right answer for a surface or a small
+    cluster, so this warns instead of failing the whole analysis.
     """
-    n = len(d["positions"])
-    d["neighbors"] = [[] for _ in range(n)]
-    d["neighbordist"] = [[] for _ in range(n)]
-    d["neighborweight"] = [[] for _ in range(n)]
-    d["diff"] = [[] for _ in range(n)]
-    d["r"] = [[] for _ in range(n)]
-    d["theta"] = [[] for _ in range(n)]
-    d["phi"] = [[] for _ in range(n)]
-    d["cutoff"] = [0.0] * n
-
-    res = pc.nl_candidates(
-        np.ascontiguousarray(supercell.positions, dtype=float),
-        np.ascontiguousarray(supercell.cell, dtype=float),
-        [bool(p) for p in periodic],
-        2.0,
-        nmax,
+    warnings.warn(
+        "Could not find %d neighbor candidates for every atom; those atoms "
+        "are reported as 'others'. The structure may be a small cluster or "
+        "very sparse. If it is meant to be periodic, check that atoms.pbc "
+        "is set and the cell is correct." % nmax,
+        RuntimeWarning,
+        stacklevel=3,
     )
-    with gc_paused():
-        bounds = list(zip(res["temp_offsets"][:-1].tolist(), res["temp_offsets"][1:].tolist()))
-        temp_j = res["temp_j"].tolist()
-        temp_d = res["temp_d"].tolist()
-        d["temp_neighbors"] = [temp_j[a:b] for a, b in bounds]
-        d["temp_neighbordist"] = [temp_d[a:b] for a, b in bounds]
-    finished = res["finished"]
-    if not finished:
-        # Atoms with fewer than `nmax` candidates cannot be classified; the
-        # C++ routines skip them, so they end up labelled "others". That is
-        # the right answer for a surface or a small cluster, so warn instead
-        # of failing the whole analysis.
-        warnings.warn(
-            "Could not find %d neighbor candidates for every atom; those atoms "
-            "are reported as 'others'. The structure may be a small cluster or "
-            "very sparse. If it is meant to be periodic, check that atoms.pbc "
-            "is set and the cell is correct." % nmax,
-            RuntimeWarning,
-            stacklevel=3,
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -1836,36 +1692,60 @@ def _ace_a_functions(d, nmax, lmax, cutoff):
     # Complex array to hold A coefficients
     # Index mapping: m ranges from -l to +l, stored at index m + lmax
     A = np.zeros((natoms, nmax, lmax + 1, 2 * lmax + 1), dtype=np.complex128)
-    
-    for i in range(natoms):
-        neighbors_i = d["neighbors"][i]
-        if not hasattr(neighbors_i, '__len__') or len(neighbors_i) == 0:
-            continue
-            
-        dists = d["neighbordist"][i]
-        diffs = d["diff"][i]
-        
-        for j_idx in range(len(neighbors_i)):
-            rij = dists[j_idx]
-            if rij < 1e-10 or rij >= cutoff:
-                continue
-            
-            vec = np.array(diffs[j_idx])
-            # Spherical coordinates
-            # theta = polar angle from z axis
-            # phi = azimuthal angle in xy plane
-            theta = np.arccos(np.clip(vec[2] / rij, -1, 1))
-            phi = np.arctan2(vec[1], vec[0])
-            
+
+    # all bonds, flat and in the order of the neighbor lists
+    atom, dists, diffs = _flat_bonds(d, natoms)
+    keep = ~((dists < 1e-10) | (dists >= cutoff))
+    atom, rij, vec = atom[keep], dists[keep], diffs[keep]
+    if len(rij) == 0:
+        return A
+
+    # Spherical coordinates
+    # theta = polar angle from z axis
+    # phi = azimuthal angle in xy plane
+    theta = np.arccos(np.clip(vec[:, 2] / rij, -1, 1))
+    phi = np.arctan2(vec[:, 1], vec[:, 0])
+
+    radial = [_ace_radial_basis(n, rij, cutoff) for n in range(nmax)]
+    for l in range(lmax + 1):
+        for m in range(-l, l + 1):
+            # scipy sph_harm_y(l, m, theta, phi) uses physics convention
+            Y_lm = sph_harm_y(l, m, theta, phi)
             for n in range(nmax):
-                R_n = _ace_radial_basis(n, rij, cutoff)
-                for l in range(lmax + 1):
-                    for m in range(-l, l + 1):
-                        # scipy sph_harm_y(l, m, theta, phi) uses physics convention
-                        Y_lm = sph_harm_y(l, m, theta, phi)
-                        A[i, n, l, m + lmax] += R_n * Y_lm
-    
+                # per-atom sums in bond order, as a loop over the bonds would do
+                term = radial[n] * Y_lm
+                A[:, n, l, m + lmax] = (
+                    np.bincount(atom, weights=term.real, minlength=natoms)
+                    + 1j * np.bincount(atom, weights=term.imag, minlength=natoms)
+                )
+
     return A
+
+
+def _flat_bonds(d, natoms):
+    """Atom index, distance and vector of every bond in the atom dict ``d``."""
+    if "bond_offsets" in d:
+        counts = np.diff(np.asarray(d["bond_offsets"]))
+        return (np.repeat(np.arange(natoms), counts),
+                np.asarray(d["bond_distance"], dtype=float),
+                np.asarray(d["bond_vector"], dtype=float).reshape(-1, 3))
+    counts = np.array([len(r) for r in d["neighbordist"]], dtype=np.int64) \
+        if not isinstance(d["neighbordist"], np.ndarray) else \
+        np.full(natoms, d["neighbordist"].shape[1] if d["neighbordist"].ndim == 2 else 0)
+    atom = np.repeat(np.arange(natoms), counts)
+    if isinstance(d["neighbordist"], np.ndarray):
+        dists = np.asarray(d["neighbordist"], dtype=float).reshape(-1)
+    else:
+        dists = np.fromiter(itertools.chain.from_iterable(d["neighbordist"]), dtype=float,
+                            count=int(counts.sum()))
+    if isinstance(d["diff"], np.ndarray):
+        diffs = np.asarray(d["diff"], dtype=float).reshape(-1, 3)
+    else:
+        diffs = np.fromiter(
+            itertools.chain.from_iterable(itertools.chain.from_iterable(d["diff"])),
+            dtype=float, count=3 * int(counts.sum()),
+        ).reshape(-1, 3)
+    return atom, dists, diffs
 
 
 def _ace_b_basis_nu1(A, lmax):
@@ -1923,9 +1803,10 @@ def _ace_b_basis_nu2(A, nmax, lmax):
                 # Sum over m: sum_m A*_{n1,l,m} * A_{n2,l,m}
                 B_desc = np.zeros(natoms)
                 for m in range(-l, l + 1):
-                    B_desc += np.real(
-                        np.conj(A[:, n1, l, m + lmax]) * A[:, n2, l, m + lmax]
-                    )
+                    # Re(conj(a) * b) in real arithmetic: numpy's complex
+                    # product can round differently from run to run
+                    a, b = A[:, n1, l, m + lmax], A[:, n2, l, m + lmax]
+                    B_desc += a.real * b.real + a.imag * b.imag
                 descriptors.append(B_desc)
     
     return np.column_stack(descriptors) if descriptors else np.zeros((natoms, 0))
@@ -2010,11 +1891,14 @@ def _ace_b_basis_nu3(A, nmax, lmax):
                                     if w3j == 0.0:
                                         continue
                                     
-                                    # 3j-coupled product of three A-functions
-                                    prod = (A[:, n1, l1, m1 + lmax] *
-                                            A[:, n2, l2, m2 + lmax] *
-                                            A[:, n3, l3, m3 + lmax])
-                                    B_desc += w3j * np.real(prod)
+                                    # 3j-coupled product of three A-functions,
+                                    # real part in real arithmetic (see nu=2)
+                                    a = A[:, n1, l1, m1 + lmax]
+                                    b = A[:, n2, l2, m2 + lmax]
+                                    c = A[:, n3, l3, m3 + lmax]
+                                    ab_re = a.real * b.real - a.imag * b.imag
+                                    ab_im = a.real * b.imag + a.imag * b.real
+                                    B_desc += w3j * (ab_re * c.real - ab_im * c.imag)
                             
                             # Always append so the descriptor count is a
                             # deterministic function of (nmax, lmax) — needed

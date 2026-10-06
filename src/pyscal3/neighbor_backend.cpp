@@ -19,6 +19,7 @@ neighbour index.
 #include "system.h"
 #include "neighbour_list.hh"
 #include "error.hh"
+#include "neighbor_backend.h"
 
 #include <algorithm>
 #include <cmath>
@@ -28,23 +29,12 @@ neighbour index.
 #include <stdexcept>
 #include <utility>
 
-namespace {
-
-using idx = std::int64_t;
-using darray = py::array_t<double, py::array::c_style | py::array::forcecast>;
+namespace nlb {
 
 // periodic images are searched up to this radius; the exact comparison of
 // each method is applied afterwards
 double query_radius(double r) { return r * (1.0 + 1e-9) + 1e-12; }
 
-struct Geometry {
-    idx n;
-    const double *positions;
-    double cell[9];
-    double inv_cell[9];
-    bool pbc[3];
-    double volume;
-};
 
 Geometry make_geometry(const darray &positions, const darray &cell,
                        const vector<bool> &pbc) {
@@ -84,7 +74,9 @@ struct Pairs {
     vector<double> d, v;
 };
 
-Pairs query(const Geometry &g, double rmax) {
+// radii, if given, are per-atom radii: the pair i, j is searched up to
+// radii[i] + radii[j] (rmax must be the largest such sum)
+Pairs query(const Geometry &g, double rmax, const double *radii = nullptr) {
     Pairs p;
     if (g.n == 0 || !(rmax > 0.0)) return p;
     matscipy::NeighbourList nl;
@@ -93,7 +85,7 @@ Pairs query(const Geometry &g, double rmax) {
                            matscipy::QUANTITY_DISTVEC;
     const matscipy::error_t status = matscipy::neighbour_list(
         quantities, origin, g.cell, g.inv_cell, g.pbc, g.n, g.positions,
-        query_radius(rmax), nullptr, nullptr, 0, nullptr, nl);
+        query_radius(rmax), radii, nullptr, 0, nullptr, nl);
     if (status == matscipy::NL_INVALID_ARGUMENT)
         throw std::invalid_argument(matscipy::error_string);
     if (status == matscipy::NL_OUT_OF_MEMORY) throw std::bad_alloc();
@@ -116,17 +108,6 @@ Pairs query(const Geometry &g, double rmax) {
     return p;
 }
 
-// per-atom rows of selected pairs
-struct Rows {
-    vector<idx> offsets, j;
-    vector<double> d, v;
-    explicit Rows(idx n) : offsets(n + 1, 0) {}
-    void add(idx jj, double dd, const double *vv) {
-        j.push_back(jj);
-        d.push_back(dd);
-        v.insert(v.end(), vv, vv + 3);
-    }
-};
 
 // rows of the pairs of p that satisfy keep(d), in the order of p
 template <typename Keep>
@@ -149,10 +130,9 @@ constexpr double TIE_DISTANCE = 1e-10;
 
 // candidates with d <= guess, each row sorted by distance (to TIE_DISTANCE)
 // and then by neighbour index
-Rows candidates(const Geometry &g, double guess) {
-    const Pairs p = query(g, guess);
-    Rows unsorted = select(p, g.n, [guess](double d) { return d <= guess; });
-    Rows rows(g.n);
+// each row sorted by distance (to TIE_DISTANCE) and then by neighbour index
+Rows sort_rows(const Rows &unsorted, idx n) {
+    Rows rows(n);
     rows.offsets = unsorted.offsets;
     rows.j.reserve(unsorted.j.size());
     rows.d.reserve(unsorted.d.size());
@@ -160,7 +140,7 @@ Rows candidates(const Geometry &g, double guess) {
     vector<long long> key(unsorted.d.size());
     for (size_t k = 0; k < key.size(); k++) key[k] = std::llround(unsorted.d[k] / TIE_DISTANCE);
     vector<idx> order;
-    for (idx a = 0; a < g.n; a++) {
+    for (idx a = 0; a < n; a++) {
         const idx lo = unsorted.offsets[a], hi = unsorted.offsets[a + 1];
         order.resize(hi - lo);
         std::iota(order.begin(), order.end(), lo);
@@ -171,6 +151,39 @@ Rows candidates(const Geometry &g, double guess) {
         for (idx k : order) rows.add(unsorted.j[k], unsorted.d[k], &unsorted.v[3 * k]);
     }
     return rows;
+}
+
+Rows candidates(const Geometry &g, double guess) {
+    const Pairs p = query(g, guess);
+    return sort_rows(select(p, g.n, [guess](double d) { return d <= guess; }), g.n);
+}
+
+Rows nearest_candidates(const Geometry &g, double r_small, double r_full, int nneed) {
+    Rows c = candidates(g, r_small);
+    vector<char> full(g.n, 0);
+    bool any = false;
+    for (idx a = 0; a < g.n; a++) {
+        if (c.offsets[a + 1] - c.offsets[a] < nneed) {
+            full[a] = 1;
+            any = true;
+        }
+    }
+    if (!any) return c;
+    // one more search: atom i needs neighbours up to r_i (r_full for the
+    // atoms above, r_small otherwise); with radii R_i = r_full - r_small / 2
+    // and r_small / 2, R_i + R_j is at least r_i for every pair
+    vector<double> radii(g.n);
+    for (idx a = 0; a < g.n; a++) radii[a] = full[a] ? r_full - 0.5 * r_small : 0.5 * r_small;
+    const Pairs p = query(g, 2.0 * r_full - r_small, radii.data());
+    Rows rows(g.n);
+    for (size_t k = 0; k < p.i.size(); k++) {
+        if (p.d[k] <= (full[p.i[k]] ? r_full : r_small)) {
+            rows.add(p.j[k], p.d[k], &p.v[3 * k]);
+            rows.offsets[p.i[k] + 1]++;
+        }
+    }
+    for (idx a = 0; a < g.n; a++) rows.offsets[a + 1] += rows.offsets[a];
+    return sort_rows(rows, g.n);
 }
 
 // the first count[a] entries of each row of c
@@ -203,6 +216,9 @@ py::dict to_dict(Rows &&rows, vector<double> &&cutoff) {
     for (idx k = 0; k < m; k++) {
         const double x = rows.v[3 * k], y = rows.v[3 * k + 1], z = rows.v[3 * k + 2];
         convert_to_spherical_coordinates(x, y, z, r[k], phi[k], theta[k]);
+        // r is the bond length; keep it identical to d, whatever the compiler
+        // does with the two sqrt expressions
+        r[k] = rows.d[k];
     }
     py::dict out;
     out["offsets"] = to_array(std::move(rows.offsets), {py::ssize_t(n + 1)});
@@ -241,7 +257,9 @@ vector<double> cutoff_if_any(const Rows &rows, double value) {
     return cutoff;
 }
 
-}  // namespace
+}  // namespace nlb
+
+using namespace nlb;
 
 py::dict nl_cutoff(const darray &positions, const darray &cell,
                    const vector<bool> &pbc, double rc) {
@@ -258,19 +276,6 @@ py::dict nl_shell(const darray &positions, const darray &cell,
                        [dmin, dmax](double d) { return d >= dmin && d <= dmax; });
     vector<double> cutoff = cutoff_if_any(rows, dmax);
     return to_dict(std::move(rows), std::move(cutoff));
-}
-
-py::dict nl_candidates(const darray &positions, const darray &cell,
-                       const vector<bool> &pbc, double prefactor, int nmin) {
-    const Geometry g = make_geometry(positions, cell, pbc);
-    Rows c = candidates(g, guess_radius(g, prefactor));
-    bool finished = true;
-    for (idx a = 0; a < g.n; a++)
-        if (c.offsets[a + 1] - c.offsets[a] < nmin) finished = false;
-    py::dict out;
-    add_candidates(out, std::move(c));
-    out["finished"] = finished;
-    return out;
 }
 
 py::dict nl_number(const darray &positions, const darray &cell,

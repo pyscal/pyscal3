@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 #include "system.h"
 
 void calculate_factors(const int lm, 
@@ -259,178 +260,157 @@ void calculate_q(py::dict& atoms,
 }
 
 /**********************************************************************
-New set of functions that use the old algorithm
+Spherical harmonics of one bond, all m at once
 **********************************************************************/
-double plm(const int l,
-	const int m,
-	const double theta){
+vector<double> ylm_norms(const int l){
+    // sqrt((2l + 1) / (4 pi) * (l - m)! / (l + m)!) for m = 0 .. l
+    vector<double> norm(l + 1);
+    for (int m = 0; m <= l; m++)
+        norm[m] = sqrt(((2.0*double(l) + 1.0)/ (4.0*PI))*dfactorial(l, m));
+    return norm;
+}
 
-	double x = cos(theta);
-    double fact,pll,pmm,pmmp1,somx2;
-    int i,ll;
-    pll = 0.0;
-    if (m < 0 || m > l || fabs(x) > 1.0)
-        cerr << "impossible combination of l and m" << "\n";
-    pmm=1.0;
-    if (m > 0){
-        somx2=sqrt((1.0-x)*(1.0+x));
-        fact=1.0;
-        for (i=1;i<=m;i++){
+void ylm_all_m(const int l,
+    const double theta,
+    const double phi,
+    const vector<double>& norm,
+    double* ylm_real,
+    double* ylm_imag){
+
+    // Y_lm for m = -l .. l, stored at index m + l. For each m the associated
+    // Legendre function P_l^m(cos theta) uses the usual recurrence in l,
+    // cos(m phi) and sin(m phi) follow from the angle-addition formulas.
+    const double x = cos(theta);
+    const double somx2 = sqrt((1.0 - x)*(1.0 + x));
+    const double c1 = cos(phi);
+    const double s1 = sin(phi);
+    double cm = 1.0, sm = 0.0;
+    double pmm = 1.0, fact = 1.0;
+
+    for (int m = 0; m <= l; m++){
+        if (m > 0){
             pmm *= -fact*somx2;
             fact += 2.0;
+            const double c = cm*c1 - sm*s1;
+            sm = sm*c1 + cm*s1;
+            cm = c;
         }
-    }
-
-    if (l == m)
-        return pmm;
-    else{
-        pmmp1=x*(2*m+1)*pmm;
-        if (l == (m+1))
-            return pmmp1;
+        double p;
+        if (l == m){
+            p = pmm;
+        }
         else{
-            for (ll=m+2;ll<=l;ll++){
-            pll=(x*(2*ll-1)*pmmp1-(ll+m-1)*pmm)/(ll-m);
-            pmm=pmmp1;
-            pmmp1=pll;
+            double pa = pmm, pb = x*(2*m + 1)*pmm;
+            for (int ll = m + 2; ll <= l; ll++){
+                const double pc = (x*(2*ll - 1)*pb - (ll + m - 1)*pa)/(ll - m);
+                pa = pb;
+                pb = pc;
             }
-        return pll;
+            p = pb;
         }
-    }	
-}
-
-double sph_legendre(const int l,
-	const int m,
-	const double theta){
-
-	double factor = ((2.0*double(l) + 1.0)/ (4.0*PI))*dfactorial(l,m);
-	double m_plm = plm(l, m, theta);
-	return sqrt(factor)*m_plm;
-
-}
-
-void calculate_qlm(const int l, 
-	const int m, 
-	const double theta, 
-	const double phi, 
-	double &ylm_real, 
-	double &ylm_imag){
-
-    double m_plm;
-
-    m_plm = sph_legendre(l, abs(m), theta);
-    ylm_real = m_plm*cos(double(m)*phi);
-    ylm_imag  = m_plm*sin(double(m)*phi);
-    // Condon-Shortley phase for negative m:  Y_{l,-m} = (-1)^m conj(Y_{lm}).
-    // It cancels in |q_lm|^2 (q_l) but not in the Wigner-3j contraction
-    // used for W_l, which is not rotationally invariant without it.
-    if (m < 0 && (abs(m) % 2 == 1)){
-        ylm_real = -ylm_real;
-        ylm_imag = -ylm_imag;
+        p *= norm[m];
+        ylm_real[l + m] = p*cm;
+        ylm_imag[l + m] = p*sm;
+        if (m > 0){
+            // Condon-Shortley phase for negative m:  Y_{l,-m} = (-1)^m conj(Y_{lm}).
+            // It cancels in |q_lm|^2 (q_l) but not in the Wigner-3j contraction
+            // used for W_l, which is not rotationally invariant without it.
+            const double sign = (m % 2 == 1) ? -1.0 : 1.0;
+            ylm_real[l - m] = sign*p*cm;
+            ylm_imag[l - m] = -sign*p*sm;
+        }
     }
 }
 
 
-void calculate_q_single(py::dict& atoms,
-	const int lm){
+py::tuple calculate_q_single(const nl_index& offsets,
+    const nl_values& theta,
+    const nl_values& phi,
+    const nl_values& weights,
+    const int lm){
 
-	//we need theta and pi
-    vector<vector<double>> theta = atoms[py::str("theta")].cast<vector<vector<double>>>();
-    vector<vector<double>> phi = atoms[py::str("phi")].cast<vector<vector<double>>>();
-    vector<vector<double>> weights = atoms[py::str("neighborweight")].cast<vector<vector<double>>>();
-    
-    int nop = theta.size();
-    vector<vector<double>> qlm_real(nop);
-    vector<vector<double>> qlm_img(nop);
-    vector<double> q;
+    // offsets[i] .. offsets[i + 1] are the bonds of atom i in theta, phi, weights
+    const std::int64_t* off = offsets.data();
+    const double* th = theta.data();
+    const double* ph = phi.data();
+    const double* w = weights.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
+    const int nm = 2*lm + 1;
 
-    int nn;
+    py::array_t<double> q(nop);
+    py::array_t<double> qlm_real(vector<py::ssize_t>{nop, nm});
+    py::array_t<double> qlm_img(vector<py::ssize_t>{nop, nm});
+    double* qo = q.mutable_data();
+    double* qr = qlm_real.mutable_data();
+    double* qi = qlm_img.mutable_data();
+
+    const vector<double> norm = ylm_norms(lm);
+    vector<double> ylm_real(nm), ylm_imag(nm), sum_real(nm), sum_imag(nm);
     double summ, weightsum;
     double realti, imgti;
-    double realylm, imgylm;
-	
-    for (int ti=0; ti<nop; ti++){
-		summ = 0;
-		for (int mi=-lm; mi<lm+1; mi++){
-            realti = 0.0;
-            imgti = 0.0;
-            weightsum = 0;
-			for(int ci=0; ci<theta[ti].size(); ci++){
-				calculate_qlm(lm, mi, theta[ti][ci], phi[ti][ci], realylm, imgylm);
-				realti += weights[ti][ci]*realylm;
-				imgti += weights[ti][ci]*imgylm;
-				weightsum += weights[ti][ci];
-			}
-			realti = realti/float(weightsum);
-			imgti = imgti/float(weightsum);
 
-			qlm_real[ti].emplace_back(realti);
-			qlm_img[ti].emplace_back(imgti);
-
-			summ += realti*realti + imgti*imgti;
-		}
-		//cout<<summ<<endl;
-		summ = pow(((4.0*PI/(2*lm+1))*summ),0.5);
-
-		//cout<<summ<<endl;
-
-		q.emplace_back(summ);
+    for (py::ssize_t ti=0; ti<nop; ti++){
+        fill(sum_real.begin(), sum_real.end(), 0.0);
+        fill(sum_imag.begin(), sum_imag.end(), 0.0);
+        weightsum = 0;
+        for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
+            ylm_all_m(lm, th[ci], ph[ci], norm, ylm_real.data(), ylm_imag.data());
+            for (int k=0; k<nm; k++){
+                sum_real[k] += w[ci]*ylm_real[k];
+                sum_imag[k] += w[ci]*ylm_imag[k];
+            }
+            weightsum += w[ci];
+        }
+        summ = 0;
+        for (int k=0; k<nm; k++){
+            realti = sum_real[k]/float(weightsum);
+            imgti = sum_imag[k]/float(weightsum);
+            qr[ti*nm + k] = realti;
+            qi[ti*nm + k] = imgti;
+            summ += realti*realti + imgti*imgti;
+        }
+        qo[ti] = pow(((4.0*PI/(2*lm+1))*summ),0.5);
     }
-
-	string key1, key2, key3;
-
-	key1 = "q"+to_string(lm);
-	key2 = "q"+to_string(lm)+"_real";
-	key3 = "q"+to_string(lm)+"_imag";
-
-    atoms[py::str(key1)] = q;
-    atoms[py::str(key2)] = qlm_real;
-    atoms[py::str(key3)] = qlm_img;
-	
+    return py::make_tuple(q, qlm_real, qlm_img);
 }
 
-void calculate_aq_single(py::dict& atoms,
-	const int lm){
+py::array_t<double> calculate_aq_single(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
+    const int lm){
 
-    double realti, imgti;
-    double summ;
+    // average q_lm over each atom and its neighbours
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const double* qr = q_real.data();
+    const double* qi = q_imag.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
+    const int nm = 2*lm + 1;
+
+    py::array_t<double> q(nop);
+    double* qo = q.mutable_data();
+    double realti, imgti, summ;
     int nns;
 
-    string key1, key2;
-	key1 = "q"+to_string(lm)+"_real";
-	key2 = "q"+to_string(lm)+"_imag";
-
-    vector<vector<double>> q_real = atoms[py::str(key1)].cast<vector<vector<double>>>();
-    vector<vector<double>> q_imag = atoms[py::str(key2)].cast<vector<vector<double>>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<double> q;
-    int nop = neighbors.size();
- 
-    for (int ti= 0;ti<nop;ti++){
+    for (py::ssize_t ti=0; ti<nop; ti++){
         summ = 0;
-        for (int mi = 0;mi<2*lm+1;mi++){
-            realti = q_real[ti][mi];
-            imgti = q_imag[ti][mi];
-            
+        for (int mi=0; mi<nm; mi++){
+            realti = qr[ti*nm + mi];
+            imgti = qi[ti*nm + mi];
             nns = 0;
-            for (int ci = 0;ci<neighbors[ti].size();ci++){
-            	realti += q_real[neighbors[ti][ci]][mi];
-            	imgti += q_imag[neighbors[ti][ci]][mi];
+            for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
+                realti += qr[nb[ci]*nm + mi];
+                imgti += qi[nb[ci]*nm + mi];
                 nns += 1;
+            }
+            realti = realti/(double(nns+1));
+            imgti = imgti/(double(nns+1));
+            summ += realti*realti + imgti*imgti;
         }
-        
-        realti = realti/(double(nns+1));
-        imgti = imgti/(double(nns+1));
-
-        summ+= realti*realti + imgti*imgti;
-        
-        }
-        
-        //normalise summ
-        summ = pow(((4.0*PI/(2*lm+1)) * summ),0.5);
-        q.emplace_back(summ);
+        qo[ti] = pow(((4.0*PI/(2*lm+1)) * summ),0.5);
     }
-    key1 = "avg_q"+to_string(lm);
-    atoms[py::str(key1)] = q;
+    return q;
 }
 
 
@@ -502,239 +482,186 @@ static double wigner3j(int l, int m1, int m2, int m3) {
 }
 
 
-void calculate_w_single(py::dict& atoms,
+// 3j symbols (l l l; m1 m2 -(m1+m2)), indexed [m1 + l][m2 + l]
+static vector<vector<double>> wigner3j_table(const int lm) {
+    vector<vector<double>> w3j_table((2 * lm + 1), vector<double>(2 * lm + 1, 0.0));
+    for (int m1 = -lm; m1 <= lm; m1++) {
+        for (int m2 = -lm; m2 <= lm; m2++) {
+            int m3 = -(m1 + m2);
+            if (abs(m3) <= lm) {
+                w3j_table[m1 + lm][m2 + lm] = wigner3j(lm, m1, m2, m3);
+            }
+        }
+    }
+    return w3j_table;
+}
+
+// W_l = sum_{m1+m2+m3=0} (l l l / m1 m2 m3) * q_lm1 * q_lm2 * q_lm3,
+// with q_lm = re[m + l] + i im[m + l]
+static double wigner_w(const int lm, const double* re, const double* im,
+    const vector<vector<double>>& w3j_table) {
+    double w_val = 0.0;
+    for (int m1 = -lm; m1 <= lm; m1++) {
+        int idx1 = m1 + lm;
+        for (int m2 = -lm; m2 <= lm; m2++) {
+            int m3 = -(m1 + m2);
+            if (abs(m3) > lm) continue;
+            int idx2 = m2 + lm;
+            int idx3 = m3 + lm;
+            double w3j = w3j_table[m1 + lm][m2 + lm];
+            if (w3j == 0.0) continue;
+            double r12 = re[idx1] * re[idx2] - im[idx1] * im[idx2];
+            double i12 = re[idx1] * im[idx2] + im[idx1] * re[idx2];
+            double r123 = r12 * re[idx3] - i12 * im[idx3];
+            w_val += w3j * r123;
+        }
+    }
+    return w_val;
+}
+
+py::tuple calculate_w_single(const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm) {
 
-    string key_real = "q" + to_string(lm) + "_real";
-    string key_imag = "q" + to_string(lm) + "_imag";
-
-    vector<vector<double>> q_real = atoms[py::str(key_real)].cast<vector<vector<double>>>();
-    vector<vector<double>> q_imag = atoms[py::str(key_imag)].cast<vector<vector<double>>>();
-
-    int nop = q_real.size();
-    vector<double> w_values(nop, 0.0);
-    vector<double> wbar_values(nop, 0.0);
+    // W_l and its normalised form from the q_lm of each atom, (nop, 2l+1)
+    const py::ssize_t nop = q_real.shape(0);
+    const int nm = 2*lm + 1;
+    const double* qr = q_real.data();
+    const double* qi = q_imag.data();
+    py::array_t<double> w_values(nop), wbar_values(nop);
+    double* wv = w_values.mutable_data();
+    double* wb = wbar_values.mutable_data();
+    fill(wv, wv + nop, 0.0);
+    fill(wb, wb + nop, 0.0);
 
     // For odd l, W_l = 0 (3j symbol vanishes when 3l is odd)
     if ((3 * lm) % 2 != 0) {
-        atoms[py::str("w" + to_string(lm))] = w_values;
-        atoms[py::str("what" + to_string(lm))] = wbar_values;
-        return;
+        return py::make_tuple(w_values, wbar_values);
     }
 
-    // Precompute all needed Wigner 3j symbols
-    // m1 runs from -l to l, m2 from -l to l, m3 = -(m1+m2)
-    vector<vector<double>> w3j_table((2 * lm + 1), vector<double>(2 * lm + 1, 0.0));
-    for (int m1 = -lm; m1 <= lm; m1++) {
-        for (int m2 = -lm; m2 <= lm; m2++) {
-            int m3 = -(m1 + m2);
-            if (abs(m3) <= lm) {
-                w3j_table[m1 + lm][m2 + lm] = wigner3j(lm, m1, m2, m3);
-            }
-        }
-    }
+    const vector<vector<double>> w3j_table = wigner3j_table(lm);
 
-    for (int ti = 0; ti < nop; ti++) {
-        double w_val = 0.0;
+    for (py::ssize_t ti = 0; ti < nop; ti++) {
+        const double* re = qr + ti*nm;
+        const double* im = qi + ti*nm;
+        wv[ti] = wigner_w(lm, re, im, w3j_table);
         double norm_sq = 0.0;
-
-        // Compute |q_lm|^2 sum for normalization
-        for (int mi = 0; mi < 2 * lm + 1; mi++) {
-            norm_sq += q_real[ti][mi] * q_real[ti][mi] + q_imag[ti][mi] * q_imag[ti][mi];
+        for (int mi = 0; mi < nm; mi++) {
+            norm_sq += re[mi] * re[mi] + im[mi] * im[mi];
         }
-
-        // W_l = sum_{m1+m2+m3=0} (l l l / m1 m2 m3) * q_lm1 * q_lm2 * q_lm3
-        // where q_lm is complex: q_real + i*q_imag
-        for (int m1 = -lm; m1 <= lm; m1++) {
-            int idx1 = m1 + lm;  // index into q arrays
-            for (int m2 = -lm; m2 <= lm; m2++) {
-                int m3 = -(m1 + m2);
-                if (abs(m3) > lm) continue;
-                int idx2 = m2 + lm;
-                int idx3 = m3 + lm;
-
-                double w3j = w3j_table[m1 + lm][m2 + lm];
-                if (w3j == 0.0) continue;
-
-                // Complex product: q1 * q2 * q3
-                // (a1+ib1)(a2+ib2) = (a1a2-b1b2) + i(a1b2+a2b1)
-                double r1 = q_real[ti][idx1], i1 = q_imag[ti][idx1];
-                double r2 = q_real[ti][idx2], i2 = q_imag[ti][idx2];
-                double r3 = q_real[ti][idx3], i3 = q_imag[ti][idx3];
-
-                double r12 = r1 * r2 - i1 * i2;
-                double i12 = r1 * i2 + i1 * r2;
-                double r123 = r12 * r3 - i12 * i3;
-                // imaginary part of triple product should be ~0 for real W_l
-                // double i123 = r12 * i3 + i12 * r3;
-
-                w_val += w3j * r123;
-            }
-        }
-
-        w_values[ti] = w_val;
         // Normalized: W-hat_l = W_l / (sum |q_lm|^2)^(3/2)
         double norm_cubed = pow(norm_sq, 1.5);
-        wbar_values[ti] = (norm_cubed > 1e-30) ? w_val / norm_cubed : 0.0;
+        wb[ti] = (norm_cubed > 1e-30) ? wv[ti] / norm_cubed : 0.0;
     }
-
-    atoms[py::str("w" + to_string(lm))] = w_values;
-    atoms[py::str("what" + to_string(lm))] = wbar_values;
+    return py::make_tuple(w_values, wbar_values);
 }
 
 
-void calculate_aw_single(py::dict& atoms,
+py::tuple calculate_aw_single(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
     const int lm) {
 
-    // Compute averaged W_l using neighbor-averaged q_lm values
-    // First, compute neighbor-averaged q_lm (same as calculate_aq_single but
-    // we keep the full complex components, then compute W_l from those)
+    // W_l of the q_lm averaged over each atom and its neighbours
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const double* qr = q_real.data();
+    const double* qi = q_imag.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
+    const int nm = 2*lm + 1;
+    py::array_t<double> w_values(nop), wbar_values(nop);
+    double* wv = w_values.mutable_data();
+    double* wb = wbar_values.mutable_data();
+    fill(wv, wv + nop, 0.0);
+    fill(wb, wb + nop, 0.0);
 
-    string key_real = "q" + to_string(lm) + "_real";
-    string key_imag = "q" + to_string(lm) + "_imag";
-
-    vector<vector<double>> q_real = atoms[py::str(key_real)].cast<vector<vector<double>>>();
-    vector<vector<double>> q_imag = atoms[py::str(key_imag)].cast<vector<vector<double>>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-
-    int nop = q_real.size();
-
-    // For odd l, W_l = 0
     if ((3 * lm) % 2 != 0) {
-        vector<double> zeros(nop, 0.0);
-        atoms[py::str("avg_w" + to_string(lm))] = zeros;
-        atoms[py::str("avg_what" + to_string(lm))] = zeros;
-        return;
+        return py::make_tuple(w_values, wbar_values);
     }
 
-    // Precompute 3j table
-    vector<vector<double>> w3j_table((2 * lm + 1), vector<double>(2 * lm + 1, 0.0));
-    for (int m1 = -lm; m1 <= lm; m1++) {
-        for (int m2 = -lm; m2 <= lm; m2++) {
-            int m3 = -(m1 + m2);
-            if (abs(m3) <= lm) {
-                w3j_table[m1 + lm][m2 + lm] = wigner3j(lm, m1, m2, m3);
-            }
-        }
-    }
+    const vector<vector<double>> w3j_table = wigner3j_table(lm);
+    vector<double> avg_real(nm), avg_imag(nm);
 
-    vector<double> w_values(nop, 0.0);
-    vector<double> wbar_values(nop, 0.0);
-
-    for (int ti = 0; ti < nop; ti++) {
-        // First compute averaged q_lm for this atom
-        int nns = neighbors[ti].size();
-        vector<double> avg_real(2 * lm + 1, 0.0);
-        vector<double> avg_imag(2 * lm + 1, 0.0);
-
-        for (int mi = 0; mi < 2 * lm + 1; mi++) {
-            avg_real[mi] = q_real[ti][mi];
-            avg_imag[mi] = q_imag[ti][mi];
-            for (int ci = 0; ci < nns; ci++) {
-                avg_real[mi] += q_real[neighbors[ti][ci]][mi];
-                avg_imag[mi] += q_imag[neighbors[ti][ci]][mi];
+    for (py::ssize_t ti = 0; ti < nop; ti++) {
+        const std::int64_t nns = off[ti+1] - off[ti];
+        for (int mi = 0; mi < nm; mi++) {
+            avg_real[mi] = qr[ti*nm + mi];
+            avg_imag[mi] = qi[ti*nm + mi];
+            for (std::int64_t ci = off[ti]; ci < off[ti+1]; ci++) {
+                avg_real[mi] += qr[nb[ci]*nm + mi];
+                avg_imag[mi] += qi[nb[ci]*nm + mi];
             }
             avg_real[mi] /= double(nns + 1);
             avg_imag[mi] /= double(nns + 1);
         }
 
-        // Compute W_l from averaged q_lm
-        double w_val = 0.0;
         double norm_sq = 0.0;
-        for (int mi = 0; mi < 2 * lm + 1; mi++) {
+        for (int mi = 0; mi < nm; mi++) {
             norm_sq += avg_real[mi] * avg_real[mi] + avg_imag[mi] * avg_imag[mi];
         }
-
-        for (int m1 = -lm; m1 <= lm; m1++) {
-            for (int m2 = -lm; m2 <= lm; m2++) {
-                int m3 = -(m1 + m2);
-                if (abs(m3) > lm) continue;
-                int idx1 = m1 + lm, idx2 = m2 + lm, idx3 = m3 + lm;
-                double w3j = w3j_table[m1 + lm][m2 + lm];
-                if (w3j == 0.0) continue;
-
-                double r12 = avg_real[idx1] * avg_real[idx2] - avg_imag[idx1] * avg_imag[idx2];
-                double i12 = avg_real[idx1] * avg_imag[idx2] + avg_imag[idx1] * avg_real[idx2];
-                double r123 = r12 * avg_real[idx3] - i12 * avg_imag[idx3];
-                w_val += w3j * r123;
-            }
-        }
-
-        w_values[ti] = w_val;
+        wv[ti] = wigner_w(lm, avg_real.data(), avg_imag.data(), w3j_table);
         double norm_cubed = pow(norm_sq, 1.5);
-        wbar_values[ti] = (norm_cubed > 1e-30) ? w_val / norm_cubed : 0.0;
+        wb[ti] = (norm_cubed > 1e-30) ? wv[ti] / norm_cubed : 0.0;
     }
-
-    atoms[py::str("avg_w" + to_string(lm))] = w_values;
-    atoms[py::str("avg_what" + to_string(lm))] = wbar_values;
+    return py::make_tuple(w_values, wbar_values);
 }
 
 
-void calculate_disorder(py::dict& atoms,
-	const int lm){
-    
+py::array_t<double> calculate_disorder(const nl_index& offsets,
+    const nl_index& neighbors,
+    const nl_values& q_real,
+    const nl_values& q_imag,
+    const int lm){
+
+    const std::int64_t* off = offsets.data();
+    const std::int64_t* nb = neighbors.data();
+    const double* qr = q_real.data();
+    const double* qi = q_imag.data();
+    const py::ssize_t nop = offsets.shape(0) - 1;
+    const int nm = 2*lm + 1;
+
     double sum2ti, sum2tj;
     double realdotproduct, imgdotproduct;
     double connection;
     double dis;
+    vector<double> sii(nop);
+    py::array_t<double> disorder(nop);
+    double* dout = disorder.mutable_data();
 
-    string key1, key2;
-	key1 = "q"+to_string(lm)+"_real";
-	key2 = "q"+to_string(lm)+"_imag";
-
-    vector<vector<double>> q_real = atoms[py::str(key1)].cast<vector<vector<double>>>();
-    vector<vector<double>> q_imag = atoms[py::str(key2)].cast<vector<vector<double>>>();
-    vector<vector<int>> neighbors = atoms[py::str("neighbors")].cast<vector<vector<int>>>();
-    vector<double> sii;
-    vector<double> disorder;
-    int nop = neighbors.size();
-
-    for(int ti=0; ti<nop; ti++){
-
+    for (py::ssize_t ti=0; ti<nop; ti++){
         sum2ti = 0.0;
         realdotproduct = 0.0;
         imgdotproduct = 0.0;
-
-        for (int mi = 0;mi < 2*lm+1 ; mi++){
-            sum2ti += q_real[ti][mi]*q_real[ti][mi] + q_imag[ti][mi]*q_imag[ti][mi];
-            realdotproduct += q_real[ti][mi]*q_real[ti][mi];
-            imgdotproduct  += q_imag[ti][mi]*q_imag[ti][mi];
+        for (int mi = 0; mi < nm; mi++){
+            const double a = qr[ti*nm + mi], b = qi[ti*nm + mi];
+            sum2ti += a*a + b*b;
+            realdotproduct += a*a;
+            imgdotproduct  += b*b;
         }
         connection = (realdotproduct+imgdotproduct)/(sqrt(sum2ti)*sqrt(sum2ti));
-        sii.emplace_back(connection);
+        sii[ti] = connection;
     }
 
-    //first round is over
-    //now find cross terms
-    //   D_i = 1/n_i * sum_{j in nbrs(i)} [S_ii + S_jj - 2 S_ij]
-    // with S_ij = Re(q_i . q_j*) / (|q_i| |q_j|), i.e. the normalised
-    // Kawasaki-Onuki variable (S_ii = 1).
-    for(int ti=0; ti<nop; ti++){
-
+    for (py::ssize_t ti=0; ti<nop; ti++){
         dis = 0;
-
-        for(size_t ni=0; ni<neighbors[ti].size(); ni++){
-            int tj = neighbors[ti][ni];
+        for (std::int64_t ci=off[ti]; ci<off[ti+1]; ci++){
+            const std::int64_t tj = nb[ci];
             sum2ti = 0.0;
             sum2tj = 0.0;
             realdotproduct = 0.0;
             imgdotproduct = 0.0;
-            for (int mi = 0; mi<2*lm+1 ; mi++){
-                sum2ti += q_real[ti][mi]*q_real[ti][mi] + q_imag[ti][mi]*q_imag[ti][mi];
-                sum2tj += q_real[tj][mi]*q_real[tj][mi] + q_imag[tj][mi]*q_imag[tj][mi];
-                realdotproduct += q_real[ti][mi]*q_real[tj][mi];
-                imgdotproduct  += q_imag[ti][mi]*q_imag[tj][mi];
+            for (int mi = 0; mi < nm; mi++){
+                sum2ti += qr[ti*nm + mi]*qr[ti*nm + mi] + qi[ti*nm + mi]*qi[ti*nm + mi];
+                sum2tj += qr[tj*nm + mi]*qr[tj*nm + mi] + qi[tj*nm + mi]*qi[tj*nm + mi];
+                realdotproduct += qr[ti*nm + mi]*qr[tj*nm + mi];
+                imgdotproduct  += qi[ti*nm + mi]*qi[tj*nm + mi];
             }
             connection = (realdotproduct+imgdotproduct)/(sqrt(sum2tj)*sqrt(sum2ti));
             dis += (sii[ti] + sii[tj] - 2*connection);
         }
-        if (neighbors[ti].size() > 0){
-            disorder.emplace_back(dis/double(neighbors[ti].size()));
-        }
-        else{
-            disorder.emplace_back(0.0);
-        }
+        const std::int64_t nn = off[ti+1] - off[ti];
+        dout[ti] = (nn > 0) ? dis/double(nn) : 0.0;
     }
-
-    atoms[py::str("disorder")] = disorder;
+    return disorder;
 }

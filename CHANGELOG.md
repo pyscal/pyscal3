@@ -62,12 +62,55 @@ and ACE descriptors up to body order four.
   `atoms.arrays` for any cell size. Small cells used to put them in
   `atoms.info` as lists.
 - The `cells` argument of `find_neighbors` is ignored.
+- The bonds are also stored as flat arrays in `atoms.info`
+  (`pyscal_bond_offsets`, `pyscal_bond_neighbors`, `pyscal_bond_distance`,
+  `pyscal_bond_weight`, `pyscal_bond_vector`, `pyscal_bond_theta`,
+  `pyscal_bond_phi`, and `pyscal_candidate_*` for the candidate methods), which
+  the descriptors read. `find_neighbors(..., store_rows=False)` stores only
+  these and skips the per-atom row keys: for 131 072 atoms with a 5 A cutoff
+  the search takes 0.31 s instead of 1.33 s, and the atoms can be written to
+  extxyz.
+
+### Descriptor speed
+
+The C++ descriptor routines take the neighbor data as flat arrays instead of
+nested lists, and the spherical harmonics of a bond are evaluated for all m at
+once. For 131 072 atoms with 12 neighbors each (5 A cutoff: ragged neighbor
+lists), on one core:
+
+- `steinhardt_parameter(atoms, [4, 6])`: 0.09 s instead of 1.27 s (0.53 s
+  instead of 2.26 s); averaged q_l, `wigner_w_parameter` and `disorder`
+  improve similarly.
+- `find_solids` with clustering: 0.08 s instead of 0.57 s.
+- `chi_params`: 0.03 s instead of 0.88 s; `angular_criteria`: 0.015 s instead
+  of 0.61 s; `short_range_order` and `average_over_neighbors`: a few ms instead
+  of 0.08 s.
+- `atomic_strain`, `von_mises_strain`, `d2min` and `slip_vector` (32 000 atoms):
+  6 ms instead of about 0.9 s (0.19 s instead of about 3 s).
+- `ace` (4000 atoms, 5 A cutoff): 0.37 s instead of 47 s.
+- `common_neighbor_analysis`: 1.84 s instead of 79 s for 1 000 188 atoms (0.45
+  s instead of 10.3 s for 256 000), and 10 to 12 times faster than before for
+  structures with surfaces or liquid. `diamond_structure` improves similarly.
+  CNA no longer builds a padded supercell; the labels are unchanged.
+
+Most results are bitwise the same as before. q_l, the q_lm parts, W_l and
+everything derived from them (disorder, `find_solids`) can differ in the last
+digit (at most about 1e-15), and the strain family by up to about 1e-12
+relative for badly conditioned fits.
 
 ### Fixes
 
 - `common_neighbor_analysis` and `diamond_structure` no longer label every
   atom as "others" when a single atom, for example an isolated atom next to a
   surface, has too few neighbor candidates.
+- `find_clusters` and `find_solids` no longer crash with a segmentation fault
+  for clusters of a few hundred thousand atoms (the cluster search was
+  recursive and overflowed the stack).
+- `ace` returns bitwise the same descriptors on repeated calls; complex
+  products in the B basis could round differently from call to call.
+- `diamond_structure` no longer labels an atom as hexagonal diamond when
+  its second shell has the icosahedral CNA signature; such an atom is now
+  treated like any other non-diamond site.
 - Cell lists are built on fractional coordinates: triclinic, hexagonal and
   rotated cells (primitive fcc, hcp, ASE `fcc111` slabs, LAMMPS triclinic
   boxes) gave wrong neighbors or hung above 250 atoms.
