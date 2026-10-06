@@ -172,3 +172,39 @@ def test_non_finite_positions_raise_on_threads(n):
     with threads(4):
         with pytest.raises(ValueError, match="finite"):
             pyscal3.find_neighbors(atoms, method="cutoff", cutoff=3.0)
+
+
+def test_default_threads_in_process(monkeypatch):
+    # the subprocess test above checks the import, this one covers every
+    # branch of the default in the measured process
+    from pyscal3 import threads as t
+    for name in ("PYSCAL_NUM_THREADS", "OMP_NUM_THREADS"):
+        monkeypatch.delenv(name, raising=False)
+    cpus = t._available_cpus()
+    assert cpus >= 1
+    assert t._default_threads() == cpus
+    monkeypatch.setenv("OMP_NUM_THREADS", "3,2")      # nested OpenMP setting
+    assert t._default_threads() == 3
+    monkeypatch.setenv("PYSCAL_NUM_THREADS", "2")
+    assert t._default_threads() == 2
+    monkeypatch.setenv("PYSCAL_NUM_THREADS", "many")  # not a number: ignored
+    assert t._default_threads() == 3
+    monkeypatch.setenv("PYSCAL_NUM_THREADS", "0")     # not positive: ignored
+    assert t._default_threads() == 3
+    before = pyscal3.get_num_threads()
+    try:
+        pyscal3.set_num_threads(0)                    # below 1: the default
+        assert pyscal3.get_num_threads() == 3
+    finally:
+        pyscal3.set_num_threads(before)
+
+
+def test_available_cpus_without_affinity(monkeypatch):
+    # macOS and Windows have no os.sched_getaffinity
+    import os
+    from pyscal3 import threads as t
+    monkeypatch.delattr(os, "sched_getaffinity", raising=False)
+    monkeypatch.setattr(os, "cpu_count", lambda: 5)
+    assert t._available_cpus() == 5
+    monkeypatch.setattr(os, "cpu_count", lambda: None)
+    assert t._available_cpus() == 1
