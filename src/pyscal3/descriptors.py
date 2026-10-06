@@ -382,24 +382,9 @@ def disorder(atoms: Atoms, q=6, averaged=False):
     """
     d = _get_dict_with_neighbors(atoms)
 
-    # Ensure q values exist
-    keys_needed = ["q%d_real" % q, "q%d_imag" % q]
-    need_calc = False
-    for k in keys_needed:
-        if k not in d:
-            need_calc = True
-            break
-        v = d[k]
-        if not hasattr(v, "__len__") or len(v) == 0:
-            need_calc = True
-            break
-        # Check if it looks like a 2-D container (list-of-lists or 2-D array)
-        first = v[0]
-        if not (hasattr(first, "__len__") and not isinstance(first, str)):
-            need_calc = True
-            break
-    if need_calc:
-        _compute_qlm(atoms, d, q)
+    # q_lm from the current neighbors: stored values may belong to an
+    # earlier neighbor list
+    _compute_qlm(atoms, d, q)
 
     offsets, nb = neighbor_arrays(atoms, "neighbors")
     real = np.ascontiguousarray(d["q%d_real" % q], dtype=float)
@@ -539,9 +524,12 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
     atoms : ase.Atoms
         Structure (must have Voronoi neighbors computed).
     edge_cutoff : float, optional
-        Minimum edge length fraction. Default 0.05.
+        Edges shorter than this fraction of the face perimeter are not
+        counted. Default 0.05.
     area_cutoff : float, optional
-        Minimum face area fraction. Default 0.01.
+        Faces whose area is at most this fraction of the surface of the
+        Voronoi cell are not counted. It does not depend on the ``voroexp``
+        used in :func:`find_neighbors`. Default 0.01.
 
     Returns
     -------
@@ -555,10 +543,6 @@ def voronoi_vector(atoms: Atoms, edge_cutoff=0.05, area_cutoff=0.01):
             "Voronoi analysis required. Call find_neighbors(atoms, method='voronoi') first."
         )
 
-    if "neighborweight" not in d:
-        # rows not stored (store_rows=False): rebuild them for the C++ routine
-        offsets, nb = neighbor_arrays(atoms, "neighborweight")
-        d["neighborweight"] = rows_from_flat(offsets, nb["neighborweight"])
     pc.calculate_voronoi_vector(d, edge_cutoff, area_cutoff)
 
     vv = np.array(d["vorovector"])
@@ -618,7 +602,6 @@ def entropy(
     d = {}
 
     n = len(atoms)
-    volume = _periodic_volume(atoms, "entropy")
     kb = 1
 
     cutoffs = np.ascontiguousarray(stored_per_atom(atoms, "cutoff"), dtype=float)
@@ -634,7 +617,8 @@ def entropy(
     if local:
         rho = 0
     else:
-        rho = n / volume
+        # the global density needs a fully periodic cell
+        rho = n / _periodic_volume(atoms, "entropy")
 
     d["entropy"] = pc.calculate_entropy(
         offsets, nb["neighbordist"], cutoffs, sigma, rho, rstart, rm, h, kb
@@ -963,25 +947,30 @@ def identify_ackland_jones(atoms: Atoms):
     """
     Classify atomic environments with the Ackland–Jones method.
 
-    Uses the chi-parameter histogram (angular signature) to assign each
-    atom a structure type via a decision tree.  The chi histogram bins
-    cosines of all pairwise neighbor angles into 9 ranges; the counts in
-    specific bins discriminate FCC, HCP, BCC, and icosahedral (ICO)
-    environments.
+    For each atom, :math:`r_0^2` is the mean squared distance of its six
+    nearest atoms. The bond angles between the :math:`N_0` atoms with
+    :math:`d^2 < 1.45\\,r_0^2` are counted in eight ranges of
+    :math:`\\cos\\theta` (:math:`\\chi_0, \\dots, \\chi_7`), and
+    :math:`N_1` is the number of atoms with :math:`d^2 < 1.55\\,r_0^2`.
+    The structure is assigned from the deviations of the counts from those
+    of perfect bcc, close packed, fcc and hcp environments, as in
+    Ackland & Jones (2006) and the original implementation of LAMMPS
+    ``compute ackland/atom``. Atoms that match no structure are labelled
+    0 (other).
 
-    The algorithm follows Ackland & Jones, *Phys. Rev. B* **73**, 054104
-    (2006), adapted for the 9-bin chi scheme used by pyscal3.
+    The function finds its own neighbors. A neighbor list stored on
+    ``atoms`` is not used and not changed.
 
     Parameters
     ----------
     atoms : ase.Atoms
-        Structure with neighbors already computed (via
-        :func:`pyscal3.find_neighbors`).
+        Structure.
 
     Returns
     -------
     labels : numpy.ndarray of int, shape (natoms,)
-        Per-atom structure label:
+        Per-atom structure label, with the codes of
+        :func:`common_neighbor_analysis`:
 
         =====  ==========
         Value  Structure
@@ -994,35 +983,19 @@ def identify_ackland_jones(atoms: Atoms):
         =====  ==========
 
     names : list of str
-        Human-readable name for each atom: ``"fcc"``, ``"hcp"``, ``"bcc"``,
-        ``"ico"`` or ``"other"``. The labels are stored in
-        ``atoms.arrays["pyscal_ackland_label"]`` and the names in
-        ``atoms.arrays["pyscal_structure"]``.
+        Name for each atom: ``"fcc"``, ``"hcp"``, ``"bcc"``, ``"ico"`` or
+        ``"other"``.
 
     Notes
     -----
-    Chi-parameter bin edges (9 bins, cosine of the angle):
+    The labels are stored in ``atoms.arrays["pyscal_ackland_label"]`` and
+    ``atoms.arrays["pyscal_structure"]`` (the key that
+    :func:`common_neighbor_analysis` also uses), and the angle counts in
+    ``atoms.arrays["pyscal_ackland_chi"]``, shape (natoms, 8).
 
-    =====  =========================
-    Bin    Cosine range
-    =====  =========================
-    χ₀     [−1.000, −0.945)  ~180°
-    χ₁     [−0.945, −0.915)  ~160°
-    χ₂     [−0.915, −0.755)  ~139°
-    χ₃     [−0.755, −0.705)  ~135°
-    χ₄     [−0.705, −0.195)
-    χ₅     [−0.195, +0.195)  ~90°
-    χ₆     [+0.195, +0.245)
-    χ₇     [+0.245, +0.795)  ~60°
-    χ₈     [+0.795, +1.000]  ~0°
-    =====  =========================
-
-    Decision tree (ideal counts for perfect structures):
-
-    * **BCC** (14 neighbours): χ₀ = 7, χ₅ = 12, χ₇ = 36
-    * **FCC** (12 neighbours): χ₀ = 6, χ₅ = 12, χ₇ = 24, χ₁₊₂₊₃ = 0
-    * **HCP** (12 neighbours): χ₀ = 3, χ₂ = 6, χ₇ = 24
-    * **ICO** (12 neighbours): χ₀ = 6, χ₅ = 0, χ₇ = 30
+    Bins of :math:`\\cos\\theta`: [-1, -0.945), [-0.945, -0.915),
+    [-0.915, -0.755), [-0.755, -0.195), [-0.195, 0.195), [0.195, 0.245),
+    [0.245, 0.795), [0.795, 1].
 
     References
     ----------
@@ -1032,34 +1005,12 @@ def identify_ackland_jones(atoms: Atoms):
     `doi:10.1103/PhysRevB.73.054104
     <https://doi.org/10.1103/PhysRevB.73.054104>`__
     """
-    chi = chi_params(atoms)  # (N, 9) int array
-
-    n = len(atoms)
-    labels = np.zeros(n, dtype=int)
-
-    # --- BCC: 7 or more antiparallel (180°) pairs ---
-    bcc_mask = chi[:, 0] >= 7
-    labels[bcc_mask] = ACKLAND_BCC
-
-    # --- FCC or ICO: 6 antiparallel pairs, no intermediate angles ---
-    remaining = labels == 0
-    fcc_or_ico = remaining & (chi[:, 0] >= 5) & (
-        chi[:, 1] + chi[:, 2] + chi[:, 3] == 0
-    )
-    # ICO has no ~90° pairs (χ₅ = 0); FCC has χ₅ > 0
-    labels[fcc_or_ico & (chi[:, 5] == 0)] = ACKLAND_ICO
-    labels[fcc_or_ico & (chi[:, 5] > 0)] = ACKLAND_FCC
-
-    # --- HCP: has angles in the ~139° range (χ₂ > 0) ---
-    remaining = labels == 0
-    hcp_mask = remaining & (chi[:, 2] > 0)
-    labels[hcp_mask] = ACKLAND_HCP
-
-    # Store results
+    labels, chi = pc.ackland_jones_structure(*_geometry(atoms, 2), 2.0)
+    labels = np.asarray(labels, dtype=int)
     names = [_ACKLAND_NAMES[l] for l in labels]
     atoms.arrays["pyscal_ackland_label"] = labels
-    atoms.arrays["pyscal_structure"] = np.array(names)
-
+    atoms.arrays["pyscal_structure"] = labels.copy()
+    atoms.arrays["pyscal_ackland_chi"] = chi
     return labels, names
 
 
@@ -1123,14 +1074,20 @@ def von_mises_strain(atoms: Atoms, reference: Atoms):
     """
     Compute the von Mises shear strain invariant from the atomic strain.
 
+    Following Shimizu, Ogata and Li (2007),
+
     .. math::
 
         \\eta^{\\text{Mises}} = \\sqrt{
-            \\frac{1}{2} \\left[
+            \\frac{1}{6} \\left[
                 (E_{xx}-E_{yy})^2 + (E_{yy}-E_{zz})^2 + (E_{zz}-E_{xx})^2
             \\right]
             + E_{xy}^2 + E_{yz}^2 + E_{xz}^2
         }
+
+    which equals :math:`\\sqrt{E'_{ij} E'_{ij} / 2}` with :math:`E'` the
+    deviatoric part of the strain, so it does not depend on the
+    orientation of the axes.
 
     Parameters
     ----------
@@ -1149,7 +1106,7 @@ def von_mises_strain(atoms: Atoms, reference: Atoms):
     exx, eyy, ezz = E[:, 0, 0], E[:, 1, 1], E[:, 2, 2]
     exy, eyz, exz = E[:, 0, 1], E[:, 1, 2], E[:, 0, 2]
     vm = np.sqrt(
-        0.5 * ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2)
+        ((exx - eyy)**2 + (eyy - ezz)**2 + (ezz - exx)**2) / 6.0
         + exy**2 + eyz**2 + exz**2
     )
     vm[np.isnan(E).any(axis=(1, 2))] = np.nan
@@ -1265,10 +1222,13 @@ def find_solids(
     """
     d = {}
 
-    if isinstance(bonds, int):
+    # numbers.Integral and numbers.Real also accept numpy scalars
+    if isinstance(bonds, numbers.Integral):
         criteria = 0
-    elif isinstance(bonds, float) and 0 <= bonds <= 1:
+        bonds = int(bonds)
+    elif isinstance(bonds, numbers.Real) and 0 <= bonds <= 1:
         criteria = 1
+        bonds = float(bonds)
     else:
         raise TypeError("bonds must be int or float in [0,1]")
 
@@ -1338,6 +1298,8 @@ def find_clusters(atoms: Atoms, condition, largest=True, cutoff=0, d=None):
             largest_id = unique[counts.argmax()]
             atoms.arrays["pyscal_largest_cluster"] = cluster_ids == largest_id
             return largest_size
+        # no cluster: do not leave the mask of an earlier call behind
+        atoms.arrays["pyscal_largest_cluster"] = np.zeros(len(atoms), dtype=bool)
         return 0
     return None
 
@@ -1365,6 +1327,9 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     Returns
     -------
     numpy array
+        The averages, with the shape of the property: one value per atom,
+        or one row per atom for properties with several values per atom
+        (each column is averaged separately).
     """
     d = _get_dict_with_neighbors(atoms)
 
@@ -1377,24 +1342,20 @@ def average_over_neighbors(atoms: Atoms, key: str, include_self=True):
     else:
         raise KeyError(f"Property '{key}' not found")
 
-    # 1-D values: use fast C++ averaging
     values = np.asarray(values)
-    if values.ndim == 1:
-        offsets, nb = neighbor_arrays(atoms, "neighbors")
+    offsets, nb = neighbor_arrays(atoms, "neighbors")
+
+    def average(column):
         return pc.calculate_average_over_neighbors(
-            offsets, nb["neighbors"], np.ascontiguousarray(values, dtype=float), include_self
+            offsets, nb["neighbors"], np.ascontiguousarray(column, dtype=float), include_self
         )
 
-    # Multi-dimensional: fall back to Python loop
-    offsets, nb = neighbor_arrays(atoms, "neighbors")
-    result = []
-    for i in range(len(atoms)):
-        vals = [values[i]] if include_self else []
-        for j in nb["neighbors"][offsets[i]:offsets[i + 1]]:
-            vals.append(values[j])
-        result.append(np.mean(vals))
-
-    return np.array(result)
+    if values.ndim == 1:
+        return average(values)
+    # several values per atom: average each column on its own
+    columns = values.reshape(len(atoms), -1)
+    result = np.column_stack([average(columns[:, k]) for k in range(columns.shape[1])])
+    return result.reshape(values.shape)
 
 
 # ---------------------------------------------------------------------------
@@ -1405,17 +1366,24 @@ def effective_coordination_number(atoms: Atoms):
     """
     Calculate the effective coordination number (ECoN).
 
-    ECoN weights each neighbor by a continuous function of distance
-    relative to the average neighbor distance, converging iteratively:
+    ECoN weights each neighbor by a continuous function of its distance
+    relative to a weighted mean distance (Hoppe 1979):
 
     .. math::
 
         \\mathrm{ECoN}_i = \\sum_j \\exp\\!\\left[
             1 - \\left(\\frac{d_{ij}}{d_{\\mathrm{av},i}}\\right)^6
-        \\right]
+        \\right],
+        \\qquad
+        d_{\\mathrm{av},i} = \\frac{\\sum_j d_{ij}\\, w_{ij}}{\\sum_j w_{ij}},
+        \\quad
+        w_{ij} = \\exp\\!\\left[
+            1 - \\left(\\frac{d_{ij}}{d_{\\mathrm{av},i}}\\right)^6
+        \\right].
 
-    where :math:`d_{\\mathrm{av},i}` is the weighted average distance
-    that is itself computed from the weights (self-consistent iteration).
+    :math:`d_{\\mathrm{av},i}` is found by iteration, starting from the
+    shortest neighbor distance, until it changes by less than one part in
+    :math:`10^{12}`. The sums run over the stored neighbors of atom i.
 
     Parameters
     ----------
@@ -1425,8 +1393,8 @@ def effective_coordination_number(atoms: Atoms):
     Returns
     -------
     numpy.ndarray, shape (natoms,)
-        Per-atom ECoN values.  Also stored in
-        ``atoms.arrays["pyscal_econ"]``.
+        Per-atom ECoN values (0 for atoms without neighbors).  Also stored
+        in ``atoms.arrays["pyscal_econ"]``.
 
     References
     ----------
@@ -1434,35 +1402,30 @@ def effective_coordination_number(atoms: Atoms):
     ionic radii (MEFIR)", *Z. Kristallogr.* **150**, 23 (1979).
     """
     ensure_neighbors(atoms)
-    dists = _get_neighbor_dists_padded(atoms)   # (N, max_nn)
-    mask = dists > 0  # valid neighbors
+    dists = _get_neighbor_dists_padded(atoms)   # (N, max_nn), 0 where padded
+    mask = dists > 0
+    has_neighbors = mask.any(axis=1)
 
-    n = len(atoms)
-    econ = np.zeros(n, dtype=float)
+    def weights(dav):
+        return np.where(mask, np.exp(1.0 - (dists / dav[:, None]) ** 6), 0.0)
 
-    for _ in range(10):  # iterate to self-consistency
-        # weighted average distance
-        weights = np.where(mask, np.exp(1.0 - (dists / np.where(
-            econ[:, None] > 0,
-            _weighted_avg_dist(dists, mask, econ),
-            np.where(mask, dists, np.inf).min(axis=1, keepdims=True)
-        ))**6), 0.0)
-        econ_new = weights.sum(axis=1)
-        if np.allclose(econ, econ_new, atol=1e-8):
+    # start from the shortest distance and iterate the weighted mean
+    dav = np.where(has_neighbors, np.where(mask, dists, np.inf).min(axis=1), 1.0)
+    for _ in range(200):
+        w = weights(dav)
+        wsum = w.sum(axis=1)
+        new = np.where(wsum > 0, (w * dists).sum(axis=1) / np.where(wsum > 0, wsum, 1.0), dav)
+        converged = np.all(np.abs(new - dav) <= 1e-12 * dav)
+        dav = new
+        if converged:
             break
-        econ = econ_new
+    else:
+        warnings.warn("effective_coordination_number: the mean distance did not "
+                      "converge in 200 iterations", stacklevel=2)
 
+    econ = np.where(has_neighbors, weights(dav).sum(axis=1), 0.0)
     atoms.arrays["pyscal_econ"] = econ
     return econ
-
-
-def _weighted_avg_dist(dists, mask, econ):
-    """Weighted average distance for ECoN iteration."""
-    weights = np.where(mask, np.exp(1.0 - (dists / np.where(
-        mask, dists, np.inf).min(axis=1, keepdims=True))**6), 0.0)
-    wsum = weights.sum(axis=1, keepdims=True)
-    wsum = np.where(wsum > 0, wsum, 1.0)
-    return (weights * dists).sum(axis=1, keepdims=True) / wsum
 
 
 def coordination_number(atoms: Atoms):
@@ -1548,17 +1511,19 @@ def generalized_coordination_number(atoms: Atoms, cn_max=None):
 
 def local_density(atoms: Atoms):
     """
-    Estimate the local atomic number density.
+    Estimate a local density from the neighbors of each atom.
 
-    For each atom, the local density is estimated from the mean neighbor
-    distance:
+    For each atom, the number of neighbors is divided by the volume of a
+    sphere whose radius is the mean neighbor distance:
 
     .. math::
 
         \\rho_i = \\frac{N_i}{\\frac{4}{3}\\pi \\bar{d}_i^3}
 
     where :math:`N_i` is the coordination number and :math:`\\bar{d}_i`
-    is the mean neighbor distance.
+    is the mean neighbor distance. This is a relative measure, for
+    comparing atoms within one structure: it is not the number density
+    N/V (in a perfect fcc crystal with 12 neighbors it is about twice N/V).
 
     Parameters
     ----------
@@ -1568,7 +1533,7 @@ def local_density(atoms: Atoms):
     Returns
     -------
     numpy.ndarray, shape (natoms,)
-        Per-atom local density (atoms per unit volume).  Also stored in
+        Per-atom local density.  Also stored in
         ``atoms.arrays["pyscal_local_density"]``.
     """
     ensure_neighbors(atoms)

@@ -55,10 +55,12 @@ For a homogeneous deformation $\mathbf{F}$ of the whole structure, $\mathbf{F}(i
 `von_mises_strain` reduces $\mathbf{E}$ with components $E_{\alpha\beta}$ to one number per atom:
 
 $$
-\eta(i) = \left( \frac{1}{2} \left[ (E_{xx} - E_{yy})^2 + (E_{yy} - E_{zz})^2 + (E_{zz} - E_{xx})^2 \right] + E_{xy}^2 + E_{yz}^2 + E_{xz}^2 \right)^{1/2}.
+\eta(i) = \left( \frac{1}{6} \left[ (E_{xx} - E_{yy})^2 + (E_{yy} - E_{zz})^2 + (E_{zz} - E_{xx})^2 \right] + E_{xy}^2 + E_{yz}^2 + E_{xz}^2 \right)^{1/2}.
 $$
 
-$\eta$ is zero for a pure change of volume.
+This is the definition of Shimizu et al. [2].
+It equals $\left( \tfrac{1}{2} \sum_{\alpha\beta} E'_{\alpha\beta} E'_{\alpha\beta} \right)^{1/2}$, where $\mathbf{E}'$ is the deviatoric part of $\mathbf{E}$, so $\eta$ does not depend on the orientation of the axes.
+$\eta$ is zero for a pure change of volume, and equal to $\gamma$ for a small pure shear $E_{xy} = E_{yx} = \gamma$.
 
 ### Non-affine displacement
 
@@ -389,8 +391,8 @@ for G in (shear, rotation.T @ shear @ rotation):
     for structure in (reference, current):
         pyscal.find_neighbors(structure, method="cutoff", cutoff=3.1)
     eta_shear.append(pyscal.von_mises_strain(current, reference)[0])
-glue("eta_axes", round(eta_shear[0], 3), display=False)
-glue("eta_rotated", round(eta_shear[1], 3), display=False)
+# eta does not depend on the orientation of the axes
+assert abs(eta_shear[0] - eta_shear[1]) < 1e-3
 ```
 
 ## Things to watch
@@ -399,7 +401,6 @@ glue("eta_rotated", round(eta_shear[1], 3), display=False)
 - **Neighbors that leave the cutoff.** Only neighbors found in both structures are paired. For large deformations or slip, use a larger cutoff for the current structure, as in the example above.
 - **Thermal background.** At finite temperature, $D^2_\mathrm{min}$, $|\mathbf{s}|$ and the scatter of the strain are not zero. Compare values with those of a region known to be undeformed, or average over time.
 - **Normalisation of $D^2_\mathrm{min}$.** pyscal divides by the number of pairs. Values from codes that use the sum of Falk and Langer are larger by a factor $n_i$.
-- **Definition of $\eta$.** The differences of the normal strains enter $\eta$ with a factor 1/2, as in the equation above. Shimizu et al. [2] use a factor 1/6, which makes $\eta$ independent of the orientation of the axes. With the factor 1/2, $\eta$ depends on the orientation: the same pure shear gives $\eta$ = {glue}`eta_axes` along the cube axes and {glue}`eta_rotated` after a rotation by 45° about $z$. Compare values of $\eta$ only for the same orientation, or compute an invariant measure from `pyscal_strain`.
 
 ## References
 

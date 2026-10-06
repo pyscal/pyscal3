@@ -195,6 +195,8 @@ py::tuple cna_structure(const nl_positions& positions, const nl_positions& cell,
     const vector<bool>& pbc, double prefactor, double lattice_constant, int nmin);
 py::tuple diamond_structure_cna(const nl_positions& positions, const nl_positions& cell,
     const vector<bool>& pbc, double prefactor);
+py::tuple ackland_jones_structure(const nl_positions& positions, const nl_positions& cell,
+                                  const vector<bool>& pbc, double prefactor);
 
 /*-----------------------------------------------------
     Other Methods

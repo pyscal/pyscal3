@@ -62,8 +62,7 @@ fcc.get_chemical_formula(), hcp.get_chemical_formula(), l12.get_chemical_formula
 - `element` gives the chemical element, or a list of elements for structures with several sublattices such as `l12` and `b2`. Without it, the atoms of sublattice $k$ get the atomic number $k$, so that sublattices can be told apart.
 - `ca_ratio` sets $c/a$ for `hcp` and `dhcp`.
 - `primitive=True` gives the primitive cell.
-
-For random displacements, use `atoms.rattle(stdev, seed=...)` from ASE on the finished structure, as below.
+- `noise` adds random Gaussian displacements with this standard deviation, in Å, to every atom, and `seed` makes them reproducible.
 
 `make_element` looks up a tabulated structure and lattice constant for an element:
 

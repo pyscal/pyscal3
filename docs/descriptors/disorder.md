@@ -79,8 +79,7 @@ It also stores the results on `atoms`:
 | `atoms.arrays["pyscal_avg_disorder"]` | $(N,)$ | $\bar{D}$, with `averaged=True` |
 | `atoms.arrays["pyscal_q6"]`, `["pyscal_q6_real"]`, `["pyscal_q6_imag"]` | $(N,)$, $(N, 13)$ | $q_6$ and the parts of $q_{6m}$, as in [Steinhardt parameters](steinhardt) |
 
-If `atoms` already holds the $q_{lm}$ of the requested $l$, from `steinhardt_parameter` or `find_solids`, `disorder` uses them.
-Otherwise it computes them from the current neighbors.
+`disorder` computes the $q_{lm}$ from the current neighbors and stores them as `steinhardt_parameter` does.
 
 The sum over $S_{ij}$ in the definition is the average bond correlation $\langle s_{ij} \rangle$ of the [solid–liquid classification](solid_liquid), so $D(i) = 2 (1 - \langle s_{ij} \rangle)$ for the same neighbors and $l$.
 
@@ -225,7 +224,6 @@ Use $l = 6$ unless there is a reason for another choice.
 
 ## Things to watch
 
-- **Stored $q_{lm}$ are reused.** `disorder` uses the $q_{lm}$ stored on `atoms` if there are any. After calling `find_neighbors` again with other settings, call `steinhardt_parameter` with the same $l$ before `disorder`, so that the $q_{lm}$ belong to the current neighbors.
 - **The choice of $l$.** With $l = 4$, bcc crystals at finite temperature look as disordered as a liquid, as shown above.
 - **The neighbor method changes the values.** $D$ depends on which atoms are counted as neighbors, through $q_{lm}$ and through the sum over neighbors. Compare values only when they were computed with the same neighbor method.
 

@@ -50,3 +50,16 @@ def test_find_solids_clusters_with_voronoi_neighbors():
     pyscal3.find_neighbors(atoms, method="voronoi")
     largest = pyscal3.find_solids(atoms, bonds=6, threshold=0.5, avgthreshold=0.6, cluster=True)
     assert largest == len(atoms)
+
+
+def test_voronoi_vector_does_not_depend_on_voroexp():
+    # area_cutoff compares the area fraction of each face, not the
+    # neighbor weights, which change with voroexp
+    from pyscal3.structures import make_crystal
+    bcc = make_crystal("bcc", lattice_constant=2.87, repetitions=(4, 4, 4))
+    vectors = []
+    for voroexp in (1, 2, 3):
+        pyscal3.find_neighbors(bcc, method="voronoi", voroexp=voroexp)
+        vectors.append(pyscal3.voronoi_vector(bcc))
+    assert all(np.array_equal(v, vectors[0]) for v in vectors)
+    assert np.all(vectors[0] == [0, 6, 0, 8])

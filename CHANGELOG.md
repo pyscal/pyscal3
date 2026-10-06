@@ -124,6 +124,45 @@ neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
 
 ### Fixes
 
+- `find_solids` accepts numpy integers and floats for `bonds`; an
+  `np.int64` raised `TypeError`.
+- `entropy(local=True)` works for cells that are not periodic in all
+  directions; only the global density needs the volume of the cell.
+- `find_clusters` clears `pyscal_largest_cluster` when no atom satisfies the
+  condition, instead of leaving the mask of an earlier call.
+- `voronoi_vector` compares `area_cutoff` with the share of each face in the
+  surface of the Voronoi cell, as documented. It used to compare it with the
+  neighbor weight, which depends on `voroexp`: with `voroexp=3`, the square
+  faces of perfect bcc were dropped. Results with the default `voroexp=1`
+  are unchanged.
+- `average_over_neighbors` averages each column of a property with several
+  values per atom, such as `pyscal_ace`, and returns an array of the same
+  shape. It used to return the mean over all values of each atom.
+- `identify_ackland_jones` follows the method of Ackland and Jones (2006), as
+  in the original implementation of LAMMPS `compute ackland/atom`: it
+  chooses its own neighbors from the six nearest atoms, assigns the
+  structure with the smallest deviation from the ideal angle counts, and
+  labels atoms that match no structure as other. Before, it used the stored
+  neighbor list and a simplified decision tree that labelled any unmatched
+  atom with an angle near 139 degrees as hcp, so a liquid came out as 99.6 %
+  hcp (now 83 % other). It no longer needs `find_neighbors`, stores integer
+  labels in `pyscal_structure` like `common_neighbor_analysis` (names are
+  still returned), and stores its eight angle counts in
+  `pyscal_ackland_chi` instead of computing `pyscal_chiparams`.
+- `effective_coordination_number` iterates the weighted mean bond length to
+  self-consistency, as Hoppe defines it and as its docstring said. It used
+  to stop after one step, so values were too low when bond lengths differ:
+  11.28 instead of 11.63 for perfect bcc with 14 neighbors.
+- `von_mises_strain` uses the definition of Shimizu, Ogata and Li, with a
+  factor 1/6 on the differences of the normal strains. With the factor 1/2
+  used before, the value depended on the orientation of the axes: a pure
+  shear gave a value up to 1.7 times larger after a rotation.
+- `disorder` computes the $q_{lm}$ from the current neighbors. It used to
+  reuse values stored by an earlier call with another neighbor list.
+- `make_crystal(noise=...)` adds the random displacements once to every atom.
+  Before, they were added again to each replicated copy, so atoms in later
+  copies moved up to twice as far. A new `seed` argument makes them
+  reproducible.
 - `common_neighbor_analysis` and `diamond_structure` no longer label every
   atom as "others" when a single atom, for example an isolated atom next to a
   surface, has too few neighbor candidates.

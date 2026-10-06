@@ -29,7 +29,8 @@ def available_elements():
 
 
 def make_crystal(structure, lattice_constant=1.0, repetitions=None,
-                 ca_ratio=1.633, noise=0, element=None, primitive=False):
+                 ca_ratio=1.633, noise=0, element=None, primitive=False,
+                 seed=None):
     """
     Create a crystal structure as an ASE Atoms object.
 
@@ -46,7 +47,8 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
     ca_ratio : float
         c/a ratio for hcp/dhcp. Default 1.633.
     noise : float
-        Standard deviation of Gaussian noise on positions. Default 0.
+        Standard deviation, in Angstrom, of random Gaussian displacements
+        added to every Cartesian coordinate of every atom. Default 0.
     element : str or list of str, optional
         Chemical element(s), one per lattice type in increasing type order.
         For 'l12' type 1 is the single corner site and type 2 the three
@@ -58,6 +60,9 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
         :func:`pyscal3.short_range_order` can distinguish the sublattices.
     primitive : bool
         If True, use primitive cell. Default False.
+    seed : int, optional
+        Seed for the random displacements. If omitted, numpy's global
+        random generator is used.
 
     Returns
     -------
@@ -95,8 +100,6 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
 
     box = lattice_constant * np.array(sdict["box"], dtype=float)
     positions = np.array([_unfold(p, box) for p in sdict["positions"]])
-    if noise > 0:
-        positions += np.random.normal(0, noise, positions.shape)
 
     types = list(sdict['species'])
     species = [element_map[t] for t in types]
@@ -117,8 +120,6 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
 
         for i in range(1, repetitions[d]):
             shifted = current_pos + i * box[d]
-            if noise > 0:
-                shifted += np.random.normal(0, noise, shifted.shape)
             new_pos.append(shifted)
             new_types.append(current_types)
             new_species.append(current_species)
@@ -128,6 +129,11 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
         all_species = [sum(all_species, [])] + new_species
 
     final_pos = np.concatenate(all_pos)
+    if noise > 0:
+        # once for every atom of the supercell
+        normal = (np.random.normal if seed is None
+                  else np.random.default_rng(seed).normal)
+        final_pos = final_pos + normal(0, noise, final_pos.shape)
     final_types = sum(all_types, [])
     final_species = sum(all_species, [])
 
@@ -162,7 +168,7 @@ def make_crystal(structure, lattice_constant=1.0, repetitions=None,
 
 
 def make_general_lattice(positions, types, box, lattice_constant=1.0,
-                         repetitions=None, noise=0, element=None):
+                         repetitions=None, noise=0, element=None, seed=None):
     """
     Create a custom lattice from fractional positions.
 
@@ -179,9 +185,13 @@ def make_general_lattice(positions, types, box, lattice_constant=1.0,
     repetitions : tuple of 3 ints
         Repetitions. Default (1,1,1).
     noise : float
-        Gaussian noise std dev. Default 0.
+        Standard deviation, in Angstrom, of random Gaussian displacements
+        added to every coordinate. Default 0.
     element : str or list of str, optional
         Chemical element(s).
+    seed : int, optional
+        Seed for the random displacements. If omitted, numpy's global
+        random generator is used.
 
     Returns
     -------
@@ -207,7 +217,8 @@ def make_general_lattice(positions, types, box, lattice_constant=1.0,
     _structures = custom_structures
     try:
         result = make_crystal("custom", lattice_constant=lattice_constant,
-                              repetitions=repetitions, noise=noise, element=element)
+                              repetitions=repetitions, noise=noise, element=element,
+                              seed=seed)
     finally:
         _structures = old
 

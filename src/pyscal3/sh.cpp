@@ -223,8 +223,8 @@ void calculate_q(py::dict& atoms,
 					weightsum += weights[ti][ci];
 				}
 				//TODO: turn off for Voronoi
-				realti = realti/float(weightsum);
-				imgti = imgti/float(weightsum);
+				realti = realti/weightsum;
+				imgti = imgti/weightsum;
 
 				qlm_real[ti][l].emplace_back(realti);
 				qlm_img[ti][l].emplace_back(imgti);
@@ -367,8 +367,8 @@ py::tuple calculate_q_single(const nl_index& offsets,
         }
         summ = 0;
         for (int k=0; k<nm; k++){
-            realti = sum_real[k]/float(weightsum);
-            imgti = sum_imag[k]/float(weightsum);
+            realti = sum_real[k]/weightsum;
+            imgti = sum_imag[k]/weightsum;
             qr[ti*nm + k] = realti;
             qi[ti*nm + k] = imgti;
             summ += realti*realti + imgti*imgti;

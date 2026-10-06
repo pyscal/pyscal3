@@ -55,7 +55,7 @@ $$
 
 where $n_k$ is the number of faces with $k$ edges.
 At finite temperature, thermal motion creates small faces and short edges that are not part of the ideal cell.
-`voronoi_vector` ignores a face if its weight $w_{ij}$ is not larger than `area_cutoff` (default 0.01), and an edge if its length is not larger than `edge_cutoff` (default 0.05) times the perimeter of the face.
+`voronoi_vector` ignores a face if its area is not larger than `area_cutoff` (default 0.01) times the surface of the Voronoi cell, and an edge if its length is not larger than `edge_cutoff` (default 0.05) times the perimeter of the face.
 Faces that are left with fewer than three or more than six edges are not counted.
 
 ## Usage
@@ -302,15 +302,11 @@ The broad distribution reflects the disorder of the liquid, where some atoms hav
 liquid_faces = np.concatenate([np.ravel(f) for f in snapshots["liquid"].info["pyscal_face_vertices"]])
 glue("liquid_large_faces", round(100 * np.mean(liquid_faces > 6)), display=False)
 
-bcc = crystals["bcc"]
-pyscal.find_neighbors(bcc, method="voronoi", voroexp=3)
-glue("bcc_n4_exp3", int(pyscal.voronoi_vector(bcc)[0, 1]), display=False)
 ```
 
 - **fcc and hcp have the same vector.** Both are $\langle 0\ 12\ 0\ 0 \rangle$. Use another descriptor to tell them apart.
 - **Thresholds.** The vectors depend on `edge_cutoff` and `area_cutoff`, and no single setting works for all crystal structures at finite temperature. Report the values used.
 - **Faces with more than six edges.** These are not counted in the vector. In the liquid snapshot, {glue}`liquid_large_faces` % of the faces have more than six vertices.
-- **The face threshold uses the weights.** `area_cutoff` is compared with the weight $w_{ij}$, which is the relative area of the face only for `voroexp=1`. Keep the default `voroexp=1` in `find_neighbors` before calling `voronoi_vector`. With `voroexp=3`, for example, the weights of the square faces of a perfect bcc crystal fall below the threshold, and $n_4$ becomes {glue}`bcc_n4_exp3`.
 - **More neighbors than expected.** The small faces created by thermal motion make extra Voronoi neighbors, about 14 per atom in an fcc crystal at finite temperature (see [Finding neighbors](../guide/neighbors)). Descriptors that weight neighbors by the face area, such as the [Minkowski structure metrics](minkowski), are less affected than those that count them.
 
 ## References

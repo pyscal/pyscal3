@@ -193,16 +193,19 @@ void calculate_voronoi_vector(py::dict& atoms,
         atoms[py::str("vertex_numbers")].cast<vector<vector<int>>>();
     vector<vector<double>> vertex_vectors =
         atoms[py::str("vertex_vectors")].cast<vector<vector<double>>>();
-    vector<vector<double>> neighborweight =
-        atoms[py::str("neighborweight")].cast<vector<vector<double>>>();
 
     int nop = (int)face_vertices.size();
     vector<vector<int>> vorovectors(nop, vector<int>(4, 0));
 
     for (int x = 0; x < nop; x++) {
         int st = 1;   // starting index into vertex_numbers (skip first entry)
+        const int nfaces = (int)face_vertices[x].size();
+        // per face: number of edges passing edge_cutoff, and area
+        vector<int> edgecounts(nfaces, 0);
+        vector<double> areas(nfaces, 0.0);
+        double total_area = 0.0;
 
-        for (int fi = 0; fi < (int)face_vertices[x].size(); fi++) {
+        for (int fi = 0; fi < nfaces; fi++) {
             int vno = face_vertices[x][fi];
 
             // Collect vertex indices for this face
@@ -231,22 +234,34 @@ void calculate_voronoi_vector(py::dict& atoms,
 
             st += (vno + 1);
 
-            // Skip faces whose (relative) area is below area_cutoff.
-            // neighborweight holds the area fraction of face fi.
-            if (fi < (int)neighborweight[x].size() &&
-                neighborweight[x][fi] > area_cutoff) {
-                // Count edges passing edge_cutoff
-                int edgecount = 0;
-                if (edge_sum > 0.0) {
-                    for (int e = 0; e < vno; e++) {
-                        if (edge_lengths[e] / edge_sum > edge_cutoff)
-                            edgecount++;
-                    }
+            // area of the (planar, ordered) face polygon: half the norm of
+            // the sum of the cross products of consecutive vertices
+            double ax = 0.0, ay = 0.0, az = 0.0;
+            for (int k = 0; k < vno; k++) {
+                const double *p = &vertex_vectors[x][3 * vphase[k]];
+                const double *q = &vertex_vectors[x][3 * vphase[(k + 1) % vno]];
+                ax += p[1] * q[2] - p[2] * q[1];
+                ay += p[2] * q[0] - p[0] * q[2];
+                az += p[0] * q[1] - p[1] * q[0];
+            }
+            areas[fi] = 0.5 * sqrt(ax * ax + ay * ay + az * az);
+            total_area += areas[fi];
+
+            // Count edges passing edge_cutoff
+            if (edge_sum > 0.0) {
+                for (int e = 0; e < vno; e++) {
+                    if (edge_lengths[e] / edge_sum > edge_cutoff)
+                        edgecounts[fi]++;
                 }
-                // Bin into n3,n4,n5,n6
-                if (edgecount >= 3 && edgecount <= 6) {
-                    vorovectors[x][edgecount - 3]++;
-                }
+            }
+        }
+
+        // faces whose share of the cell surface passes area_cutoff, binned
+        // into n3, n4, n5, n6
+        for (int fi = 0; fi < nfaces; fi++) {
+            if (total_area > 0.0 && areas[fi] / total_area > area_cutoff &&
+                edgecounts[fi] >= 3 && edgecounts[fi] <= 6) {
+                vorovectors[x][edgecounts[fi] - 3]++;
             }
         }
     }

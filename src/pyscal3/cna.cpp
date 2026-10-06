@@ -258,3 +258,105 @@ py::tuple diamond_structure_cna(const nl_positions &positions, const nl_position
     }
     return py::make_tuple(to_array(structure), enough);
 }
+
+namespace {
+
+// Ackland-Jones bins of cos(theta) for the angles between the bonds of an atom
+inline int ackland_bin(double c) {
+    if (c < -0.945) return 0;
+    if (c < -0.915) return 1;
+    if (c < -0.755) return 2;
+    if (c < -0.195) return 3;
+    if (c < 0.195) return 4;
+    if (c < 0.245) return 5;
+    if (c < 0.795) return 6;
+    return 7;
+}
+
+// labels as in CNA: 0 unknown, 1 fcc, 2 hcp, 3 bcc, 4 ico
+std::int64_t ackland_classify(const std::int64_t *chi, idx n1) {
+    double delta_bcc = 0.35 * chi[4] / static_cast<double>(chi[5] + chi[6] - chi[4]);
+    double delta_cp = std::fabs(1.0 - chi[6] / 24.0);
+    double delta_fcc = 0.61 * (std::fabs(static_cast<double>(chi[0] + chi[1] - 6)) + chi[2]) / 6.0;
+    double delta_hcp = (std::fabs(chi[0] - 3.0) +
+                        std::fabs(static_cast<double>(chi[0] + chi[1] + chi[2] + chi[3] - 9))) / 12.0;
+    if (chi[0] == 7) delta_bcc = 0.0;
+    else if (chi[0] == 6) delta_fcc = 0.0;
+    else if (chi[0] <= 3) delta_hcp = 0.0;
+
+    if (chi[7] > 0) return 0;
+    if (chi[4] < 3) return (n1 > 13 || n1 < 11) ? 0 : 4;
+    if (delta_bcc <= delta_cp) return (n1 < 11) ? 0 : 3;
+    if (n1 > 12 || n1 < 11) return 0;
+    return (delta_fcc < delta_hcp) ? 1 : 2;
+}
+
+}  // namespace
+
+py::tuple ackland_jones_structure(const nl_positions &positions, const nl_positions &cell,
+                                  const vector<bool> &pbc, double prefactor) {
+    // Ackland and Jones, Phys. Rev. B 73, 054104 (2006), as in the original
+    // ("legacy") implementation of LAMMPS compute ackland/atom: r0^2 is the
+    // mean squared distance of the 6 nearest atoms, the angles are those
+    // between the bonds to the atoms with d^2 < 1.45 r0^2 (N0 of them), and
+    // N1 counts the atoms with d^2 < 1.55 r0^2. Returns the labels and the
+    // eight angle counts chi_0 ... chi_7 of each atom.
+    const nlb::Geometry g = nlb::make_geometry(positions, cell, pbc);
+    const idx n = g.n;
+    std::vector<std::int64_t> structure(n, 0);
+    std::vector<std::int64_t> chi(8 * n, 0);
+    {
+    py::gil_scoped_release release_gil;
+    // candidates up to a radius that contains sqrt(1.55) r0 for every atom
+    double radius = nlb::guess_radius(g, prefactor);
+    Rows c(0);
+    for (int attempt = 0; attempt < 6; attempt++) {
+        c = nlb::candidates(g, radius);
+        std::atomic<bool> enough(true);
+        pyscal::parallel_for(n, [&](idx begin, idx end) {
+            for (idx i = begin; i < end && enough.load(std::memory_order_relaxed); i++) {
+                const idx lo = c.offsets[i], cnt = c.offsets[i + 1] - lo;
+                if (cnt < 6) { enough.store(false); break; }
+                double r0_sq = 0;
+                for (int k = 0; k < 6; k++) r0_sq += c.d[lo + k] * c.d[lo + k];
+                if (1.55 * r0_sq / 6.0 >= radius * radius) { enough.store(false); break; }
+            }
+        }, 1024);
+        if (enough.load() || g.n < 7) break;
+        radius *= 1.5;
+    }
+    pyscal::parallel_for(n, [&](idx begin, idx end) {
+        for (idx i = begin; i < end; i++) {
+            const idx lo = c.offsets[i], cnt = c.offsets[i + 1] - lo;
+            if (cnt == 0) continue;
+            const idx nsel = cnt < 6 ? cnt : 6;
+            double r0_sq = 0;
+            for (idx k = 0; k < nsel; k++) r0_sq += c.d[lo + k] * c.d[lo + k];
+            r0_sq /= static_cast<double>(nsel);
+            idx n0 = 0, n1 = 0;
+            for (idx k = 0; k < cnt; k++) {
+                const double dsq = c.d[lo + k] * c.d[lo + k];
+                if (dsq < 1.55 * r0_sq) {
+                    n1++;
+                    if (dsq < 1.45 * r0_sq) n0++;
+                }
+            }
+            // candidates are sorted by distance, so the N0 atoms come first
+            std::int64_t *ch = &chi[8 * i];
+            for (idx j = 0; j < n0; j++) {
+                const double *vj = &c.v[3 * (lo + j)];
+                for (idx k = j + 1; k < n0; k++) {
+                    const double *vk = &c.v[3 * (lo + k)];
+                    const double cosine = (vj[0] * vk[0] + vj[1] * vk[1] + vj[2] * vk[2]) /
+                                          (c.d[lo + j] * c.d[lo + k]);
+                    ch[ackland_bin(cosine)]++;
+                }
+            }
+            structure[i] = ackland_classify(ch, n1);
+        }
+    }, 256);
+    }
+    py::array_t<std::int64_t> chi_out({static_cast<py::ssize_t>(n), py::ssize_t(8)});
+    std::copy(chi.begin(), chi.end(), chi_out.mutable_data());
+    return py::make_tuple(to_array(structure), chi_out);
+}
