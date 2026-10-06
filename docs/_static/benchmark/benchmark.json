@@ -1,0 +1,67 @@
+{
+ "description": "Wall time of three operations for 1 000 188 atoms of fcc Cu (a = 3.61 A, random displacements of 0.05 A, cutoff 3 A, 12 neighbors per atom).",
+ "machine": "Apple M4 Pro with 14 cores; pyscal 4, OVITO and freud used all 14 threads, pyscal 3.3 has no threading and ran on one. On battery power (macOS low power mode); all codes were run one after the other in one session.",
+ "timing": "Minimum over repeated calls adding up to at least 0.3 s (one call above 5 s). Converting ASE Atoms into each code's own container is not timed.",
+ "rows": [
+  {
+   "code": "pyscal 3.3",
+   "threads": 1,
+   "operation": "neighbor search",
+   "time_s": 28.0848
+  },
+  {
+   "code": "pyscal 3.3",
+   "threads": 1,
+   "operation": "adaptive CNA",
+   "time_s": 96.1348
+  },
+  {
+   "code": "pyscal 3.3",
+   "threads": 1,
+   "operation": "q6 with neighbor search",
+   "time_s": 33.0363
+  },
+  {
+   "code": "pyscal 4",
+   "threads": 14,
+   "operation": "neighbor search",
+   "time_s": 0.1151
+  },
+  {
+   "code": "pyscal 4",
+   "threads": 14,
+   "operation": "adaptive CNA",
+   "time_s": 0.2759
+  },
+  {
+   "code": "pyscal 4",
+   "threads": 14,
+   "operation": "q6 with neighbor search",
+   "time_s": 0.1756
+  },
+  {
+   "code": "freud 3.4",
+   "threads": 14,
+   "operation": "neighbor search",
+   "time_s": 0.5905
+  },
+  {
+   "code": "freud 3.4",
+   "threads": 14,
+   "operation": "q6 with neighbor search",
+   "time_s": 0.5579
+  },
+  {
+   "code": "OVITO 3.16",
+   "threads": 14,
+   "operation": "neighbor search",
+   "time_s": 0.1153
+  },
+  {
+   "code": "OVITO 3.16",
+   "threads": 14,
+   "operation": "adaptive CNA",
+   "time_s": 0.3321
+  }
+ ]
+}
