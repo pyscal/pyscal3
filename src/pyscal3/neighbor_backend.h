@@ -9,11 +9,16 @@ the geometry of a structure and per-atom rows of neighbour candidates.
 #include <vector>
 #include <pybind11/numpy.h>
 
+#include "parallel.h"
+
 namespace nlb {
 
 namespace py = pybind11;
 using idx = std::int64_t;
 using darray = py::array_t<double, py::array::c_style | py::array::forcecast>;
+
+template <typename T>
+using buffer = pyscal::buffer<T>;
 
 struct Geometry {
     idx n;
@@ -26,8 +31,9 @@ struct Geometry {
 
 // per-atom rows of selected pairs
 struct Rows {
-    std::vector<idx> offsets, j;
-    std::vector<double> d, v;
+    std::vector<idx> offsets;
+    buffer<idx> j;
+    buffer<double> d, v;
     explicit Rows(idx n) : offsets(n + 1, 0) {}
     void add(idx jj, double dd, const double *vv) {
         j.push_back(jj);

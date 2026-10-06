@@ -98,6 +98,30 @@ everything derived from them (disorder, `find_solids`) can differ in the last
 digit (at most about 1e-15), and the strain family by up to about 1e-12
 relative for badly conditioned fits.
 
+### Threads
+
+The neighbor search, CNA and `diamond_structure`, and the per-atom loops of
+the C++ descriptors run on all CPUs available to the process, with the GIL
+released. `pyscal.set_num_threads(n)` and `pyscal.get_num_threads()` set and
+return the number of threads; the default can also be set with the
+environment variable `PYSCAL_NUM_THREADS`, or else `OMP_NUM_THREADS`. Results
+are bitwise the same for any number of threads. The Voronoi tessellation, the
+cluster search of `find_clusters` and `ace` stay serial. The two pair loops of
+the included matscipy-neighbours code run on pyscal's threads instead of
+OpenMP (see `lib/matscipy-neighbours/VENDORED.md`).
+
+For 1 000 188 fcc atoms (3 A cutoff) on the 14 cores of an Apple M4 Pro,
+compared with one thread: `find_neighbors` is 7 times faster,
+`steinhardt_parameter`, `wigner_w_parameter`, `chi_params` and `entropy`
+7 to 10 times, `atomic_strain` 9 times, `common_neighbor_analysis` and
+`diamond_structure` 7 to 8 times, and `find_solids` with clustering 5 times.
+On 14 threads, `find_neighbors` takes as long as OVITO's
+`CutoffNeighborFinder` for 1 000 188 atoms (0.12 s) and up to 1.3 times
+longer between 60 000 and 260 000 atoms; `common_neighbor_analysis` is
+faster than OVITO's adaptive CNA at every size tested (0.28 s against
+0.33 s for 1 000 188 atoms), and `steinhardt_parameter` including the
+neighbor search is 3 times faster than freud (0.18 s against 0.56 s).
+
 ### Fixes
 
 - `common_neighbor_analysis` and `diamond_structure` no longer label every
