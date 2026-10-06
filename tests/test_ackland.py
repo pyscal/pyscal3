@@ -8,7 +8,13 @@ from pyscal3.structures import make_crystal
 
 
 def _classify(name, lattice_constant, noise=0.0, repetitions=(4, 4, 4)):
-    """Helper to create a crystal, find neighbors, and classify."""
+    """Helper to create a crystal, find neighbors, and classify.
+
+    make_crystal draws the noise from numpy's global generator, so it is
+    seeded here: unseeded, about 1 in 1000 noisy fcc samples falls below the
+    90% threshold of test_ackland_fcc_noisy.
+    """
+    np.random.seed(12345)
     atoms = make_crystal(name, lattice_constant=lattice_constant,
                          repetitions=repetitions, noise=noise)
     pyscal3.find_neighbors(atoms, method="cutoff", cutoff=0)

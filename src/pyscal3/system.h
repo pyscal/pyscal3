@@ -25,11 +25,6 @@ using namespace std;
     Some utility objects
 -----------------------------------------------------*/
 
-struct cell{
-  vector<int> members;
-  vector<int> neighbor_cells;
-};
-
 struct datom{
     double dist;
     int  index;
@@ -72,101 +67,8 @@ vector<double> remap_and_displace_atom(vector<double> pos,
     const vector<double>& box,
     const vector<double>& perturbation);
 
-void reset_all_neighbors(py::dict&);
-
 void convert_to_spherical_coordinates(double, double, double, 
     double&, double&, double&);
-
-void get_all_neighbors_normal(py::dict& atoms,
-    const double neighbordistance,
-    const int triclinic,
-    const vector<vector<double>> rot,
-    const vector<vector<double>> rotinv,
-    const vector<double> box);
-
-void get_all_neighbors_shell_normal(py::dict& atoms,
-    const double dmin,
-    const double dmax,
-    const int triclinic,
-    const vector<vector<double>> rot,
-    const vector<vector<double>> rotinv,
-    const vector<double> box);
-
-int cell_index(int, int, int, int, int, int);
-vector<int> cell_periodic(int, int, int, int, int, int);
-
-vector<cell> set_up_cells(const vector<vector<double>>&,
-    const int,
-    const vector<vector<double>>&,
-    const vector<vector<double>>&,
-    const vector<double>&,
-    const double);
-
-void get_all_neighbors_cells(py::dict& atoms,
-    const double neighbordistance,
-    const int triclinic,
-    const vector<vector<double>> rot,
-    const vector<vector<double>> rotinv,
-    const vector<double> box);
-
-void get_all_neighbors_shell_cells(py::dict& atoms,
-    const double dmin,
-    const double dmax,
-    const int triclinic,
-    const vector<vector<double>> rot,
-    const vector<vector<double>> rotinv,
-    const vector<double> box);
-
-void get_temp_neighbors_brute(const vector<vector<double>>& positions,
-    const vector<bool>& mask_1,
-    const vector<bool>& mask_2,
-    vector<vector<datom>>& temp_neighbors,
-    const int& triclinic,
-    const double neighbordistance, 
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-void get_temp_neighbors_cells(const vector<vector<double>>& positions,
-    const vector<bool>& mask_1,
-    const vector<bool>& mask_2,
-    vector<vector<datom>>& temp_neighbors,
-    const int& triclinic,
-    const double neighbordistance, 
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box);
-
-int get_all_neighbors_bynumber(py::dict& atoms,
-    double& neighbordistance,
-    const int& triclinic, 
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    double prefactor,
-    int nns, 
-    int usecells,
-    int assign);
-
-int get_all_neighbors_sann(py::dict& atoms,
-    double& neighbordistance,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    double prefactor,
-    int usecells);
-
-int get_all_neighbors_adaptive(py::dict& atoms,
-    double& neighbordistance,
-    const int& triclinic,
-    const vector<vector<double>>& rot, 
-    const vector<vector<double>>& rotinv,
-    const vector<double>& box,
-    double prefactor,
-    int nlimit,
-    double padding, 
-    int usecells);
 
 void get_all_neighbors_voronoi(py::dict& atoms,
     const double neighbordistance,
@@ -176,6 +78,24 @@ void get_all_neighbors_voronoi(py::dict& atoms,
     const vector<double> box,
     const double face_area_exponent);
 
+/*-----------------------------------------------------
+    Neighbor search on matscipy-neighbours
+    (neighbor_backend.cpp)
+-----------------------------------------------------*/
+using nl_positions = py::array_t<double, py::array::c_style | py::array::forcecast>;
+
+py::dict nl_cutoff(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double rc);
+py::dict nl_shell(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double dmin, double dmax);
+py::dict nl_candidates(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor, int nmin);
+py::dict nl_number(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor, int nmax, bool assign);
+py::dict nl_adaptive(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor, int nlimit, double padding);
+py::dict nl_sann(const nl_positions& positions, const nl_positions& cell,
+    const vector<bool>& pbc, double prefactor);
 
 
 /*-----------------------------------------------------

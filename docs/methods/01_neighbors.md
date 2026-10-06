@@ -90,6 +90,22 @@ $$
 pyscal.find_neighbors(atoms, method='voronoi', voroexp=2)
 ```
 
+## How neighbors are searched and stored
+
+The fixed-cutoff, shell, adaptive, SANN and number searches use the [matscipy-neighbours](https://github.com/libAtoms/matscipy-neighbours) library, which is included in pyscal and runs on one thread. Voronoi neighbors come from Voro++.
+
+- **Fixed cutoff.** An atom $j$ is a neighbor of $i$ if $r_{ij} < r_{cut}$.
+- **Shell** (`shell_thickness > 0`). The condition is $r_{cut} \le r_{ij} \le r_{cut} + \mathrm{shell\_thickness}$.
+- **Adaptive, SANN and number.** The candidates are the atoms with $r_{ij} \le r_{initial}$, with $r_{initial}$ as defined above. They are sorted by distance, and candidates at the same distance (to within $10^{-10}$) are sorted by atom index. The number method (`method='number'`) keeps the first `nmax` candidates, so in a perfect crystal the choice among equidistant neighbors is reproducible.
+- **Periodic images.** When the cutoff exceeds half the width of the cell, several periodic images of the same atom, including the atom itself, can be neighbors. Each image is a separate entry, with its own distance and vector.
+- **The `cells` argument** of `find_neighbors` is ignored. It is kept so that existing scripts keep working.
+
+The results are stored in the `Atoms` object:
+- When every atom has the same number of neighbors $k$, `atoms.arrays["pyscal_neighbors"]` is an $(n, k)$ integer array, and the distances, weights and angles are $(n, k)$ float arrays.
+- When the numbers differ, the same keys are stored in `atoms.info` as lists of lists.
+- The neighbor vectors $\mathbf{r}_i - \mathbf{r}_j$ are always stored in `atoms.info["pyscal_diff"]`.
+- If no atom has a neighbor, all these keys are $(n, 0)$ arrays in `atoms.arrays`.
+
 ## References
 
 1. van Meel, J. A., Filion, L., Valeriani, C. & Frenkel, D. A parameter-free, solid-angle based, nearest- neighbor algorithm. J Chem Phys 234107, (2012).
